@@ -19,6 +19,8 @@
 
 ---
 Any comments, feature requests or even collaboration are welcom and very appreciated!
+
+This is a first beta version and needs to be tested thoroughly.
 ---
 
 ## Features
