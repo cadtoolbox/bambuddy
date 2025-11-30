@@ -239,7 +239,7 @@ export function Layout() {
         <div className="p-2 border-t border-bambu-dark-tertiary">
           {sidebarExpanded ? (
             <div className="flex items-center justify-between px-2">
-              <span className="text-sm text-bambu-gray">v0.1.2</span>
+              <span className="text-sm text-bambu-gray">v0.1.3</span>
               <div className="flex items-center gap-1">
                 <a
                   href="https://github.com/maziggy/bambusy"

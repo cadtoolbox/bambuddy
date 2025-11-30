@@ -143,6 +143,8 @@ function PrinterCard({ printer, hideIfDisconnected }: { printer: Printer; hideIf
       smartPlug ? api.updateSmartPlug(smartPlug.id, { auto_off: enabled }) : Promise.reject('No plug'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['smartPlugByPrinter', printer.id] });
+      // Also invalidate the smart-plugs list to keep Settings page in sync
+      queryClient.invalidateQueries({ queryKey: ['smart-plugs'] });
     },
   });
 
@@ -413,18 +415,22 @@ function PrinterCard({ printer, hideIfDisconnected }: { printer: Printer; hideIf
 
               {/* Auto-off toggle */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-bambu-gray hidden sm:inline">Auto-off</span>
+                <span className={`text-xs hidden sm:inline ${smartPlug.auto_off_executed ? 'text-bambu-green' : 'text-bambu-gray'}`}>
+                  {smartPlug.auto_off_executed ? 'Auto-off done' : 'Auto-off'}
+                </span>
                 <button
                   onClick={() => toggleAutoOffMutation.mutate(!smartPlug.auto_off)}
-                  disabled={toggleAutoOffMutation.isPending}
-                  title="Auto power-off after print"
+                  disabled={toggleAutoOffMutation.isPending || smartPlug.auto_off_executed}
+                  title={smartPlug.auto_off_executed ? 'Auto-off was executed - turn printer on to reset' : 'Auto power-off after print'}
                   className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                    smartPlug.auto_off ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
+                    smartPlug.auto_off_executed
+                      ? 'bg-bambu-green/50 cursor-not-allowed'
+                      : smartPlug.auto_off ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
                   }`}
                 >
                   <span
                     className={`absolute top-[2px] left-[2px] w-4 h-4 bg-white rounded-full transition-transform ${
-                      smartPlug.auto_off ? 'translate-x-4' : 'translate-x-0'
+                      smartPlug.auto_off || smartPlug.auto_off_executed ? 'translate-x-4' : 'translate-x-0'
                     }`}
                   />
                 </button>

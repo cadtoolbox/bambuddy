@@ -106,11 +106,41 @@ class BambuFTPClient:
                     name = " ".join(parts[8:])
                     is_dir = item.startswith("d")
                     size = int(parts[4]) if not is_dir else 0
-                    files.append({
+
+                    # Parse modification time from FTP listing
+                    # Format: "Nov 30 10:15" or "Nov 30  2024"
+                    mtime = None
+                    try:
+                        from datetime import datetime
+                        month = parts[5]
+                        day = parts[6]
+                        time_or_year = parts[7]
+
+                        # Determine if it's time (HH:MM) or year
+                        if ":" in time_or_year:
+                            # Recent file: "Nov 30 10:15" - assume current year
+                            year = datetime.now().year
+                            time_str = f"{month} {day} {year} {time_or_year}"
+                            mtime = datetime.strptime(time_str, "%b %d %Y %H:%M")
+                            # If parsed date is in the future, use last year
+                            if mtime > datetime.now():
+                                mtime = mtime.replace(year=year - 1)
+                        else:
+                            # Older file: "Nov 30 2024" - no time, just date
+                            time_str = f"{month} {day} {time_or_year}"
+                            mtime = datetime.strptime(time_str, "%b %d %Y")
+                    except (ValueError, IndexError):
+                        pass
+
+                    file_entry = {
                         "name": name,
                         "is_directory": is_dir,
                         "size": size,
-                    })
+                        "path": f"{path.rstrip('/')}/{name}",
+                    }
+                    if mtime:
+                        file_entry["mtime"] = mtime
+                    files.append(file_entry)
         except Exception:
             pass
 

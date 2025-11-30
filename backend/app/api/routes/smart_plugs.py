@@ -173,9 +173,11 @@ async def control_smart_plug(
     if not success:
         raise HTTPException(503, "Failed to communicate with device")
 
-    # Update last state
+    # Update last state and reset auto_off_executed when turning on
     if expected_state:
         plug.last_state = expected_state
+        if expected_state == "ON":
+            plug.auto_off_executed = False  # Reset flag when manually turning on
     plug.last_checked = datetime.utcnow()
     await db.commit()
 

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,38 +8,51 @@ from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI
 
-# Configure logging for all modules - console + file
+# Import settings first for logging configuration
+from backend.app.core.config import settings as app_settings
+
+# Configure logging based on settings
+# DEBUG=true -> DEBUG level, else use LOG_LEVEL setting
+log_level_str = "DEBUG" if app_settings.debug else app_settings.log_level.upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
 log_format = '%(asctime)s %(levelname)s [%(name)s] %(message)s'
-log_level = logging.INFO
 
 # Create root logger
 root_logger = logging.getLogger()
 root_logger.setLevel(log_level)
 
-# Console handler
+# Console handler - always enabled
 console_handler = logging.StreamHandler()
 console_handler.setLevel(log_level)
 console_handler.setFormatter(logging.Formatter(log_format))
 root_logger.addHandler(console_handler)
 
-# File handler - rotating log file (5MB max, keep 3 backups)
-log_file = Path(__file__).parent.parent.parent / "bambutrack.log"
-file_handler = RotatingFileHandler(
-    log_file,
-    maxBytes=5*1024*1024,  # 5MB
-    backupCount=3,
-    encoding='utf-8'
-)
-file_handler.setLevel(log_level)
-file_handler.setFormatter(logging.Formatter(log_format))
-root_logger.addHandler(file_handler)
+# File handler - only in production or if explicitly enabled
+if app_settings.log_to_file:
+    log_file = app_settings.log_dir / "bambutrack.log"
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(file_handler)
+    logging.info(f"Logging to file: {log_file}")
 
-logging.info(f"Logging to file: {log_file}")
+# Reduce noise from third-party libraries in production
+if not app_settings.debug:
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+logging.info(f"BambuTrack starting - debug={app_settings.debug}, log_level={log_level_str}")
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from backend.app.core.config import settings as app_settings
 from backend.app.core.database import init_db, async_session
+from sqlalchemy import select, or_
 from backend.app.core.websocket import ws_manager
 from backend.app.api.routes import printers, archives, websocket, filaments, cloud, smart_plugs, print_queue
 from backend.app.api.routes import settings as settings_routes
@@ -86,7 +100,17 @@ _last_status_broadcast: dict[int, str] = {}
 async def on_printer_status_change(printer_id: int, state: PrinterState):
     """Handle printer status changes - broadcast via WebSocket."""
     # Only broadcast if something meaningful changed (reduce WebSocket spam)
-    status_key = f"{state.connected}:{state.state}:{state.progress}:{state.layer_num}"
+    # Include rounded temperatures to detect meaningful temp changes (within 1 degree)
+    temps = state.temperatures or {}
+    nozzle_temp = round(temps.get("nozzle", 0))
+    bed_temp = round(temps.get("bed", 0))
+    nozzle_2_temp = round(temps.get("nozzle_2", 0)) if "nozzle_2" in temps else ""
+    chamber_temp = round(temps.get("chamber", 0)) if "chamber" in temps else ""
+
+    status_key = (
+        f"{state.connected}:{state.state}:{state.progress}:{state.layer_num}:"
+        f"{nozzle_temp}:{bed_temp}:{nozzle_2_temp}:{chamber_temp}"
+    )
     if _last_status_broadcast.get(printer_id) == status_key:
         return  # No change, skip broadcast
 
@@ -108,7 +132,6 @@ async def on_print_start(printer_id: int, data: dict):
     async with async_session() as db:
         from backend.app.models.printer import Printer
         from backend.app.services.bambu_ftp import list_files_async
-        from sqlalchemy import select
 
         result = await db.execute(
             select(Printer).where(Printer.id == printer_id)
@@ -179,11 +202,17 @@ async def on_print_start(printer_id: int, data: dict):
                         select(SmartPlug).where(SmartPlug.printer_id == printer_id)
                     )
                     plug = plug_result.scalar_one_or_none()
+                    logger.info(f"[ENERGY] Print start - archive {archive.id}, printer {printer_id}, plug found: {plug is not None}")
                     if plug:
                         energy = await tasmota_service.get_energy(plug)
+                        logger.info(f"[ENERGY] Energy response from plug: {energy}")
                         if energy and energy.get("total") is not None:
                             _print_energy_start[archive.id] = energy["total"]
-                            logger.info(f"Recorded starting energy for archive {archive.id}: {energy['total']} kWh")
+                            logger.info(f"[ENERGY] Recorded starting energy for archive {archive.id}: {energy['total']} kWh")
+                        else:
+                            logger.warning(f"[ENERGY] No 'total' in energy response for archive {archive.id}")
+                    else:
+                        logger.info(f"[ENERGY] No smart plug found for printer {printer_id}")
                 except Exception as e:
                     logger.warning(f"Failed to record starting energy: {e}")
 
@@ -351,11 +380,17 @@ async def on_print_start(printer_id: int, data: dict):
                         select(SmartPlug).where(SmartPlug.printer_id == printer_id)
                     )
                     plug = plug_result.scalar_one_or_none()
+                    logger.info(f"[ENERGY] Auto-archive print start - archive {archive.id}, printer {printer_id}, plug found: {plug is not None}")
                     if plug:
                         energy = await tasmota_service.get_energy(plug)
+                        logger.info(f"[ENERGY] Auto-archive energy response: {energy}")
                         if energy and energy.get("total") is not None:
                             _print_energy_start[archive.id] = energy["total"]
-                            logger.info(f"Recorded starting energy for archive {archive.id}: {energy['total']} kWh")
+                            logger.info(f"[ENERGY] Recorded starting energy for archive {archive.id}: {energy['total']} kWh")
+                        else:
+                            logger.warning(f"[ENERGY] No 'total' in energy response for archive {archive.id}")
+                    else:
+                        logger.info(f"[ENERGY] No smart plug found for printer {printer_id}")
                 except Exception as e:
                     logger.warning(f"Failed to record starting energy: {e}")
 
@@ -387,29 +422,59 @@ async def on_print_complete(printer_id: int, data: dict):
     await ws_manager.send_print_complete(printer_id, data)
 
     filename = data.get("filename", "")
-    if not filename:
+    subtask_name = data.get("subtask_name", "")
+
+    if not filename and not subtask_name:
+        logger.warning(f"Print complete without filename or subtask_name")
         return
 
-    logger.info(f"Print complete - filename: {filename}, status: {data.get('status')}")
+    logger.info(f"Print complete - filename: {filename}, subtask: {subtask_name}, status: {data.get('status')}")
 
-    # Build list of possible keys to try
+    # Build list of possible keys to try (matching how they were registered in on_print_start)
     possible_keys = []
 
-    if filename.endswith(".3mf"):
-        possible_keys.append((printer_id, filename))
-    elif filename.endswith(".gcode"):
-        base_name = filename.rsplit(".", 1)[0]
-        possible_keys.append((printer_id, f"{base_name}.3mf"))
-        possible_keys.append((printer_id, filename))
-    else:
-        possible_keys.append((printer_id, f"{filename}.3mf"))
-        possible_keys.append((printer_id, filename))
+    # Try subtask_name variations first (most reliable for matching)
+    if subtask_name:
+        possible_keys.append((printer_id, f"{subtask_name}.3mf"))
+        possible_keys.append((printer_id, f"{subtask_name}.gcode.3mf"))
+        possible_keys.append((printer_id, subtask_name))
+
+    # Try filename variations
+    if filename:
+        # Extract just the filename if it's a path
+        fname = filename.split("/")[-1] if "/" in filename else filename
+
+        if fname.endswith(".3mf"):
+            possible_keys.append((printer_id, fname))
+        elif fname.endswith(".gcode"):
+            base_name = fname.rsplit(".", 1)[0]
+            possible_keys.append((printer_id, f"{base_name}.gcode.3mf"))
+            possible_keys.append((printer_id, f"{base_name}.3mf"))
+            possible_keys.append((printer_id, fname))
+        else:
+            possible_keys.append((printer_id, f"{fname}.gcode.3mf"))
+            possible_keys.append((printer_id, f"{fname}.3mf"))
+            possible_keys.append((printer_id, fname))
+
+        # Also try full path versions
+        if filename.endswith(".3mf"):
+            possible_keys.append((printer_id, filename))
+        elif filename.endswith(".gcode"):
+            base_name = filename.rsplit(".", 1)[0]
+            possible_keys.append((printer_id, f"{base_name}.3mf"))
+            possible_keys.append((printer_id, filename))
+        else:
+            possible_keys.append((printer_id, f"{filename}.3mf"))
+            possible_keys.append((printer_id, filename))
 
     # Find the archive for this print
+    logger.info(f"Looking for archive in _active_prints, keys to try: {possible_keys[:5]}...")
+    logger.info(f"Current _active_prints: {list(_active_prints.keys())}")
     archive_id = None
     for key in possible_keys:
         archive_id = _active_prints.pop(key, None)
         if archive_id:
+            logger.info(f"Found archive {archive_id} with key {key}")
             # Also clean up any other keys pointing to this archive
             keys_to_remove = [k for k, v in _active_prints.items() if v == archive_id]
             for k in keys_to_remove:
@@ -417,24 +482,44 @@ async def on_print_complete(printer_id: int, data: dict):
             break
 
     if not archive_id:
-        # Try to find by filename if not tracked (for prints started before app)
+        # Try to find by filename or subtask_name if not tracked (for prints started before app)
         async with async_session() as db:
             from backend.app.models.archive import PrintArchive
-            from sqlalchemy import select
 
-            result = await db.execute(
-                select(PrintArchive)
-                .where(PrintArchive.printer_id == printer_id)
-                .where(PrintArchive.filename == filename)
-                .where(PrintArchive.status == "printing")
-                .order_by(PrintArchive.created_at.desc())
-                .limit(1)
-            )
-            archive = result.scalar_one_or_none()
-            if archive:
-                archive_id = archive.id
+            # Try matching by subtask_name (stored as print_name) first
+            if subtask_name:
+                result = await db.execute(
+                    select(PrintArchive)
+                    .where(PrintArchive.printer_id == printer_id)
+                    .where(PrintArchive.status == "printing")
+                    .where(or_(
+                        PrintArchive.print_name.ilike(f"%{subtask_name}%"),
+                        PrintArchive.filename.ilike(f"%{subtask_name}%"),
+                    ))
+                    .order_by(PrintArchive.created_at.desc())
+                    .limit(1)
+                )
+                archive = result.scalar_one_or_none()
+                if archive:
+                    archive_id = archive.id
+                    logger.info(f"Found archive {archive_id} by subtask_name match: {subtask_name}")
+
+            # Also try by filename
+            if not archive_id and filename:
+                result = await db.execute(
+                    select(PrintArchive)
+                    .where(PrintArchive.printer_id == printer_id)
+                    .where(PrintArchive.filename == filename)
+                    .where(PrintArchive.status == "printing")
+                    .order_by(PrintArchive.created_at.desc())
+                    .limit(1)
+                )
+                archive = result.scalar_one_or_none()
+                if archive:
+                    archive_id = archive.id
 
     if not archive_id:
+        logger.warning(f"Could not find archive for print complete: filename={filename}, subtask={subtask_name}")
         return
 
     # Update archive status
@@ -455,9 +540,10 @@ async def on_print_complete(printer_id: int, data: dict):
     # Calculate energy used for this print
     try:
         starting_kwh = _print_energy_start.pop(archive_id, None)
+        logger.info(f"[ENERGY] Print complete for archive {archive_id}, starting_kwh={starting_kwh}, tracked_archives={list(_print_energy_start.keys())}")
         if starting_kwh is not None:
             async with async_session() as db:
-                # Get smart plug for this printer
+                # Get smart plug for this printer (SmartPlug is imported at module level)
                 plug_result = await db.execute(
                     select(SmartPlug).where(SmartPlug.printer_id == printer_id)
                 )
@@ -465,9 +551,11 @@ async def on_print_complete(printer_id: int, data: dict):
 
                 if plug:
                     energy = await tasmota_service.get_energy(plug)
+                    logger.info(f"[ENERGY] Print complete - ending energy response: {energy}")
                     if energy and energy.get("total") is not None:
                         ending_kwh = energy["total"]
                         energy_used = round(ending_kwh - starting_kwh, 4)
+                        logger.info(f"[ENERGY] Calculated: ending={ending_kwh}, starting={starting_kwh}, used={energy_used}")
 
                         # Get energy cost per kWh from settings (default to 0.15)
                         from backend.app.api.routes.settings import get_setting
@@ -485,21 +573,28 @@ async def on_print_complete(printer_id: int, data: dict):
                             archive.energy_kwh = energy_used
                             archive.energy_cost = energy_cost
                             await db.commit()
-                            logger.info(f"Recorded energy for archive {archive_id}: {energy_used} kWh (${energy_cost})")
+                            logger.info(f"[ENERGY] Saved to archive {archive_id}: {energy_used} kWh, cost={energy_cost}")
+                        else:
+                            logger.warning(f"[ENERGY] Archive {archive_id} not found when saving energy")
+                    else:
+                        logger.warning(f"[ENERGY] No 'total' in ending energy response")
+                else:
+                    logger.info(f"[ENERGY] No smart plug found for printer {printer_id} at print complete")
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Failed to calculate energy: {e}")
 
     # Capture finish photo from printer camera
+    logger.info(f"[PHOTO] Starting finish photo capture for archive {archive_id}")
     try:
         async with async_session() as db:
             # Check if finish photo capture is enabled
             from backend.app.api.routes.settings import get_setting
             capture_enabled = await get_setting(db, "capture_finish_photo")
+            logger.info(f"[PHOTO] capture_finish_photo setting: {capture_enabled}")
             if capture_enabled is None or capture_enabled.lower() == "true":
                 # Get printer details
                 from backend.app.models.printer import Printer
-                from sqlalchemy import select
                 result = await db.execute(
                     select(Printer).where(Printer.id == printer_id)
                 )
@@ -538,10 +633,12 @@ async def on_print_complete(printer_id: int, data: dict):
         logging.getLogger(__name__).warning(f"Finish photo capture failed: {e}")
 
     # Smart plug automation: schedule turn off when print completes
+    logger.info(f"[AUTO-OFF] Calling smart_plug_manager.on_print_complete for printer {printer_id}")
     try:
         async with async_session() as db:
             status = data.get("status", "completed")
             await smart_plug_manager.on_print_complete(printer_id, status, db)
+            logger.info(f"[AUTO-OFF] smart_plug_manager.on_print_complete completed")
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Smart plug on_print_complete failed: {e}")
@@ -550,8 +647,9 @@ async def on_print_complete(printer_id: int, data: dict):
     try:
         async with async_session() as db:
             from backend.app.models.print_queue import PrintQueueItem
-            from backend.app.models.smart_plug import SmartPlug
-            from backend.app.services.tasmota import tasmota_service
+            # Note: SmartPlug is already imported at module level (line 56)
+            # Do NOT import it here as it would shadow the module-level import
+            # and cause "cannot access local variable" errors earlier in this function
 
             result = await db.execute(
                 select(PrintQueueItem)

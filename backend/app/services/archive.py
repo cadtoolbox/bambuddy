@@ -32,12 +32,12 @@ class ThreeMFParser:
                 self._parse_3dmodel(zf)
                 self._extract_thumbnail(zf)
 
-                # Prefer slice_info for colors (shows ALL filaments actually used in print)
-                # project_settings may filter out "support" filaments incorrectly
+                # ALWAYS prefer slice_info values - they contain ONLY filaments actually used in print
+                # project_settings contains ALL configured filaments (AMS slots), not just used ones
+                if self.metadata.get("_slice_filament_type"):
+                    self.metadata["filament_type"] = self.metadata["_slice_filament_type"]
                 if self.metadata.get("_slice_filament_color"):
                     self.metadata["filament_color"] = self.metadata["_slice_filament_color"]
-                if not self.metadata.get("filament_type") and self.metadata.get("_slice_filament_type"):
-                    self.metadata["filament_type"] = self.metadata["_slice_filament_type"]
 
                 # Clean up internal keys
                 self.metadata.pop("_slice_filament_type", None)
@@ -65,20 +65,30 @@ class ThreeMFParser:
                         elif key == "weight" and value:
                             self.metadata["filament_used_grams"] = float(value)
 
-                # Get filament info from ALL filaments actually used in the print
+                # Get filament info from filaments ACTUALLY USED in the print
                 # slice_info has <filament id="1" type="PLA" color="#FFFFFF" used_g="100" />
+                # Only include filaments where used_g > 0
                 filaments = root.findall(".//filament")
                 if filaments:
-                    # Collect all unique filament types and colors
+                    # Collect unique filament types and colors for filaments that are actually used
                     types = []
                     colors = []
                     for f in filaments:
-                        ftype = f.get("type")
-                        fcolor = f.get("color")
-                        if ftype and ftype not in types:
-                            types.append(ftype)
-                        if fcolor and fcolor not in colors:
-                            colors.append(fcolor)
+                        # Check if this filament is actually used in the print
+                        used_g = f.get("used_g", "0")
+                        try:
+                            used_amount = float(used_g)
+                        except (ValueError, TypeError):
+                            used_amount = 0
+
+                        # Only include if used_g > 0 (filament is actually consumed)
+                        if used_amount > 0:
+                            ftype = f.get("type")
+                            fcolor = f.get("color")
+                            if ftype and ftype not in types:
+                                types.append(ftype)
+                            if fcolor and fcolor not in colors:
+                                colors.append(fcolor)
 
                     if types:
                         self.metadata["_slice_filament_type"] = ", ".join(types)

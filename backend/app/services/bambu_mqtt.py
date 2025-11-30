@@ -74,6 +74,8 @@ class BambuMQTTClient:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._previous_gcode_state: str | None = None
         self._previous_gcode_file: str | None = None
+        self._was_running: bool = False  # Track if we've seen RUNNING state for current print
+        self._completion_triggered: bool = False  # Prevent duplicate completion triggers
         self._message_log: deque[MQTTLogEntry] = deque(maxlen=100)
         self._logging_enabled: bool = False
         self._last_message_time: float = 0.0  # Track when we last received a message
@@ -251,9 +253,19 @@ class BambuMQTTClient:
             and self._previous_gcode_file is not None
         )
 
+        # Track RUNNING state for more robust completion detection
+        if self.state.state == "RUNNING" and current_file:
+            if not self._was_running:
+                logger.info(f"[{self.serial_number}] Now tracking RUNNING state for {current_file}")
+            self._was_running = True
+            self._completion_triggered = False
+
         if is_new_print or is_file_change:
             # Clear any old HMS errors when a new print starts
             self.state.hms_errors = []
+            # Reset completion tracking for new print
+            self._was_running = True
+            self._completion_triggered = False
 
         if (is_new_print or is_file_change) and self.on_print_start:
             logger.info(
@@ -267,11 +279,27 @@ class BambuMQTTClient:
             })
 
         # Detect print completion (FINISH = success, FAILED = error, IDLE = aborted)
+        # Use _was_running flag in addition to _previous_gcode_state for more robust detection
+        # This handles cases where server restarts during a print
+        should_trigger_completion = (
+            self.state.state in ("FINISH", "FAILED")
+            and not self._completion_triggered
+            and self.on_print_complete
+            and (
+                self._previous_gcode_state == "RUNNING"  # Normal transition
+                or (self._was_running and self._previous_gcode_state != self.state.state)  # After server restart
+            )
+        )
+        # For IDLE, only trigger if we just came from RUNNING (explicit abort/cancel)
         if (
-            self._previous_gcode_state == "RUNNING"
-            and self.state.state in ("FINISH", "FAILED", "IDLE")
+            self.state.state == "IDLE"
+            and self._previous_gcode_state == "RUNNING"
+            and not self._completion_triggered
             and self.on_print_complete
         ):
+            should_trigger_completion = True
+
+        if should_trigger_completion:
             if self.state.state == "FINISH":
                 status = "completed"
             elif self.state.state == "FAILED":
@@ -280,11 +308,15 @@ class BambuMQTTClient:
                 status = "aborted"
             logger.info(
                 f"[{self.serial_number}] PRINT COMPLETE detected - state: {self.state.state}, "
-                f"status: {status}, file: {self._previous_gcode_file or current_file}"
+                f"status: {status}, file: {self._previous_gcode_file or current_file}, "
+                f"subtask: {self.state.subtask_name}, was_running: {self._was_running}"
             )
+            self._completion_triggered = True
+            self._was_running = False
             self.on_print_complete({
                 "status": status,
                 "filename": self._previous_gcode_file or current_file,
+                "subtask_name": self.state.subtask_name,
                 "raw_data": data,
             })
 

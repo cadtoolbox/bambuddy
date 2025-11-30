@@ -62,9 +62,10 @@ class SmartPlugManager:
         success = await tasmota_service.turn_on(plug)
 
         if success:
-            # Update last state
+            # Update last state and reset auto_off_executed
             plug.last_state = "ON"
             plug.last_checked = datetime.utcnow()
+            plug.auto_off_executed = False  # Reset flag when turning on
             await db.commit()
 
     async def on_print_complete(
@@ -103,11 +104,11 @@ class SmartPlugManager:
         )
 
         if plug.off_delay_mode == "time":
-            self._schedule_delayed_off(plug, plug.off_delay_minutes * 60)
+            self._schedule_delayed_off(plug, printer_id, plug.off_delay_minutes * 60)
         elif plug.off_delay_mode == "temperature":
             self._schedule_temp_based_off(plug, printer_id, plug.off_temp_threshold)
 
-    def _schedule_delayed_off(self, plug: "SmartPlug", delay_seconds: int):
+    def _schedule_delayed_off(self, plug: "SmartPlug", printer_id: int, delay_seconds: int):
         """Schedule turn-off after delay."""
         # Cancel any existing task for this plug
         self._cancel_pending_off(plug.id)
@@ -117,7 +118,7 @@ class SmartPlugManager:
         )
 
         task = asyncio.create_task(
-            self._delayed_off(plug.id, plug.ip_address, plug.username, plug.password, delay_seconds)
+            self._delayed_off(plug.id, plug.ip_address, plug.username, plug.password, printer_id, delay_seconds)
         )
         self._pending_off[plug.id] = task
 
@@ -127,6 +128,7 @@ class SmartPlugManager:
         ip_address: str,
         username: str | None,
         password: str | None,
+        printer_id: int,
         delay_seconds: int,
     ):
         """Wait and turn off."""
@@ -142,8 +144,14 @@ class SmartPlugManager:
                     self.name = f"plug_{plug_id}"
 
             plug_info = PlugInfo()
-            await tasmota_service.turn_off(plug_info)
+            success = await tasmota_service.turn_off(plug_info)
             logger.info(f"Turned off plug {plug_id} after time delay")
+
+            # Mark auto_off_executed in database and update printer status
+            if success:
+                await self._mark_auto_off_executed(plug_id)
+                # Mark the printer as offline immediately
+                printer_manager.mark_printer_offline(printer_id)
 
         except asyncio.CancelledError:
             logger.debug(f"Delayed turn-off cancelled for plug {plug_id}")
@@ -226,11 +234,18 @@ class SmartPlugManager:
                                 self.name = f"plug_{plug_id}"
 
                         plug_info = PlugInfo()
-                        await tasmota_service.turn_off(plug_info)
+                        success = await tasmota_service.turn_off(plug_info)
                         logger.info(
                             f"Turned off plug {plug_id} after nozzle temp dropped to "
                             f"{max_nozzle_temp}°C (threshold: {temp_threshold}°C)"
                         )
+
+                        # Mark auto_off_executed in database and update printer status
+                        if success:
+                            await self._mark_auto_off_executed(plug_id)
+                            # Mark the printer as offline immediately
+                            printer_manager.mark_printer_offline(printer_id)
+
                         break
 
                 await asyncio.sleep(check_interval)
@@ -245,6 +260,27 @@ class SmartPlugManager:
             logger.debug(f"Temperature-based turn-off cancelled for plug {plug_id}")
         finally:
             self._pending_off.pop(plug_id, None)
+
+    async def _mark_auto_off_executed(self, plug_id: int):
+        """Disable auto-off after it was executed (one-shot behavior)."""
+        try:
+            from backend.app.core.database import async_session
+            from backend.app.models.smart_plug import SmartPlug
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(SmartPlug).where(SmartPlug.id == plug_id)
+                )
+                plug = result.scalar_one_or_none()
+                if plug:
+                    plug.auto_off = False  # Disable auto-off (one-shot behavior)
+                    plug.auto_off_executed = False  # Reset the flag
+                    plug.last_state = "OFF"
+                    plug.last_checked = datetime.utcnow()
+                    await db.commit()
+                    logger.info(f"Auto-off executed and disabled for plug {plug_id}")
+        except Exception as e:
+            logger.warning(f"Failed to update plug {plug_id} after auto-off: {e}")
 
     def _cancel_pending_off(self, plug_id: int):
         """Cancel any pending off task for this plug."""

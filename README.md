@@ -328,6 +328,36 @@ To connect Bambusy to your printer, you need to enable LAN Mode:
 
 The printer should connect automatically and show real-time status.
 
+### Environment Variables
+
+Bambusy can be configured using environment variables or a `.env` file in the project root. Copy `.env.example` to `.env` and adjust as needed:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEBUG` | `false` | Enable debug mode (verbose logging, SQL queries) |
+| `LOG_LEVEL` | `INFO` | Log level when DEBUG=false (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `LOG_TO_FILE` | `true` | Write logs to `logs/bambutrack.log` |
+
+**Production (default):**
+- INFO level logging
+- SQLAlchemy and HTTP library noise suppressed
+- Logs written to `logs/bambutrack.log` (5MB rotating, 3 backups)
+
+**Development (`DEBUG=true`):**
+- DEBUG level logging (verbose)
+- All SQL queries logged
+- Useful for troubleshooting printer connections
+
+Example `.env` for development:
+```bash
+DEBUG=true
+LOG_TO_FILE=true
+```
+
 ## Usage
 
 ### Keyboard Shortcuts
@@ -568,6 +598,34 @@ Common causes:
 - **Printer not ready** - The printer needs to be idle and connected
 - **File upload failed** - Check FTP connectivity to the printer
 - **HMS errors** - Check the printer for any health system errors that prevent printing
+
+### Timelapse not attaching automatically
+
+**The Problem:**
+When printers run in **LAN-only mode** (disconnected from Bambu Cloud), they cannot sync time via NTP. This causes the printer's internal clock to drift significantly (sometimes days or weeks off). Bambusy matches timelapses by comparing the print completion time with the timelapse file's modification time - when the printer's clock is wrong, this matching fails.
+
+**Symptoms:**
+- "Scan for Timelapse" shows "No matching timelapse found"
+- Timelapse files exist on the printer but don't auto-attach
+- Printer shows incorrect date/time in its settings
+
+**Workaround - Manual Selection:**
+When automatic matching fails, Bambusy now offers manual timelapse selection:
+
+1. Right-click the archive and select **"Scan for Timelapse"**
+2. If no match is found, a dialog appears showing all available timelapse files on the printer
+3. Files are sorted by date (newest first) with size information
+4. Select the correct timelapse and click to attach it
+
+**Permanent Fix:**
+To fix the printer's clock:
+1. Temporarily connect the printer to the internet (via router or mobile hotspot)
+2. Wait for the printer to sync time via NTP
+3. Return to LAN-only mode - the clock should remain accurate until the next power cycle
+
+**Note:** Some users report the clock resets after power cycling. In this case, you'll need to either:
+- Periodically connect to the internet to sync time
+- Use the manual timelapse selection feature
 
 ## Known Issues / Roadmap
 

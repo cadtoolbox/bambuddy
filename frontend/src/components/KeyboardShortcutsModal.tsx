@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, Keyboard } from 'lucide-react';
 import { Card, CardContent } from './Card';
 
@@ -51,6 +52,15 @@ function KeyBadge({ children }: { children: string }) {
 
 export function KeyboardShortcutsModal({ onClose, navItems }: KeyboardShortcutsModalProps) {
   const shortcuts = getShortcuts(navItems);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>

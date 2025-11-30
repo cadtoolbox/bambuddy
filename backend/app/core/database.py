@@ -64,3 +64,12 @@ async def run_migrations(conn):
     except Exception:
         # Column already exists
         pass
+
+    # Migration: Add auto_off_executed column to smart_plugs
+    try:
+        await conn.execute(text(
+            "ALTER TABLE smart_plugs ADD COLUMN auto_off_executed BOOLEAN DEFAULT 0"
+        ))
+    except Exception:
+        # Column already exists
+        pass

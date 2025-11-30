@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, AlertTriangle, AlertCircle, Info, ExternalLink } from 'lucide-react';
 import type { HMSError } from '../api/client';
 
@@ -49,6 +50,15 @@ function getHMSWikiUrl(code: string): string {
 }
 
 export function HMSErrorModal({ printerName, errors, onClose }: HMSErrorModalProps) {
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-bambu-dark-secondary rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">

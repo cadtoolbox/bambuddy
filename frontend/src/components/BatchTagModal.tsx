@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Tag, Plus, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -18,6 +18,15 @@ export function BatchTagModal({ selectedIds, existingTags, onClose }: BatchTagMo
   const [newTag, setNewTag] = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'add' | 'remove'>('add');
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const batchTagMutation = useMutation({
     mutationFn: async () => {

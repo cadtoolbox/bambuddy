@@ -97,6 +97,8 @@ function ArchiveCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showTimelapse, setShowTimelapse] = useState(false);
+  const [showTimelapseSelect, setShowTimelapseSelect] = useState(false);
+  const [availableTimelapses, setAvailableTimelapses] = useState<Array<{ name: string; path: string; size: number; mtime: string | null }>>([]);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   const [showProjectPage, setShowProjectPage] = useState(false);
@@ -111,12 +113,29 @@ function ArchiveCard({
         showToast(`Timelapse attached: ${data.filename}`);
       } else if (data.status === 'exists') {
         showToast('Timelapse already attached');
+      } else if (data.status === 'not_found' && data.available_files && data.available_files.length > 0) {
+        // Show selection dialog
+        setAvailableTimelapses(data.available_files);
+        setShowTimelapseSelect(true);
       } else {
         showToast(data.message || 'No matching timelapse found', 'warning');
       }
     },
     onError: (error: Error) => {
       showToast(error.message || 'Failed to scan for timelapse', 'error');
+    },
+  });
+
+  const timelapseSelectMutation = useMutation({
+    mutationFn: (filename: string) => api.selectArchiveTimelapse(archive.id, filename),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['archives'] });
+      showToast(`Timelapse attached: ${data.filename}`);
+      setShowTimelapseSelect(false);
+      setAvailableTimelapses([]);
+    },
+    onError: (error: Error) => {
+      showToast(error.message || 'Failed to attach timelapse', 'error');
     },
   });
 
@@ -582,6 +601,62 @@ function ArchiveCard({
           downloadFilename={`${archive.print_name || archive.filename}_timelapse.mp4`}
           onClose={() => setShowTimelapse(false)}
         />
+      )}
+
+      {/* Timelapse Selection Modal */}
+      {showTimelapseSelect && availableTimelapses.length > 0 && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-card-dark rounded-lg max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Select Timelapse</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  No auto-match found. Select the timelapse for this print:
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTimelapseSelect(false);
+                  setAvailableTimelapses([]);
+                }}
+                className="text-gray-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-2">
+              {availableTimelapses.map((file) => (
+                <button
+                  key={file.name}
+                  onClick={() => timelapseSelectMutation.mutate(file.name)}
+                  disabled={timelapseSelectMutation.isPending}
+                  className="w-full text-left p-3 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-3 disabled:opacity-50"
+                >
+                  <Film className="w-8 h-8 text-bambu-green flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">{file.name}</p>
+                    <p className="text-sm text-gray-400">
+                      {formatFileSize(file.size)}
+                      {file.mtime && ` • ${formatDate(file.mtime)}`}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="p-4 border-t border-gray-700">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowTimelapseSelect(false);
+                  setAvailableTimelapses([]);
+                }}
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* QR Code Modal */}

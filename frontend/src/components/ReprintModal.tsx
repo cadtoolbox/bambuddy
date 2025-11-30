@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { X, Printer, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -14,6 +14,15 @@ interface ReprintModalProps {
 
 export function ReprintModal({ archiveId, archiveName, onClose, onSuccess }: ReprintModalProps) {
   const [selectedPrinter, setSelectedPrinter] = useState<number | null>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const { data: printers, isLoading: loadingPrinters } = useQuery({
     queryKey: ['printers'],

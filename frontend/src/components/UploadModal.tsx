@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Upload, X, File, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -29,6 +29,15 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedPrinter, setSelectedPrinter] = useState<number | undefined>();
   const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const { data: printers } = useQuery({
     queryKey: ['printers'],

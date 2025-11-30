@@ -47,6 +47,10 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
     mutationFn: (data: SmartPlugUpdate) => api.updateSmartPlug(plug.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['smart-plugs'] });
+      // Also invalidate printer-specific smart plug queries to keep PrintersPage in sync
+      if (plug.printer_id) {
+        queryClient.invalidateQueries({ queryKey: ['smartPlugByPrinter', plug.printer_id] });
+      }
     },
   });
 
@@ -181,7 +185,7 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-white">Auto Off</p>
-                  <p className="text-xs text-bambu-gray">Turn off when print completes</p>
+                  <p className="text-xs text-bambu-gray">Turn off when print completes (one-shot)</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input

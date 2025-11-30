@@ -112,6 +112,25 @@ class PrinterManager:
             return self._clients[printer_id].state.connected
         return False
 
+    def mark_printer_offline(self, printer_id: int):
+        """Mark a printer as offline and trigger status callback.
+
+        This is used when we know the printer power was cut (e.g., smart plug turned off)
+        to immediately update the UI without waiting for MQTT timeout.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if printer_id in self._clients:
+            client = self._clients[printer_id]
+            if client.state.connected:
+                logger.info(f"Marking printer {printer_id} as offline (smart plug power off)")
+                client.state.connected = False
+                client.state.state = "unknown"
+                # Trigger the status change callback to broadcast via WebSocket
+                if self._on_status_change:
+                    self._schedule_async(self._on_status_change(printer_id, client.state))
+
     def start_print(self, printer_id: int, filename: str) -> bool:
         """Start a print on a connected printer."""
         if printer_id in self._clients:

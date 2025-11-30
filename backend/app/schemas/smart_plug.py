@@ -39,6 +39,7 @@ class SmartPlugResponse(SmartPlugBase):
     id: int
     last_state: str | None = None
     last_checked: datetime | None = None
+    auto_off_executed: bool = False  # True when auto-off was triggered after print
     created_at: datetime
     updated_at: datetime
 

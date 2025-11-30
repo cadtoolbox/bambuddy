@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, Download } from 'lucide-react';
 import { Button } from './Button';
 import { api } from '../api/client';
@@ -10,6 +11,15 @@ interface QRCodeModalProps {
 
 export function QRCodeModal({ archiveId, archiveName, onClose }: QRCodeModalProps) {
   const qrCodeUrl = api.getArchiveQRCodeUrl(archiveId, 300);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleDownload = () => {
     const link = document.createElement('a');

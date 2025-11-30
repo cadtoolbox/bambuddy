@@ -3,7 +3,7 @@ import zipfile
 import io
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
 
 logger = logging.getLogger(__name__)
 from fastapi.responses import FileResponse, Response
@@ -618,11 +618,15 @@ async def scan_timelapse(
             break
 
     # Strategy 2: Match by timestamp proximity
+    # Bambu timelapse filename uses the print START time (when recording began)
     if not matching_file and (archive.started_at or archive.completed_at or archive.created_at):
         import re
         from datetime import datetime, timedelta
 
-        archive_time = archive.started_at or archive.completed_at or archive.created_at
+        # Prefer started_at since video filename is the print start time
+        # Fall back to completed_at or created_at if started_at is not available
+        archive_start = archive.started_at
+        archive_end = archive.completed_at or archive.created_at
         best_match = None
         best_diff = timedelta(hours=24)  # Max 24 hour difference
 
@@ -633,25 +637,76 @@ async def scan_timelapse(
             if match:
                 try:
                     file_time = datetime.strptime(match.group(1), "%Y-%m-%d_%H-%M-%S")
-                    # Timelapse is usually created at print end, so compare to completed_at or created_at
-                    compare_time = archive.completed_at or archive.created_at
-                    if compare_time:
-                        # Bambu printers use China Standard Time (UTC+8) for filenames
-                        # Try matching with CST offset adjustment
-                        diff_direct = abs(file_time - compare_time)
-                        # Also try with 8-hour offset (CST to UTC-ish local times)
-                        diff_cst_adjusted = abs(file_time - timedelta(hours=8) - compare_time)
-                        diff = min(diff_direct, diff_cst_adjusted)
-                        if diff < best_diff:
-                            best_diff = diff
-                            best_match = f
+
+                    # Try multiple timezone offsets since printer timezone can vary
+                    # Common cases: local time (0), CST/UTC+8 (+8), or UTC (-local offset)
+                    for hour_offset in [0, 8, -8, 7, -7, 1, -1]:
+                        adjusted_file_time = file_time - timedelta(hours=hour_offset)
+
+                        # Check against start time (video filename = print start)
+                        if archive_start:
+                            diff = abs(adjusted_file_time - archive_start)
+                            if diff < best_diff:
+                                best_diff = diff
+                                best_match = f
+                                logger.debug(
+                                    f"Timelapse match candidate: {fname} with offset {hour_offset}h, "
+                                    f"diff from start: {diff}"
+                                )
+
+                        # Also check against end time with a buffer
+                        # (video timestamp should be BEFORE completion time)
+                        if archive_end:
+                            # The video timestamp should be within the print duration before completion
+                            if adjusted_file_time < archive_end:
+                                diff = archive_end - adjusted_file_time
+                                # Reasonable print duration: up to 48 hours
+                                if diff < timedelta(hours=48) and diff < best_diff:
+                                    best_diff = diff
+                                    best_match = f
+                                    logger.debug(
+                                        f"Timelapse match candidate (from end): {fname} with offset {hour_offset}h, "
+                                        f"diff: {diff}"
+                                    )
+
                 except ValueError:
                     continue
 
-        if best_match and best_diff < timedelta(hours=2):  # Within 2 hours
+        # Accept match within 4 hours (more lenient for timezone issues)
+        if best_match and best_diff < timedelta(hours=4):
             matching_file = best_match
+            logger.info(f"Matched timelapse by timestamp: {best_match.get('name')} (diff: {best_diff})")
 
-    # Strategy 3: If only one timelapse exists and archive was recently completed, use it
+    # Strategy 3: Use file modification time from FTP listing
+    # This handles cases where printer's filename timestamp is wrong but file mtime is correct
+    if not matching_file and (archive.started_at or archive.completed_at or archive.created_at):
+        from datetime import datetime, timedelta
+
+        archive_start = archive.started_at
+        archive_end = archive.completed_at or archive.created_at
+        best_match = None
+        best_diff = timedelta(hours=24)
+
+        for f in mp4_files:
+            mtime = f.get("mtime")
+            if mtime:
+                # Timelapse file should be modified during or shortly after the print
+                # The mtime should be close to completion time (video finishes when print ends)
+                if archive_end:
+                    diff = abs(mtime - archive_end)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_match = f
+                        logger.debug(
+                            f"Timelapse mtime match candidate: {f.get('name')}, "
+                            f"mtime: {mtime}, diff from end: {diff}"
+                        )
+
+        if best_match and best_diff < timedelta(hours=2):
+            matching_file = best_match
+            logger.info(f"Matched timelapse by file mtime: {best_match.get('name')} (diff: {best_diff})")
+
+    # Strategy 4: If only one timelapse exists and archive was recently completed, use it
     # This handles cases where printer clock is wrong or timezone issues exist
     if not matching_file and len(mp4_files) == 1:
         from datetime import datetime, timedelta
@@ -663,8 +718,28 @@ async def scan_timelapse(
                 matching_file = mp4_files[0]
                 logger.info(f"Using single timelapse file as fallback: {mp4_files[0].get('name')}")
 
+    # Note: We intentionally don't use a "most recent file" fallback because
+    # we can't verify if timelapse was actually enabled for this print.
+    # Instead, return the list of available files for manual selection.
+
     if not matching_file:
-        return {"status": "not_found", "message": "No matching timelapse found on printer"}
+        # Return available files for manual selection
+        available_files = [
+            {
+                "name": f.get("name"),
+                "path": f.get("path"),
+                "size": f.get("size"),
+                "mtime": f.get("mtime").isoformat() if f.get("mtime") else None,
+            }
+            for f in mp4_files
+        ]
+        # Sort by mtime descending (most recent first)
+        available_files.sort(key=lambda x: x.get("mtime") or "", reverse=True)
+        return {
+            "status": "not_found",
+            "message": "No matching timelapse found - please select manually",
+            "available_files": available_files,
+        }
 
     # Download the timelapse - use the full path from the file listing
     remote_path = matching_file.get('path') or f"/timelapse/{matching_file['name']}"
@@ -687,6 +762,67 @@ async def scan_timelapse(
         "status": "attached",
         "message": f"Timelapse '{matching_file['name']}' attached successfully",
         "filename": matching_file["name"],
+    }
+
+
+@router.post("/{archive_id}/timelapse/select")
+async def select_timelapse(
+    archive_id: int,
+    filename: str = Query(..., description="Timelapse filename to attach"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually select a timelapse from the printer to attach."""
+    from backend.app.models.printer import Printer
+    from backend.app.services.bambu_ftp import list_files_async, download_file_bytes_async
+
+    service = ArchiveService(db)
+    archive = await service.get_archive(archive_id)
+    if not archive:
+        raise HTTPException(404, "Archive not found")
+
+    if not archive.printer_id:
+        raise HTTPException(400, "Archive has no associated printer")
+
+    result = await db.execute(
+        select(Printer).where(Printer.id == archive.printer_id)
+    )
+    printer = result.scalar_one_or_none()
+    if not printer:
+        raise HTTPException(404, "Printer not found")
+
+    # Find the file on the printer
+    files = []
+    remote_path = None
+    for timelapse_dir in ["/timelapse", "/timelapse/video"]:
+        try:
+            files = await list_files_async(printer.ip_address, printer.access_code, timelapse_dir)
+            for f in files:
+                if f.get("name") == filename:
+                    remote_path = f.get("path") or f"{timelapse_dir}/{filename}"
+                    break
+            if remote_path:
+                break
+        except Exception:
+            continue
+
+    if not remote_path:
+        raise HTTPException(404, f"Timelapse '{filename}' not found on printer")
+
+    # Download and attach
+    timelapse_data = await download_file_bytes_async(
+        printer.ip_address, printer.access_code, remote_path
+    )
+    if not timelapse_data:
+        raise HTTPException(500, "Failed to download timelapse")
+
+    success = await service.attach_timelapse(archive_id, timelapse_data, filename)
+    if not success:
+        raise HTTPException(500, "Failed to attach timelapse")
+
+    return {
+        "status": "attached",
+        "message": f"Timelapse '{filename}' attached successfully",
+        "filename": filename,
     }
 
 

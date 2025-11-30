@@ -205,6 +205,7 @@ export interface SmartPlug {
   password: string | null;
   last_state: string | null;
   last_checked: string | null;
+  auto_off_executed: boolean;  // True when auto-off was triggered after print
   created_at: string;
   updated_at: string;
 }
@@ -412,9 +413,19 @@ export const api = {
   getArchiveGcode: (id: number) => `${API_BASE}/archives/${id}/gcode`,
   getArchiveTimelapse: (id: number) => `${API_BASE}/archives/${id}/timelapse`,
   scanArchiveTimelapse: (id: number) =>
-    request<{ status: string; message: string; filename?: string }>(`/archives/${id}/timelapse/scan`, {
+    request<{
+      status: string;
+      message: string;
+      filename?: string;
+      available_files?: Array<{ name: string; path: string; size: number; mtime: string | null }>;
+    }>(`/archives/${id}/timelapse/scan`, {
       method: 'POST',
     }),
+  selectArchiveTimelapse: (id: number, filename: string) =>
+    request<{ status: string; message: string; filename: string }>(
+      `/archives/${id}/timelapse/select?filename=${encodeURIComponent(filename)}`,
+      { method: 'POST' }
+    ),
   uploadArchiveTimelapse: async (archiveId: number, file: File): Promise<{ status: string; filename: string }> => {
     const formData = new FormData();
     formData.append('file', file);
