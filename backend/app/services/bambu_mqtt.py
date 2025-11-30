@@ -2,6 +2,7 @@ import json
 import ssl
 import asyncio
 import logging
+import time
 from collections import deque
 from datetime import datetime
 from typing import Callable
@@ -75,6 +76,7 @@ class BambuMQTTClient:
         self._previous_gcode_file: str | None = None
         self._message_log: deque[MQTTLogEntry] = deque(maxlen=100)
         self._logging_enabled: bool = False
+        self._last_message_time: float = 0.0  # Track when we last received a message
 
     @property
     def topic_subscribe(self) -> str:
@@ -94,6 +96,16 @@ class BambuMQTTClient:
             self.state.connected = False
 
     def _on_disconnect(self, client, userdata, disconnect_flags=None, rc=None, properties=None):
+        # Ignore spurious disconnect callbacks if we've received a message recently
+        # Paho-mqtt sometimes fires disconnect callbacks while the connection is still active
+        time_since_last_message = time.time() - self._last_message_time
+        if time_since_last_message < 30.0 and self._last_message_time > 0:
+            logger.debug(
+                f"[{self.serial_number}] Ignoring spurious disconnect (last message {time_since_last_message:.1f}s ago)"
+            )
+            return
+
+        logger.warning(f"[{self.serial_number}] MQTT disconnected: rc={rc}, flags={disconnect_flags}")
         self.state.connected = False
         if self.on_state_change:
             self.on_state_change(self.state)
@@ -101,6 +113,9 @@ class BambuMQTTClient:
     def _on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode())
+            # Track last message time - receiving a message proves we're connected
+            self._last_message_time = time.time()
+            self.state.connected = True
             # Log message if logging is enabled
             if self._logging_enabled:
                 self._message_log.append(MQTTLogEntry(
