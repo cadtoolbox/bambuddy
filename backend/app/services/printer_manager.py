@@ -229,6 +229,15 @@ class PrinterManager:
             return self._clients[printer_id].logging_enabled
         return False
 
+    def request_status_update(self, printer_id: int) -> bool:
+        """Request a full status update from the printer.
+
+        This sends a 'pushall' command to get the latest data including nozzle info.
+        """
+        if printer_id in self._clients:
+            return self._clients[printer_id].request_status_update()
+        return False
+
     async def test_connection(
         self,
         ip_address: str,

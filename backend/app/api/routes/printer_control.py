@@ -595,3 +595,29 @@ async def set_liveview(
         success=success,
         message=f"Live view {'enabled' if request.enable else 'disabled'}" if success else "Failed to set live view"
     )
+
+
+# =============================================================================
+# Status Refresh Endpoint
+# =============================================================================
+
+@router.post("/{printer_id}/control/refresh", response_model=ControlResponse)
+async def refresh_status(
+    printer_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Request a full status update from the printer.
+
+    This sends a 'pushall' command to get the latest data including nozzle info,
+    AMS status, and all other printer state.
+    """
+    await get_printer_or_404(printer_id, db)
+
+    success = printer_manager.request_status_update(printer_id)
+    if not success:
+        raise HTTPException(status_code=503, detail="Printer not connected")
+
+    return ControlResponse(
+        success=success,
+        message="Status refresh requested"
+    )

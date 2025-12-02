@@ -48,6 +48,13 @@ class KProfile:
 
 
 @dataclass
+class NozzleInfo:
+    """Nozzle hardware configuration."""
+    nozzle_type: str = ""  # "stainless_steel" or "hardened_steel"
+    nozzle_diameter: str = ""  # e.g., "0.4"
+
+
+@dataclass
 class PrinterState:
     connected: bool = False
     state: str = "unknown"
@@ -66,6 +73,8 @@ class PrinterState:
     sdcard: bool = False  # SD card inserted
     timelapse: bool = False  # Timelapse recording active
     ipcam: bool = False  # Live view / camera streaming enabled
+    # Nozzle hardware info (for dual nozzle printers, index 0 = left, 1 = right)
+    nozzles: list = field(default_factory=lambda: [NozzleInfo(), NozzleInfo()])
 
 
 class BambuMQTTClient:
@@ -120,8 +129,10 @@ class BambuMQTTClient:
         if rc == 0:
             self.state.connected = True
             client.subscribe(self.topic_subscribe)
-            # Request full status update
+            # Request full status update (includes nozzle info in push_status response)
             self._request_push_all()
+            # Note: get_accessories returns stale nozzle data on H2D, so we don't use it.
+            # The correct nozzle data comes from push_status.
             # Prime K-profile request (Bambu printers often ignore first request)
             self._prime_kprofile_request()
             # Immediately broadcast connection state change
@@ -176,12 +187,18 @@ class BambuMQTTClient:
         # Handle xcam data (camera settings) at top level
         if "xcam" in payload:
             xcam_data = payload["xcam"]
-            logger.info(f"[{self.serial_number}] Received xcam data: {xcam_data}")
+            logger.debug(f"[{self.serial_number}] Received xcam data: {xcam_data}")
             if isinstance(xcam_data, dict):
                 if "ipcam_record" in xcam_data:
                     self.state.ipcam = xcam_data.get("ipcam_record") == "enable"
                 if "timelapse" in xcam_data:
                     self.state.timelapse = xcam_data.get("timelapse") == "enable"
+
+        # Handle system responses (accessories info, etc.)
+        if "system" in payload:
+            system_data = payload["system"]
+            logger.info(f"[{self.serial_number}] Received system data: {system_data}")
+            self._handle_system_response(system_data)
 
         if "print" in payload:
             print_data = payload["print"]
@@ -210,6 +227,22 @@ class BambuMQTTClient:
                 self._handle_kprofile_response(print_data)
 
             self._update_state(print_data)
+
+    def _handle_system_response(self, data: dict):
+        """Handle system responses including accessories info.
+
+        Note: get_accessories returns stale/incorrect nozzle_type data on H2D.
+        The correct nozzle data comes from push_status, so we don't update
+        nozzle type/diameter from get_accessories. We just log the response
+        for debugging purposes.
+        """
+        command = data.get("command")
+
+        if command == "get_accessories":
+            # Log response for debugging - but DON'T use it to update nozzle data
+            # because it returns stale values (e.g., 'stainless_steel' when the
+            # actual nozzle is 'HH01' hardened steel high-flow)
+            logger.info(f"[{self.serial_number}] Accessories response (not used for nozzle data): {data}")
 
     def _handle_ams_data(self, ams_data):
         """Handle AMS data changes for Spoolman integration.
@@ -283,6 +316,12 @@ class BambuMQTTClient:
         if temp_fields and not hasattr(self, '_temp_fields_logged'):
             logger.info(f"[{self.serial_number}] Temperature fields in MQTT data: {temp_fields}")
             self._temp_fields_logged = True
+
+        # Log nozzle hardware info fields (once)
+        nozzle_fields = {k: v for k, v in data.items() if 'nozzle' in k.lower() or 'hw' in k.lower() or 'extruder' in k.lower() or 'upgrade' in k.lower()}
+        if nozzle_fields and not hasattr(self, '_nozzle_fields_logged'):
+            logger.info(f"[{self.serial_number}] Nozzle/hardware fields in MQTT data: {nozzle_fields}")
+            self._nozzle_fields_logged = True
         if "bed_temper" in data:
             temps["bed"] = float(data["bed_temper"])
         if "bed_target_temper" in data:
@@ -355,6 +394,30 @@ class BambuMQTTClient:
                 self.state.ipcam = ipcam_data.get("ipcam_record") == "enable"
             else:
                 self.state.ipcam = ipcam_data is True
+
+        # Parse nozzle hardware info (single nozzle printers)
+        if "nozzle_type" in data:
+            self.state.nozzles[0].nozzle_type = str(data["nozzle_type"])
+        if "nozzle_diameter" in data:
+            self.state.nozzles[0].nozzle_diameter = str(data["nozzle_diameter"])
+
+        # Parse nozzle hardware info (dual nozzle printers - H2D series)
+        # Left nozzle
+        if "left_nozzle_type" in data:
+            self.state.nozzles[0].nozzle_type = str(data["left_nozzle_type"])
+        if "left_nozzle_diameter" in data:
+            self.state.nozzles[0].nozzle_diameter = str(data["left_nozzle_diameter"])
+        # Right nozzle
+        if "right_nozzle_type" in data:
+            self.state.nozzles[1].nozzle_type = str(data["right_nozzle_type"])
+        if "right_nozzle_diameter" in data:
+            self.state.nozzles[1].nozzle_diameter = str(data["right_nozzle_diameter"])
+
+        # Alternative format for dual nozzle (nozzle_type_2, etc.)
+        if "nozzle_type_2" in data:
+            self.state.nozzles[1].nozzle_type = str(data["nozzle_type_2"])
+        if "nozzle_diameter_2" in data:
+            self.state.nozzles[1].nozzle_diameter = str(data["nozzle_diameter_2"])
 
         # Preserve AMS and vt_tray data when updating raw_data
         ams_data = self.state.raw_data.get("ams")
@@ -465,6 +528,36 @@ class BambuMQTTClient:
         """Request full status update from printer."""
         if self._client:
             message = {"pushing": {"command": "pushall"}}
+            self._client.publish(self.topic_publish, json.dumps(message))
+
+    def request_status_update(self) -> bool:
+        """Request a full status update from the printer (public API).
+
+        Sends both pushall and get_accessories commands to refresh all data
+        including nozzle hardware info.
+
+        Returns:
+            True if the request was sent, False if not connected.
+        """
+        if not self._client or not self.state.connected:
+            return False
+        self._request_push_all()
+        # Note: get_accessories returns stale nozzle data on H2D.
+        # The correct nozzle data comes from push_status response.
+        return True
+
+    def _request_accessories(self):
+        """Request accessories info (nozzle type, etc.) from printer."""
+        if self._client:
+            self._sequence_id += 1
+            message = {
+                "system": {
+                    "sequence_id": str(self._sequence_id),
+                    "command": "get_accessories",
+                    "accessory_type": "none"
+                }
+            }
+            logger.debug(f"[{self.serial_number}] Requesting accessories info")
             self._client.publish(self.topic_publish, json.dumps(message))
 
     def _prime_kprofile_request(self):

@@ -11,12 +11,14 @@ import { BedControls } from '../components/control/BedControls';
 import { ExtruderControls } from '../components/control/ExtruderControls';
 import { AMSSectionDual } from '../components/control/AMSSectionDual';
 import { CameraSettingsModal } from '../components/control/CameraSettingsModal';
+import { PrinterPartsModal } from '../components/control/PrinterPartsModal';
 import { Loader2, WifiOff, Video, Webcam, Settings } from 'lucide-react';
 
 export function ControlPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
   const [showCameraSettings, setShowCameraSettings] = useState(false);
+  const [showPrinterParts, setShowPrinterParts] = useState(false);
 
   // Fetch all printers
   const { data: printers, isLoading: loadingPrinters } = useQuery({
@@ -170,7 +172,10 @@ export function ControlPage() {
             <div className="flex items-center justify-between px-3 py-2.5 border-b border-bambu-dark-tertiary min-h-[44px]">
               <span className="text-sm text-bambu-gray">Control</span>
               <div className="flex gap-2">
-                <button className="px-4 py-1.5 text-xs rounded bg-bambu-green text-white hover:bg-bambu-green-dark">
+                <button
+                  onClick={() => setShowPrinterParts(true)}
+                  className="px-4 py-1.5 text-xs rounded bg-bambu-green text-white hover:bg-bambu-green-dark"
+                >
                   Printer Parts
                 </button>
                 <button className="px-4 py-1.5 text-xs rounded bg-bambu-green text-white hover:bg-bambu-green-dark">
@@ -245,6 +250,15 @@ export function ControlPage() {
           printerId={selectedPrinter.id}
           status={selectedStatus}
           onClose={() => setShowCameraSettings(false)}
+        />
+      )}
+
+      {/* Printer Parts Modal */}
+      {showPrinterParts && selectedPrinter && (
+        <PrinterPartsModal
+          printer={selectedPrinter}
+          status={selectedStatus}
+          onClose={() => setShowPrinterParts(false)}
         />
       )}
     </div>

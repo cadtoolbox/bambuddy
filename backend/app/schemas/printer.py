@@ -58,6 +58,11 @@ class AMSUnit(BaseModel):
     tray: list[AMSTray] = []
 
 
+class NozzleInfoResponse(BaseModel):
+    nozzle_type: str = ""  # "stainless_steel" or "hardened_steel"
+    nozzle_diameter: str = ""  # e.g., "0.4"
+
+
 class PrinterStatus(BaseModel):
     id: int
     name: str
@@ -79,3 +84,4 @@ class PrinterStatus(BaseModel):
     sdcard: bool = False  # SD card inserted
     timelapse: bool = False  # Timelapse recording active
     ipcam: bool = False  # Live view enabled
+    nozzles: list[NozzleInfoResponse] = []  # Nozzle hardware info (index 0=left/primary, 1=right)

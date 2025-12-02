@@ -21,6 +21,7 @@ from backend.app.schemas.printer import (
     HMSErrorResponse,
     AMSUnit,
     AMSTray,
+    NozzleInfoResponse,
 )
 from backend.app.services.printer_manager import printer_manager
 from backend.app.services.bambu_ftp import (
@@ -183,6 +184,15 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
             k=vt_data.get("k"),
         )
 
+    # Convert nozzle info to response format
+    nozzles = [
+        NozzleInfoResponse(
+            nozzle_type=n.nozzle_type,
+            nozzle_diameter=n.nozzle_diameter,
+        )
+        for n in (state.nozzles or [])
+    ]
+
     return PrinterStatus(
         id=printer_id,
         name=printer.name,
@@ -204,6 +214,7 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
         sdcard=state.sdcard,
         timelapse=state.timelapse,
         ipcam=state.ipcam,
+        nozzles=nozzles,
     )
 
 

@@ -56,6 +56,11 @@ export interface AMSUnit {
   tray: AMSTray[];
 }
 
+export interface NozzleInfo {
+  nozzle_type: string;  // "stainless_steel" or "hardened_steel"
+  nozzle_diameter: string;  // e.g., "0.4"
+}
+
 export interface PrinterStatus {
   id: number;
   name: string;
@@ -83,6 +88,7 @@ export interface PrinterStatus {
   sdcard: boolean;  // SD card inserted
   timelapse: boolean;  // Timelapse recording active
   ipcam: boolean;  // Live view enabled
+  nozzles: NozzleInfo[];  // Nozzle hardware info (index 0=left/primary, 1=right)
 }
 
 export interface PrinterCreate {
@@ -1175,5 +1181,11 @@ export const api = {
     request<ControlResponse>(`/printers/${printerId}/control/camera/liveview`, {
       method: 'POST',
       body: JSON.stringify({ enable }),
+    }),
+
+  // Request full status update from printer (pushall)
+  refreshStatus: (printerId: number) =>
+    request<ControlResponse>(`/printers/${printerId}/control/refresh`, {
+      method: 'POST',
     }),
 };
