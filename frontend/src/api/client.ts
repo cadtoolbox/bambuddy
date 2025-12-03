@@ -115,6 +115,12 @@ export interface PrinterStatus {
   stg_cur: number;  // Current stage number (-1 = not calibrating)
   stg_cur_name: string | null;  // Human-readable current stage name
   stg: number[];  // List of stage numbers in calibration sequence
+  // Air conditioning mode (0=cooling, 1=heating)
+  airduct_mode: number;
+  // Print speed level (1=silent, 2=standard, 3=sport, 4=ludicrous)
+  speed_level: number;
+  // Chamber light on/off
+  chamber_light: boolean;
 }
 
 export interface PrinterCreate {
@@ -1138,6 +1144,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ target, nozzle, confirm_token: confirmToken }),
     }),
+  setChamberTemperature: (printerId: number, target: number, confirmToken?: string) =>
+    request<ControlResult>(`/printers/${printerId}/control/temperature/chamber`, {
+      method: 'POST',
+      body: JSON.stringify({ target, confirm_token: confirmToken }),
+    }),
   setPrintSpeed: (printerId: number, mode: number) =>
     request<ControlResponse>(`/printers/${printerId}/control/speed`, {
       method: 'POST',
@@ -1157,6 +1168,11 @@ export const api = {
     request<ControlResponse>(`/printers/${printerId}/control/fan/chamber`, {
       method: 'POST',
       body: JSON.stringify({ speed }),
+    }),
+  setAirductMode: (printerId: number, mode: 'cooling' | 'heating') =>
+    request<ControlResponse>(`/printers/${printerId}/control/airduct`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
     }),
   setChamberLight: (printerId: number, on: boolean) =>
     request<ControlResponse>(`/printers/${printerId}/control/light`, {

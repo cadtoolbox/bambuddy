@@ -220,11 +220,10 @@ export function ControlPage() {
                 <div className="flex gap-4 bg-bambu-dark-secondary rounded-[8px] p-4 overflow-hidden" style={{ minHeight: '300px' }}>
                   {/* Temperature Column */}
                   <TemperatureColumn
-                  printerId={selectedPrinter.id}
-                  status={selectedStatus}
-                  nozzleCount={selectedPrinter.nozzle_count}
-                  disabled={isCalibrating}
-                />
+                    printer={selectedPrinter}
+                    status={selectedStatus}
+                    disabled={isCalibrating}
+                  />
 
                 {/* Movement Column */}
                 <div className="flex-1 flex gap-6 items-center justify-center">

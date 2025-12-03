@@ -273,6 +273,35 @@ async def set_nozzle_temperature(
     )
 
 
+@router.post("/{printer_id}/control/temperature/chamber", response_model=ControlResponse)
+async def set_chamber_temperature(
+    printer_id: int,
+    request: TemperatureRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set the chamber target temperature."""
+    await get_printer_or_404(printer_id, db)
+    client = get_mqtt_client_or_503(printer_id)
+
+    # Warn for high temperatures (chamber typically maxes around 60°C)
+    if request.target > 60 and not request.confirm_token:
+        token = _create_confirmation_token(printer_id, "chamber_temp")
+        return ConfirmationRequired(
+            token=token,
+            warning=f"Setting chamber to {request.target}°C is very high. Confirm?"
+        )
+
+    if request.target > 60:
+        if not _validate_confirmation_token(request.confirm_token, printer_id, "chamber_temp"):
+            raise HTTPException(status_code=400, detail="Invalid or expired confirmation token")
+
+    success = client.set_chamber_temperature(request.target)
+    return ControlResponse(
+        success=success,
+        message=f"Chamber temperature set to {request.target}°C" if success else "Failed to set chamber temperature"
+    )
+
+
 # =============================================================================
 # Speed Control Endpoint
 # =============================================================================
@@ -351,6 +380,38 @@ async def set_chamber_fan(
     return ControlResponse(
         success=success,
         message=f"Chamber fan set to {request.speed}%" if success else "Failed to set chamber fan"
+    )
+
+
+# =============================================================================
+# Air Conditioning Control Endpoint
+# =============================================================================
+
+class AirductModeRequest(BaseModel):
+    mode: str  # "cooling" or "heating"
+
+
+@router.post("/{printer_id}/control/airduct", response_model=ControlResponse)
+async def set_airduct_mode(
+    printer_id: int,
+    request: AirductModeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set air conditioning mode (cooling or heating).
+
+    - Cooling: Suitable for PLA/PETG/TPU, filters and cools chamber air
+    - Heating: Suitable for ABS/ASA/PC/PA, circulates and heats chamber air, closes top exhaust flap
+    """
+    await get_printer_or_404(printer_id, db)
+    client = get_mqtt_client_or_503(printer_id)
+
+    if request.mode not in ("cooling", "heating"):
+        raise HTTPException(status_code=400, detail="Mode must be 'cooling' or 'heating'")
+
+    success = client.set_airduct_mode(request.mode)
+    return ControlResponse(
+        success=success,
+        message=f"Air conditioning set to {request.mode}" if success else "Failed to set air conditioning mode"
     )
 
 

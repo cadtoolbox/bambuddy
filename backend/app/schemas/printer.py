@@ -112,3 +112,9 @@ class PrinterStatus(BaseModel):
     stg_cur: int = -1  # Current stage number (-1 = not calibrating)
     stg_cur_name: str | None = None  # Human-readable current stage name
     stg: list[int] = []  # List of stage numbers in calibration sequence
+    # Air conditioning mode (0=cooling, 1=heating)
+    airduct_mode: int = 0
+    # Print speed level (1=silent, 2=standard, 3=sport, 4=ludicrous)
+    speed_level: int = 2
+    # Chamber light on/off
+    chamber_light: bool = False

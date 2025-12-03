@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import type { PrinterStatus } from '../../api/client';
+import type { Printer, PrinterStatus } from '../../api/client';
+import { AirConditionModal } from './AirConditionModal';
+import { SpeedModal } from './SpeedModal';
 
 interface Temperatures {
   bed?: number;
@@ -19,33 +21,38 @@ interface Temperatures {
 }
 
 interface TemperatureColumnProps {
-  printerId: number;
+  printer: Printer;
   status: PrinterStatus | null | undefined;
-  nozzleCount: number;
   disabled?: boolean;
 }
 
-type EditingField = 'nozzle' | 'nozzle_2' | 'bed' | null;
+type EditingField = 'nozzle' | 'nozzle_2' | 'bed' | 'chamber' | null;
 
-export function TemperatureColumn({ printerId, status, nozzleCount, disabled = false }: TemperatureColumnProps) {
+export function TemperatureColumn({ printer, status, disabled = false }: TemperatureColumnProps) {
   const temps = (status?.temperatures ?? {}) as Temperatures;
-  const isDualNozzle = nozzleCount > 1;
+  const isDualNozzle = printer.nozzle_count > 1;
   const isConnected = (status?.connected ?? false) && !disabled;
 
   const [editing, setEditing] = useState<EditingField>(null);
   const [editValue, setEditValue] = useState('');
+  const [showAirConditionModal, setShowAirConditionModal] = useState(false);
+  const [showSpeedModal, setShowSpeedModal] = useState(false);
 
   const bedMutation = useMutation({
-    mutationFn: (target: number) => api.setBedTemperature(printerId, target),
+    mutationFn: (target: number) => api.setBedTemperature(printer.id, target),
   });
 
   const nozzleMutation = useMutation({
     mutationFn: ({ target, nozzle }: { target: number; nozzle: number }) =>
-      api.setNozzleTemperature(printerId, target, nozzle),
+      api.setNozzleTemperature(printer.id, target, nozzle),
+  });
+
+  const chamberMutation = useMutation({
+    mutationFn: (target: number) => api.setChamberTemperature(printer.id, target),
   });
 
   const lightMutation = useMutation({
-    mutationFn: (on: boolean) => api.setChamberLight(printerId, on),
+    mutationFn: (on: boolean) => api.setChamberLight(printer.id, on),
   });
 
   const startEditing = (field: EditingField, currentValue: number) => {
@@ -76,6 +83,8 @@ export function TemperatureColumn({ printerId, status, nozzleCount, disabled = f
       // nozzle_2 field = RIGHT nozzle display
       // H2D: RIGHT is T0/default (index 0)
       nozzleMutation.mutate({ target, nozzle: 0 });
+    } else if (editing === 'chamber') {
+      chamberMutation.mutate(target);
     }
     cancelEditing();
   };
@@ -132,6 +141,7 @@ export function TemperatureColumn({ printerId, status, nozzleCount, disabled = f
   };
 
   return (
+    <>
     <div className="flex flex-col justify-evenly min-w-[150px] pr-5 border-r border-bambu-dark-tertiary">
       {/* Nozzle 1 (Left) */}
       <div className="flex items-center gap-1.5">
@@ -183,38 +193,69 @@ export function TemperatureColumn({ printerId, status, nozzleCount, disabled = f
         {renderTargetTemp('bed', temps.bed_target ?? 0)}
       </div>
 
-      {/* Chamber - read only (target set by print file or display) */}
+      {/* Chamber - editable target */}
       <div className="flex items-center gap-1.5">
         <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
           <img src="/icons/chamber.svg" alt="" className={`w-5 ${isChamberHeating ? 'icon-heating' : 'icon-theme'}`} />
         </div>
         {isDualNozzle && <span className="min-w-[18px] flex-shrink-0" />}
         <span className="text-lg font-medium text-white">{Math.round(temps.chamber ?? 0)}</span>
-        <span className="text-sm text-bambu-gray">/{Math.round(temps.chamber_target ?? 0)} °C</span>
+        {renderTargetTemp('chamber', temps.chamber_target ?? 0)}
       </div>
 
-      {/* Air Condition - button */}
+      {/* Air Condition - full width button */}
       <button
+        onClick={() => setShowAirConditionModal(true)}
         disabled={isDisabled}
-        className="flex items-center gap-2 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center justify-center gap-2 w-full py-2 rounded-md bg-bambu-dark-secondary hover:bg-bambu-dark-tertiary border border-bambu-dark-tertiary disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-          <img src="/icons/ventilation.svg" alt="" className="w-5 icon-theme" />
-        </div>
-        <span className="text-sm text-bambu-gray">Air Condition</span>
+        <img src="/icons/ventilation.svg" alt="" className="w-5 h-5 icon-theme" />
+        <span className="text-xs text-bambu-gray">Air Condition</span>
       </button>
 
-      {/* Lamp - button (toggle, state not tracked in status yet) */}
-      <button
-        onClick={() => lightMutation.mutate(true)}
-        disabled={isDisabled || lightMutation.isPending}
-        className="flex items-center gap-2 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-          <img src="/icons/lamp.svg" alt="" className="w-4 icon-theme" />
-        </div>
-        <span className="text-sm text-bambu-gray">Lamp</span>
-      </button>
+      {/* Speed & Lamp - half width each */}
+      <div className="flex items-center gap-2">
+        {/* Speed */}
+        <button
+          onClick={() => setShowSpeedModal(true)}
+          disabled={isDisabled}
+          className="flex-1 flex flex-col items-center py-2 rounded-md bg-bambu-dark-secondary hover:bg-bambu-dark-tertiary border border-bambu-dark-tertiary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <img src="/icons/speed.svg" alt="" className="w-5 h-5 icon-theme" />
+          <span className="text-[10px] text-bambu-gray mt-0.5">
+            {status?.speed_level === 1 ? '50%' : status?.speed_level === 3 ? '124%' : status?.speed_level === 4 ? '166%' : '100%'}
+          </span>
+        </button>
+
+        {/* Lamp */}
+        <button
+          onClick={() => lightMutation.mutate(!(status?.chamber_light ?? false))}
+          disabled={isDisabled || lightMutation.isPending}
+          className="flex-1 flex flex-col items-center py-2 rounded-md bg-bambu-dark-secondary hover:bg-bambu-dark-tertiary border border-bambu-dark-tertiary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <img src="/icons/lamp.svg" alt="" className={`w-5 h-5 ${status?.chamber_light ? 'icon-green' : 'icon-theme'}`} />
+          <span className="text-[10px] text-bambu-gray mt-0.5">Lamp</span>
+        </button>
+      </div>
     </div>
+
+    {/* Air Condition Modal */}
+    {showAirConditionModal && (
+      <AirConditionModal
+        printer={printer}
+        status={status}
+        onClose={() => setShowAirConditionModal(false)}
+      />
+    )}
+
+    {/* Speed Modal */}
+    {showSpeedModal && (
+      <SpeedModal
+        printer={printer}
+        status={status}
+        onClose={() => setShowSpeedModal(false)}
+      />
+    )}
+    </>
   );
 }

@@ -241,6 +241,9 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
         stg_cur=state.stg_cur,
         stg_cur_name=get_stage_name(state.stg_cur) if state.stg_cur >= 0 else None,
         stg=state.stg,
+        airduct_mode=state.airduct_mode,
+        speed_level=state.speed_level,
+        chamber_light=state.chamber_light,
     )
 
 

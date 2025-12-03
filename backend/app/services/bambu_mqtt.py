@@ -103,6 +103,12 @@ class PrinterState:
     # Calibration stage tracking (from stg_cur and stg fields)
     stg_cur: int = -1  # Current stage index (-1 = not calibrating)
     stg: list = field(default_factory=list)  # List of stages to execute
+    # Air conditioning mode (0=cooling, 1=heating)
+    airduct_mode: int = 0
+    # Print speed level (1=silent, 2=standard, 3=sport, 4=ludicrous)
+    speed_level: int = 2
+    # Chamber light on/off
+    chamber_light: bool = False
 
 
 # Stage name mapping from BambuStudio DeviceManager.cpp
@@ -781,6 +787,13 @@ class BambuMQTTClient:
                 # Parse chamber temp from device.ctc.info.temp if not already set
                 ctc_data = device.get("ctc", {})
                 ctc_info = ctc_data.get("info", {})
+                # Parse airduct mode (0=cooling, 1=heating)
+                airduct_data = device.get("airduct", {})
+                if "modeCur" in airduct_data:
+                    new_mode = airduct_data["modeCur"]
+                    if new_mode != self.state.airduct_mode:
+                        logger.info(f"[{self.serial_number}] airduct_mode changed: {self.state.airduct_mode} -> {new_mode}")
+                    self.state.airduct_mode = new_mode
                 if "temp" in ctc_info and "chamber" not in temps:
                     temps["chamber"] = float(ctc_info["temp"])
                 # Parse chamber target from ctc.info.target if available
@@ -859,6 +872,26 @@ class BambuMQTTClient:
                 self.state.ipcam = ipcam_data.get("ipcam_record") == "enable"
             else:
                 self.state.ipcam = ipcam_data is True
+
+        # Parse print speed level (1=silent, 2=standard, 3=sport, 4=ludicrous)
+        if "spd_lvl" in data:
+            new_speed = data["spd_lvl"]
+            if new_speed != self.state.speed_level:
+                logger.info(f"[{self.serial_number}] speed_level changed: {self.state.speed_level} -> {new_speed}")
+            self.state.speed_level = new_speed
+
+        # Parse chamber light status from lights_report
+        if "lights_report" in data:
+            lights = data["lights_report"]
+            logger.debug(f"[{self.serial_number}] lights_report: {lights}")
+            if isinstance(lights, list):
+                for light in lights:
+                    if isinstance(light, dict) and light.get("node") == "chamber_light":
+                        new_light_state = light.get("mode") == "on"
+                        if new_light_state != self.state.chamber_light:
+                            logger.info(f"[{self.serial_number}] chamber_light changed: {self.state.chamber_light} -> {new_light_state}")
+                        self.state.chamber_light = new_light_state
+                        break
 
         # Parse nozzle hardware info (single nozzle printers)
         if "nozzle_type" in data:
@@ -1772,6 +1805,18 @@ class BambuMQTTClient:
             logger.info(f"[{self.serial_number}] Tracking LEFT nozzle target locally: {target}°C")
         return result
 
+    def set_chamber_temperature(self, target: int) -> bool:
+        """Set the chamber target temperature.
+
+        Args:
+            target: Target temperature in Celsius (0 to turn off heating)
+
+        Returns:
+            True if command was sent, False otherwise
+        """
+        # M141 sets chamber temperature
+        return self.send_gcode(f"M141 S{target}")
+
     def set_print_speed(self, mode: int) -> bool:
         """Set the print speed mode.
 
@@ -1829,6 +1874,37 @@ class BambuMQTTClient:
         """Set chamber fan speed (0-255)."""
         return self.set_fan_speed(3, speed)
 
+    def set_airduct_mode(self, mode: str) -> bool:
+        """Set air conditioning mode (cooling or heating).
+
+        Args:
+            mode: "cooling" (modeId=0) or "heating" (modeId=1)
+                - Cooling: Suitable for PLA/PETG/TPU, filters and cools chamber air
+                - Heating: Suitable for ABS/ASA/PC/PA, circulates and heats chamber air,
+                           closes top exhaust flap
+
+        Returns:
+            True if command was sent, False otherwise
+        """
+        if not self._client or not self.state.connected:
+            logger.warning(f"[{self.serial_number}] Cannot set airduct mode: not connected")
+            return False
+
+        self._sequence_id += 1
+        mode_id = 0 if mode == "cooling" else 1
+        command = {
+            "print": {
+                "command": "set_airduct",
+                "modeId": mode_id,
+                "sequence_id": str(self._sequence_id),
+                "submode": -1
+            }
+        }
+        # Use QoS 1 for reliable delivery
+        self._client.publish(self.topic_publish, json.dumps(command), qos=1)
+        logger.info(f"[{self.serial_number}] Set airduct mode to {mode} (modeId={mode_id}, seq={self._sequence_id})")
+        return True
+
     def set_chamber_light(self, on: bool) -> bool:
         """Turn chamber light on or off.
 
@@ -1842,20 +1918,24 @@ class BambuMQTTClient:
             logger.warning(f"[{self.serial_number}] Cannot set chamber light: not connected")
             return False
 
-        command = {
-            "system": {
-                "command": "ledctrl",
-                "led_node": "chamber_light",
-                "led_mode": "on" if on else "off",
-                "led_on_time": 500,
-                "led_off_time": 500,
-                "loop_times": 0,
-                "interval_time": 0,
-                "sequence_id": "0"
+        mode = "on" if on else "off"
+        # Control both chamber lights (some printers like H2D have two)
+        for led_node in ["chamber_light", "chamber_light2"]:
+            self._sequence_id += 1
+            command = {
+                "system": {
+                    "command": "ledctrl",
+                    "led_node": led_node,
+                    "led_mode": mode,
+                    "led_on_time": 500,
+                    "led_off_time": 500,
+                    "loop_times": 0,
+                    "interval_time": 0,
+                    "sequence_id": str(self._sequence_id)
+                }
             }
-        }
-        self._client.publish(self.topic_publish, json.dumps(command))
-        logger.info(f"[{self.serial_number}] Set chamber light {'on' if on else 'off'}")
+            self._client.publish(self.topic_publish, json.dumps(command), qos=1)
+        logger.info(f"[{self.serial_number}] Set chamber lights {'on' if on else 'off'} (seq={self._sequence_id})")
         return True
 
     def home_axes(self, axes: str = "XYZ") -> bool:
