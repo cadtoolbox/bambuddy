@@ -114,6 +114,7 @@ class PrinterStatus(BaseModel):
     store_to_sdcard: bool = False  # Store sent files on SD card
     timelapse: bool = False  # Timelapse recording active
     ipcam: bool = False  # Live view enabled
+    wifi_signal: int | None = None  # WiFi signal strength in dBm
     nozzles: list[NozzleInfoResponse] = []  # Nozzle hardware info (index 0=left/primary, 1=right)
     print_options: PrintOptionsResponse | None = None  # AI detection and print options
     # Calibration stage tracking

@@ -294,6 +294,7 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
         store_to_sdcard=state.store_to_sdcard,
         timelapse=state.timelapse,
         ipcam=state.ipcam,
+        wifi_signal=state.wifi_signal,
         nozzles=nozzles,
         print_options=print_options,
         stg_cur=state.stg_cur,

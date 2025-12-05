@@ -97,6 +97,7 @@ class PrinterState:
     store_to_sdcard: bool = False  # Store sent files on SD card (home_flag bit 11)
     timelapse: bool = False  # Timelapse recording active
     ipcam: bool = False  # Live view / camera streaming enabled
+    wifi_signal: int | None = None  # WiFi signal strength in dBm
     # Nozzle hardware info (for dual nozzle printers, index 0 = left, 1 = right)
     nozzles: list = field(default_factory=lambda: [NozzleInfo(), NozzleInfo()])
     # AI detection and print options
@@ -1276,6 +1277,19 @@ class BambuMQTTClient:
                 self.state.ipcam = ipcam_data.get("ipcam_record") == "enable"
             else:
                 self.state.ipcam = ipcam_data is True
+
+        # Parse WiFi signal strength (dBm)
+        if "wifi_signal" in data:
+            wifi_signal = data["wifi_signal"]
+            if isinstance(wifi_signal, (int, float)):
+                # Convert string dBm to int (e.g., "-52dBm" -> -52)
+                self.state.wifi_signal = int(wifi_signal)
+            elif isinstance(wifi_signal, str):
+                # Handle string format like "-52dBm"
+                try:
+                    self.state.wifi_signal = int(wifi_signal.replace("dBm", "").strip())
+                except ValueError:
+                    pass
 
         # Parse print speed level (1=silent, 2=standard, 3=sport, 4=ludicrous)
         if "spd_lvl" in data:

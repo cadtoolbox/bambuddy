@@ -10,16 +10,15 @@ import { JogPad } from '../components/control/JogPad';
 import { BedControls } from '../components/control/BedControls';
 import { ExtruderControls } from '../components/control/ExtruderControls';
 import { AMSSectionDual } from '../components/control/AMSSectionDual';
-import { CameraSettingsModal } from '../components/control/CameraSettingsModal';
 import { PrinterPartsModal } from '../components/control/PrinterPartsModal';
 import { PrintOptionsModal } from '../components/control/PrintOptionsModal';
 import { CalibrationModal } from '../components/control/CalibrationModal';
-import { Loader2, WifiOff, Video, Webcam, Settings } from 'lucide-react';
+import { Loader2, WifiOff, Video, Webcam } from 'lucide-react';
+import { WifiSignal } from '../components/icons/WifiSignal';
 
 export function ControlPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
-  const [showCameraSettings, setShowCameraSettings] = useState(false);
   const [showPrinterParts, setShowPrinterParts] = useState(false);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
@@ -148,12 +147,12 @@ export function ControlPage() {
               <button className={`p-1.5 rounded hover:bg-bambu-dark-tertiary ${selectedStatus?.ipcam ? 'text-bambu-green' : 'text-bambu-gray hover:text-white'}`}>
                 <Webcam className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setShowCameraSettings(true)}
-                className="p-1.5 rounded hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-white"
+              <div
+                className="p-1.5 rounded"
+                title={selectedStatus?.wifi_signal != null ? `WiFi: ${selectedStatus.wifi_signal} dBm` : 'WiFi signal unknown'}
               >
-                <Settings className="w-4 h-4" />
-              </button>
+                <WifiSignal signal={selectedStatus?.wifi_signal} className="w-4 h-4" />
+              </div>
             </div>
 
             {/* Camera Feed - Embedded directly */}
@@ -262,15 +261,6 @@ export function ControlPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Camera Settings Modal */}
-      {showCameraSettings && selectedPrinter && (
-        <CameraSettingsModal
-          printerId={selectedPrinter.id}
-          status={selectedStatus}
-          onClose={() => setShowCameraSettings(false)}
-        />
       )}
 
       {/* Printer Parts Modal */}

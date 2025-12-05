@@ -117,6 +117,7 @@ export interface PrinterStatus {
   store_to_sdcard: boolean;  // Store sent files on SD card
   timelapse: boolean;  // Timelapse recording active
   ipcam: boolean;  // Live view enabled
+  wifi_signal: number | null;  // WiFi signal strength in dBm
   nozzles: NozzleInfo[];  // Nozzle hardware info (index 0=left/primary, 1=right)
   print_options: PrintOptions | null;  // AI detection and print options
   // Calibration stage tracking
