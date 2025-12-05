@@ -116,6 +116,15 @@ class PrinterState:
     tray_now: int = 255
     # Pending load target - used to track what tray we're loading for H2D disambiguation
     pending_tray_target: int | None = None
+    # AMS status for filament change tracking (from print.ams.ams_status field)
+    # ams_status is a combined value: lower 8 bits = sub status, bits 8-15 = main status
+    # Main status: 0=idle, 1=filament_change, 2=rfid_identifying, 3=assist, 4=calibration, etc.
+    ams_status: int = 0
+    ams_status_main: int = 0  # (ams_status >> 8) & 0xFF
+    ams_status_sub: int = 0   # ams_status & 0xFF
+    # mc_print_sub_stage - filament change step indicator from print.mc_print_sub_stage
+    # Used by OrcaSlicer/BambuStudio to track progress during filament load/unload
+    mc_print_sub_stage: int = 0
 
 
 # Stage name mapping from BambuStudio DeviceManager.cpp
@@ -362,6 +371,30 @@ class BambuMQTTClient:
                     logger.info(f"[{self.serial_number}] vt_tray data: {vt_tray}")
                     self._vt_tray_logged = True
 
+            # Parse ams_status directly from print data (NOT from print.ams)
+            # ams_status is a combined value: lower 8 bits = sub status, bits 8-15 = main status
+            # Main status: 0=idle, 1=filament_change, 2=rfid_identifying, 3=assist, 4=calibration
+            # Sub status (when main=1): 2=heating, 3=AMS feeding, 4=retract, 6=push, 7=purge
+            if "ams_status" in print_data:
+                raw_ams_status = print_data["ams_status"]
+                if isinstance(raw_ams_status, str):
+                    try:
+                        self.state.ams_status = int(raw_ams_status)
+                    except ValueError:
+                        self.state.ams_status = 0
+                else:
+                    self.state.ams_status = raw_ams_status if raw_ams_status is not None else 0
+
+                # Compute main and sub status
+                self.state.ams_status_sub = self.state.ams_status & 0xFF
+                self.state.ams_status_main = (self.state.ams_status >> 8) & 0xFF
+
+                # Log when ams_status changes (for filament change tracking debug)
+                logger.debug(
+                    f"[{self.serial_number}] ams_status: {self.state.ams_status} "
+                    f"(main={self.state.ams_status_main}, sub={self.state.ams_status_sub})"
+                )
+
             # Check for K-profile response (extrusion_cali)
             if "command" in print_data:
                 logger.debug(f"[{self.serial_number}] Received command response: {print_data.get('command')}")
@@ -590,6 +623,26 @@ class BambuMQTTClient:
             non_list_fields = {k: v for k, v in ams_data.items() if k != "ams"}
             if non_list_fields:
                 logger.info(f"[{self.serial_number}] AMS dict fields: {non_list_fields}")
+
+            # IMPORTANT: Parse ams_status FIRST before tray_now, so we have fresh status
+            # when checking if we're in filament change mode for tray_now disambiguation
+            if "ams_status" in ams_data:
+                raw_ams_status = ams_data["ams_status"]
+                if isinstance(raw_ams_status, str):
+                    try:
+                        self.state.ams_status = int(raw_ams_status)
+                    except ValueError:
+                        self.state.ams_status = 0
+                else:
+                    self.state.ams_status = raw_ams_status if raw_ams_status is not None else 0
+                # Compute main and sub status
+                self.state.ams_status_sub = self.state.ams_status & 0xFF
+                self.state.ams_status_main = (self.state.ams_status >> 8) & 0xFF
+                logger.debug(
+                    f"[{self.serial_number}] ams_status: {self.state.ams_status} "
+                    f"(main={self.state.ams_status_main}, sub={self.state.ams_status_sub})"
+                )
+
             # Parse tray_now from AMS dict - this is the currently loaded tray global ID
             if "tray_now" in ams_data:
                 raw_tray_now = ams_data["tray_now"]
@@ -628,21 +681,35 @@ class BambuMQTTClient:
                             # Clear pending target since it's stale
                             self.state.pending_tray_target = None
                     else:
-                        # No pending target, use slot number as-is
-                        # This happens when filament was loaded before app started or via printer touchscreen
-                        logger.debug(
-                            f"[{self.serial_number}] H2D tray_now: no pending_tray_target, "
-                            f"using slot {parsed_tray_now} as global ID (may be incorrect for H2D)"
-                        )
-                        self.state.tray_now = parsed_tray_now
+                        # No pending target - check if we already have a resolved global ID
+                        # that matches this slot (from a previous successful disambiguation)
+                        current_tray = self.state.tray_now
+                        if current_tray > 3 and current_tray != 255 and (current_tray % 4) == parsed_tray_now:
+                            # Current tray_now is already a valid global ID that matches this slot
+                            # Keep it (don't overwrite with raw slot number)
+                            logger.debug(
+                                f"[{self.serial_number}] H2D tray_now: keeping existing global ID {current_tray} "
+                                f"(matches incoming slot {parsed_tray_now})"
+                            )
+                        else:
+                            # No match or no existing global ID, use slot number as-is
+                            # This happens when filament was loaded before app started or via printer touchscreen
+                            logger.debug(
+                                f"[{self.serial_number}] H2D tray_now: no pending_tray_target, "
+                                f"using slot {parsed_tray_now} as global ID (may be incorrect for H2D)"
+                            )
+                            self.state.tray_now = parsed_tray_now
                 else:
                     # tray_now > 3 means it's already a global ID, or 255 means unloaded
-                    if parsed_tray_now == 255:
-                        # Filament unloaded - clear pending target
-                        self.state.pending_tray_target = None
+                    # Note: Do NOT clear pending_tray_target on tray_now=255 here.
+                    # During filament change, the printer sends 255 first (unload), then the slot.
+                    # We only clear pending_tray_target explicitly in ams_unload_filament().
                     self.state.tray_now = parsed_tray_now
 
                 logger.debug(f"[{self.serial_number}] tray_now updated: {self.state.tray_now}")
+
+            # NOTE: ams_status is parsed BEFORE tray_now (see above) to ensure correct
+            # state when checking filament change mode for H2D disambiguation
         elif isinstance(ams_data, list):
             ams_list = ams_data
         else:
@@ -721,6 +788,14 @@ class BambuMQTTClient:
             self.state.progress = float(data["mc_percent"])
         if "mc_remaining_time" in data:
             self.state.remaining_time = int(data["mc_remaining_time"])
+        if "mc_print_sub_stage" in data:
+            new_sub_stage = int(data["mc_print_sub_stage"])
+            if new_sub_stage != self.state.mc_print_sub_stage:
+                logger.debug(
+                    f"[{self.serial_number}] mc_print_sub_stage changed: "
+                    f"{self.state.mc_print_sub_stage} -> {new_sub_stage}"
+                )
+            self.state.mc_print_sub_stage = new_sub_stage
         if "layer_num" in data:
             self.state.layer_num = int(data["layer_num"])
         if "total_layer_num" in data:
@@ -729,10 +804,10 @@ class BambuMQTTClient:
         # Calibration stage tracking
         if "stg_cur" in data:
             new_stg = data["stg_cur"]
+            # Always log ANY stg_cur change for debugging filament operations
             if new_stg != self.state.stg_cur:
                 logger.info(
-                    f"[{self.serial_number}] Calibration stage changed: "
-                    f"{self.state.stg_cur} -> {new_stg} ({get_stage_name(new_stg)})"
+                    f"[{self.serial_number}] stg_cur changed: {self.state.stg_cur} -> {new_stg} ({get_stage_name(new_stg)})"
                 )
             self.state.stg_cur = new_stg
         if "stg" in data:
@@ -2314,10 +2389,11 @@ class BambuMQTTClient:
             slot_id = tray_id % 4  # Slot within AMS (0, 1, 2, 3)
 
         # Build command with ams_id and slot_id format (per HA-Bambulab integration)
+        # Note: curr_nozzle is NOT included - ha-bambulab doesn't use it and it may cause issues
         command = {
             "print": {
                 "command": "ams_change_filament",
-                "target": tray_id,  # Keep target for compatibility
+                "target": tray_id,  # Global tray ID (ams_id * 4 + slot_id)
                 "ams_id": ams_id,
                 "slot_id": slot_id,
                 "curr_temp": 220,
@@ -2326,8 +2402,10 @@ class BambuMQTTClient:
             }
         }
 
-        self._client.publish(self.topic_publish, json.dumps(command))
-        logger.info(f"[{self.serial_number}] Loading filament from AMS {ams_id} slot {slot_id} (global tray {tray_id})")
+        command_json = json.dumps(command)
+        logger.info(f"[{self.serial_number}] Publishing ams_change_filament command: {command_json}")
+        self._client.publish(self.topic_publish, command_json)
+        logger.info(f"[{self.serial_number}] Loading filament from AMS {ams_id} slot {slot_id} (global tray {tray_id}) to extruder {curr_nozzle}")
 
         # Track this load request for H2D dual-nozzle disambiguation
         # H2D reports only slot number (0-3) in tray_now, so we use our tracked value
@@ -2392,7 +2470,7 @@ class BambuMQTTClient:
         logger.info(f"[{self.serial_number}] AMS control: {action}")
         return True
 
-    def ams_refresh_tray(self, ams_id: int, tray_id: int) -> bool:
+    def ams_refresh_tray(self, ams_id: int, tray_id: int) -> tuple[bool, str]:
         """Trigger RFID re-read for a specific AMS tray.
 
         Args:
@@ -2400,11 +2478,27 @@ class BambuMQTTClient:
             tray_id: Tray ID within the AMS (0-3)
 
         Returns:
-            True if command was sent, False otherwise
+            Tuple of (success, message)
         """
         if not self._client or not self.state.connected:
             logger.warning(f"[{self.serial_number}] Cannot refresh AMS tray: not connected")
-            return False
+            return False, "Printer not connected"
+
+        # Check if filament is currently loaded (tray_now != 255)
+        # RFID refresh requires the AMS to move filament, which can't happen if one is loaded
+        tray_now = self.state.tray_now
+        if tray_now != 255:
+            # Decode which tray is loaded for the message
+            if tray_now == 254:
+                loaded_tray = "external spool"
+            elif tray_now >= 0 and tray_now < 128:
+                loaded_ams = tray_now // 4
+                loaded_slot = tray_now % 4
+                loaded_tray = f"AMS {loaded_ams + 1} slot {loaded_slot + 1}"
+            else:
+                loaded_tray = f"tray {tray_now}"
+            logger.warning(f"[{self.serial_number}] Cannot refresh AMS tray: filament loaded from {loaded_tray}")
+            return False, f"Please unload filament first. Currently loaded: {loaded_tray}"
 
         # Use ams_get_rfid command to trigger RFID re-read
         # This command is used by Bambu Studio to re-read the RFID tag
@@ -2418,7 +2512,7 @@ class BambuMQTTClient:
         }
         self._client.publish(self.topic_publish, json.dumps(command))
         logger.info(f"[{self.serial_number}] Triggering RFID re-read: AMS {ams_id}, slot {tray_id}")
-        return True
+        return True, f"Refreshing AMS {ams_id} tray {tray_id}"
 
     def set_timelapse(self, enable: bool) -> bool:
         """Enable or disable timelapse recording.

@@ -140,6 +140,12 @@ export interface PrinterStatus {
   ams_extruder_map: Record<string, number>;
   // Currently loaded tray (global tray ID, 255 = no filament loaded, 254 = external spool)
   tray_now: number;
+  // AMS status for filament change tracking (0=idle, 1=filament_change, 2=rfid_identifying, 3=assist, 4=calibration)
+  ams_status_main: number;
+  // AMS sub-status for filament change step (when main=1): 4=retraction, 6=load verification, 7=purge
+  ams_status_sub: number;
+  // mc_print_sub_stage - filament change step indicator used by OrcaSlicer/BambuStudio
+  mc_print_sub_stage: number;
 }
 
 export interface PrinterCreate {

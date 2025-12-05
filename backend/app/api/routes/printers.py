@@ -306,6 +306,9 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
         ams_mapping=ams_mapping,
         ams_extruder_map=ams_extruder_map,
         tray_now=tray_now,
+        ams_status_main=state.ams_status_main,
+        ams_status_sub=state.ams_status_sub,
+        mc_print_sub_stage=state.mc_print_sub_stage,
     )
 
 

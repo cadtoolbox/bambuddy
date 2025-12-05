@@ -631,11 +631,8 @@ async def ams_refresh_tray(
     await get_printer_or_404(printer_id, db)
     client = get_mqtt_client_or_503(printer_id)
 
-    success = client.ams_refresh_tray(request.ams_id, request.tray_id)
-    return ControlResponse(
-        success=success,
-        message=f"Refreshing AMS {request.ams_id} tray {request.tray_id}" if success else "Failed to refresh tray"
-    )
+    success, message = client.ams_refresh_tray(request.ams_id, request.tray_id)
+    return ControlResponse(success=success, message=message)
 
 
 # =============================================================================

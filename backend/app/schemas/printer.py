@@ -48,8 +48,15 @@ class AMSTray(BaseModel):
     id: int
     tray_color: str | None = None
     tray_type: str | None = None
+    tray_sub_brands: str | None = None  # Full name like "PLA Basic", "PETG HF"
+    tray_id_name: str | None = None  # Bambu filament ID like "A00-Y2" (can decode to color)
+    tray_info_idx: str | None = None  # Filament preset ID like "GFA00"
     remain: int = 0
     k: float | None = None  # Pressure advance value
+    tag_uid: str | None = None  # RFID tag UID (any tag)
+    tray_uuid: str | None = None  # Bambu Lab spool UUID (32-char hex)
+    nozzle_temp_min: int | None = None  # Min nozzle temperature
+    nozzle_temp_max: int | None = None  # Max nozzle temperature
 
 
 class AMSUnit(BaseModel):
@@ -127,3 +134,11 @@ class PrinterStatus(BaseModel):
     ams_extruder_map: dict[str, int] = {}
     # Currently loaded tray (global ID): 254 = external spool, 255 = no filament
     tray_now: int = 255
+    # AMS status for filament change tracking
+    # Main status: 0=idle, 1=filament_change, 2=rfid_identifying, 3=assist, 4=calibration
+    ams_status_main: int = 0
+    # Sub status: specific step within filament change (when main=1)
+    # Known values: 4=retraction, 6=load verification, 7=purge
+    ams_status_sub: int = 0
+    # mc_print_sub_stage - filament change step indicator used by OrcaSlicer/BambuStudio
+    mc_print_sub_stage: int = 0
