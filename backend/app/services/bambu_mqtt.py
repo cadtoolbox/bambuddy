@@ -699,92 +699,24 @@ class BambuMQTTClient:
                                 f"(matches incoming slot {parsed_tray_now})"
                             )
                         else:
-                            # No match or no existing global ID - find active AMS from info field
-                            # For H2D, the AMS with info starting with "1" is actively feeding
-                            # (info starting with "2" means idle)
-                            inferred_global_id = None
-                            active_ams_id = None
-
-                            # Use ams_list from the current message (already extracted above at line 625)
-                            for ams_unit in ams_list:
-                                ams_id = ams_unit.get("id")
-                                if ams_id is None:
-                                    continue
-                                try:
-                                    ams_id = int(ams_id)
-                                except (ValueError, TypeError):
-                                    continue
-
-                                # Check if this AMS is active (info starts with "1")
-                                info = ams_unit.get("info")
-                                if info is not None:
-                                    info_str = str(info)
-                                    if info_str.startswith("1"):
-                                        active_ams_id = ams_id
-                                        inferred_global_id = ams_id * 4 + parsed_tray_now
-                                        logger.info(
-                                            f"[{self.serial_number}] H2D tray_now: "
-                                            f"AMS {ams_id} is active (info={info_str}), "
-                                            f"slot {parsed_tray_now} -> global ID {inferred_global_id}"
-                                        )
-                                        break
-
-                            if inferred_global_id is not None:
-                                self.state.tray_now = inferred_global_id
-                            else:
-                                # Fallback: use slot number as-is (may be incorrect for H2D)
-                                logger.debug(
-                                    f"[{self.serial_number}] H2D tray_now: no active AMS found (no info starting with '1'), "
-                                    f"using slot {parsed_tray_now} as global ID (may be incorrect for H2D)"
-                                )
-                                self.state.tray_now = parsed_tray_now
+                            # No pending target and no valid existing global ID
+                            # For H2D with multiple AMS units, we can't reliably determine which AMS
+                            # the slot belongs to without a pending_tray_target from our load command.
+                            # Use slot number as-is - this may be incorrect for multi-AMS setups,
+                            # but it's better than guessing wrong based on unreliable heuristics.
+                            # The user can load filament via our API to get correct tracking.
+                            logger.warning(
+                                f"[{self.serial_number}] H2D tray_now: no pending target, "
+                                f"using slot {parsed_tray_now} as global ID (may be incorrect for multi-AMS)"
+                            )
+                            self.state.tray_now = parsed_tray_now
                 else:
                     # tray_now > 3 means it's already a global ID, or 255 means unloaded
                     # Note: Do NOT clear pending_tray_target on tray_now=255 here.
                     # During filament change, the printer sends 255 first (unload), then the slot.
                     # We only clear pending_tray_target explicitly in ams_unload_filament().
-
-                    # H2D special case: when tray_now=255 AND we're in active filament change,
-                    # check if any AMS has active info for disambiguation.
-                    # But when IDLE (ams_status_main=0), trust tray_now=255 - filament is unloaded.
-                    # The info field "1XXX" means actively feeding, "2XXX" means idle.
-                    if parsed_tray_now == 255 and self.state.ams_status_main == 1:
-                        # Only do info override during active filament change
-                        # Check if any AMS has info starting with "1" (active)
-                        inferred_from_info = None
-                        for ams_unit in ams_list:
-                            ams_id = ams_unit.get("id")
-                            if ams_id is None:
-                                continue
-                            try:
-                                ams_id = int(ams_id)
-                            except (ValueError, TypeError):
-                                continue
-
-                            info = ams_unit.get("info")
-                            if info is not None:
-                                info_str = str(info)
-                                if info_str.startswith("1") and len(info_str) >= 2:
-                                    # Info format: 1XYZ where X is the slot index
-                                    try:
-                                        slot_idx = int(info_str[1])
-                                        if 0 <= slot_idx <= 3:
-                                            inferred_from_info = ams_id * 4 + slot_idx
-                                            logger.info(
-                                                f"[{self.serial_number}] H2D tray_now override: "
-                                                f"printer reports 255 but AMS {ams_id} info={info_str} shows "
-                                                f"slot {slot_idx} is active -> using global ID {inferred_from_info}"
-                                            )
-                                            break
-                                    except (ValueError, IndexError):
-                                        pass
-
-                        if inferred_from_info is not None:
-                            self.state.tray_now = inferred_from_info
-                        else:
-                            self.state.tray_now = parsed_tray_now
-                    else:
-                        self.state.tray_now = parsed_tray_now
+                    # Trust the printer's reported value.
+                    self.state.tray_now = parsed_tray_now
 
                 logger.debug(f"[{self.serial_number}] tray_now updated: {self.state.tray_now}")
 
