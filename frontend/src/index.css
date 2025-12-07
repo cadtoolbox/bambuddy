@@ -122,3 +122,24 @@ body {
 .dark .jogpad-theme {
   filter: brightness(0.35) contrast(1.2);
 }
+
+/* Empty AMS slot with diagonal stripes */
+.ams-empty-slot {
+  background: repeating-linear-gradient(
+    45deg,
+    #444,
+    #444 2px,
+    #222 2px,
+    #222 4px
+  );
+}
+
+.dark .ams-empty-slot {
+  background: repeating-linear-gradient(
+    45deg,
+    #555,
+    #555 2px,
+    #333 2px,
+    #333 4px
+  );
+}

@@ -268,6 +268,74 @@ class PrinterManager:
 
 def printer_state_to_dict(state: PrinterState, printer_id: int | None = None) -> dict:
     """Convert PrinterState to a JSON-serializable dict."""
+    # Parse AMS data from raw_data
+    ams_units = []
+    vt_tray = None
+    raw_data = state.raw_data or {}
+
+    if "ams" in raw_data and isinstance(raw_data["ams"], list):
+        for ams_data in raw_data["ams"]:
+            trays = []
+            for tray in ams_data.get("tray", []):
+                tag_uid = tray.get("tag_uid")
+                if tag_uid in ("", "0000000000000000"):
+                    tag_uid = None
+                tray_uuid = tray.get("tray_uuid")
+                if tray_uuid in ("", "00000000000000000000000000000000"):
+                    tray_uuid = None
+                trays.append({
+                    "id": tray.get("id", 0),
+                    "tray_color": tray.get("tray_color"),
+                    "tray_type": tray.get("tray_type"),
+                    "tray_sub_brands": tray.get("tray_sub_brands"),
+                    "remain": tray.get("remain", 0),
+                    "k": tray.get("k"),
+                    "tag_uid": tag_uid,
+                    "tray_uuid": tray_uuid,
+                })
+            # Prefer humidity_raw (actual percentage) over humidity (index 1-5)
+            humidity_raw = ams_data.get("humidity_raw")
+            humidity_idx = ams_data.get("humidity")
+            humidity_value = None
+
+            if humidity_raw is not None:
+                try:
+                    humidity_value = int(humidity_raw)
+                except (ValueError, TypeError):
+                    pass
+            # Fall back to index if no raw value (index is 1-5, not percentage)
+            if humidity_value is None and humidity_idx is not None:
+                try:
+                    humidity_value = int(humidity_idx)
+                except (ValueError, TypeError):
+                    pass
+
+            # AMS-HT has 1 tray, regular AMS has 4 trays
+            is_ams_ht = len(trays) == 1
+
+            ams_units.append({
+                "id": ams_data.get("id", 0),
+                "humidity": humidity_value,
+                "temp": ams_data.get("temp"),
+                "is_ams_ht": is_ams_ht,
+                "tray": trays,
+            })
+
+    # Parse virtual tray (external spool)
+    if "vt_tray" in raw_data:
+        vt_data = raw_data["vt_tray"]
+        vt_tag_uid = vt_data.get("tag_uid")
+        if vt_tag_uid in ("", "0000000000000000"):
+            vt_tag_uid = None
+        vt_tray = {
+            "id": 254,
+            "tray_color": vt_data.get("tray_color"),
+            "tray_type": vt_data.get("tray_type"),
+            "tray_sub_brands": vt_data.get("tray_sub_brands"),
+            "remain": vt_data.get("remain", 0),
+            "tag_uid": vt_tag_uid,
+        }
+
     result = {
         "connected": state.connected,
         "state": state.state,
@@ -283,6 +351,9 @@ def printer_state_to_dict(state: PrinterState, printer_id: int | None = None) ->
             {"code": e.code, "attr": e.attr, "module": e.module, "severity": e.severity}
             for e in (state.hms_errors or [])
         ],
+        # AMS data for filament colors
+        "ams": ams_units if ams_units else None,
+        "vt_tray": vt_tray,
         # AMS status for filament change tracking
         "ams_status_main": state.ams_status_main,
         "ams_status_sub": state.ams_status_sub,

@@ -8,6 +8,7 @@ class PrinterBase(BaseModel):
     ip_address: str = Field(..., pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
     access_code: str = Field(..., min_length=1, max_length=20)
     model: str | None = None
+    location: str | None = None  # Group/location name
     auto_archive: bool = True
 
 
@@ -20,6 +21,7 @@ class PrinterUpdate(BaseModel):
     ip_address: str | None = None
     access_code: str | None = None
     model: str | None = None
+    location: str | None = None
     is_active: bool | None = None
     auto_archive: bool | None = None
     print_hours_offset: float | None = None
@@ -63,6 +65,7 @@ class AMSUnit(BaseModel):
     id: int
     humidity: int | None = None
     temp: float | None = None
+    is_ams_ht: bool = False  # True for AMS-HT (single spool), False for regular AMS (4 spools)
     tray: list[AMSTray] = []
 
 

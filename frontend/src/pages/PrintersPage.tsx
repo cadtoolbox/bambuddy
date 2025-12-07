@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   Plus,
   Link,
@@ -20,10 +21,16 @@ import {
   Wrench,
   ChevronDown,
   Pencil,
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  LayoutList,
+  Layers,
+  Video,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Printer, PrinterCreate } from '../api/client';
+import type { Printer, PrinterCreate, AMSUnit } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -32,10 +39,132 @@ import { MQTTDebugModal } from '../components/MQTTDebugModal';
 import { HMSErrorModal } from '../components/HMSErrorModal';
 import { PrinterQueueWidget } from '../components/PrinterQueueWidget';
 
+// Nozzle side indicators (Bambu Lab style - square badge with L/R)
+function NozzleBadge({ side }: { side: 'L' | 'R' }) {
+  const { theme } = useTheme();
+  // Light theme: #e7f5e9 (light green), Dark theme: #1a4d2e (dark green)
+  const bgColor = theme === 'dark' ? '#1a4d2e' : '#e7f5e9';
+  return (
+    <span
+      className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded"
+      style={{ backgroundColor: bgColor, color: '#00ae42' }}
+    >
+      {side}
+    </span>
+  );
+}
+
+// Water drop SVG - empty outline (Bambu Lab style from bambu-humidity)
+function WaterDropEmpty({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 36 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.8131 0.00538C18.4463 -0.15091 20.3648 3.14642 20.8264 3.84781C25.4187 10.816 35.3089 26.9368 35.9383 34.8694C37.4182 53.5822 11.882 61.3357 2.53721 45.3789C-1.73471 38.0791 0.016 32.2049 3.178 25.0232C6.99221 16.3662 12.6411 7.90372 17.8131 0.00538ZM18.3738 7.24807L17.5881 7.48441C14.4452 12.9431 10.917 18.2341 8.19369 23.9368C4.6808 31.29 1.18317 38.5479 7.69403 45.5657C17.3058 55.9228 34.9847 46.8808 31.4604 32.8681C29.2558 24.0969 22.4207 15.2913 18.3776 7.24807H18.3738Z" fill="#C3C2C1"/>
+    </svg>
+  );
+}
+
+// Water drop SVG - half filled with blue water (Bambu Lab style from bambu-humidity)
+function WaterDropHalf({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 35 53" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.3165 0.0038C17.932 -0.14959 19.7971 3.08645 20.2458 3.77481C24.7103 10.6135 34.3251 26.4346 34.937 34.2198C36.3757 52.5848 11.5505 60.1942 2.46584 44.534C-1.68714 37.3735 0.0148 31.6085 3.08879 24.5603C6.79681 16.0605 12.2884 7.75907 17.3165 0.0038ZM17.8615 7.11561L17.0977 7.34755C14.0423 12.7048 10.6124 17.8974 7.96483 23.4941C4.54975 30.7107 1.14949 37.8337 7.47908 44.721C16.8233 54.8856 34.01 46.0117 30.5838 32.2595C28.4405 23.6512 21.7957 15.0093 17.8652 7.11561H17.8615Z" fill="#C3C2C1"/>
+      <path d="M5.03547 30.112C9.64453 30.4936 11.632 35.7985 16.4154 35.791C19.6339 35.7873 20.2161 33.2283 22.3853 31.6197C31.6776 24.7286 33.5835 37.4894 27.9881 44.4254C18.1878 56.5653 -1.16063 44.6013 5.03917 30.1158L5.03547 30.112Z" fill="#1F8FEB"/>
+    </svg>
+  );
+}
+
+// Water drop SVG - fully filled with blue water (Bambu Lab style from bambu-humidity)
+function WaterDropFull({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 36 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.9625 4.48059L4.77216 26.3154L2.08228 40.2175L10.0224 50.8414H23.1594L33.3246 42.1693V30.2455L17.9625 4.48059Z" fill="#1F8FEB"/>
+      <path d="M17.7948 0.00538C18.4273 -0.15091 20.3438 3.14642 20.8048 3.84781C25.3921 10.816 35.2715 26.9368 35.9001 34.8694C37.3784 53.5822 11.8702 61.3357 2.53562 45.3789C-1.73163 38.0829 0.0134 32.2087 3.1757 25.027C6.98574 16.3662 12.6284 7.90372 17.7948 0.00538ZM18.3549 7.24807L17.57 7.48441C14.4306 12.9431 10.9063 18.2341 8.1859 23.9368C4.67686 31.29 1.18305 38.5479 7.68679 45.5657C17.2881 55.9228 34.9476 46.8808 31.4271 32.8681C29.2249 24.0969 22.3974 15.2913 18.3587 7.24807H18.3549Z" fill="#C3C2C1"/>
+    </svg>
+  );
+}
+
+// Humidity indicator with water drop that fills based on level (Bambu Lab style)
+// Reference: https://github.com/theicedmango/bambu-humidity
+function HumidityIndicator({ humidity }: { humidity: number | string }) {
+  const humidityValue = typeof humidity === 'string' ? parseInt(humidity, 10) : humidity;
+
+  // Status thresholds from bambu-humidity:
+  // Good: ≤40% (green #22a352), Fair: 41-60% (gold #d4a017), Bad: >60% (red #c62828)
+  let textColor: string;
+  let statusText: string;
+
+  if (isNaN(humidityValue)) {
+    textColor = '#C3C2C1';
+    statusText = 'Unknown';
+  } else if (humidityValue <= 40) {
+    textColor = '#22a352'; // Green - Good
+    statusText = 'Good';
+  } else if (humidityValue <= 60) {
+    textColor = '#d4a017'; // Gold - Fair
+    statusText = 'Fair';
+  } else {
+    textColor = '#c62828'; // Red - Bad
+    statusText = 'Bad';
+  }
+
+  // Fill level based on humidity (matching bambu-humidity visual style)
+  // ≤40% (Good): Half fill, 41-60% (Fair): Full fill, >60% (Bad): Full fill
+  let DropComponent: React.FC<{ className?: string }>;
+  if (isNaN(humidityValue)) {
+    DropComponent = WaterDropEmpty;
+  } else if (humidityValue <= 40) {
+    DropComponent = WaterDropHalf;
+  } else {
+    DropComponent = WaterDropFull;
+  }
+
+  return (
+    <div className="flex items-center gap-1" title={`Humidity: ${humidityValue}% - ${statusText}`}>
+      <DropComponent className="w-3 h-4" />
+      <span className="text-xs font-medium" style={{ color: textColor }}>{humidityValue}%</span>
+    </div>
+  );
+}
+
+// Get AMS label: AMS-A/B/C/D for regular AMS, HT-A/B for AMS-HT (single spool)
+// Always use tray count as the source of truth (1 tray = AMS-HT, 4 trays = regular AMS)
+// AMS-HT uses IDs 128+ while regular AMS uses 0-3
+function getAmsLabel(amsId: number | string, trayCount: number): string {
+  // Ensure amsId is a number (backend might send string)
+  const id = typeof amsId === 'string' ? parseInt(amsId, 10) : amsId;
+  const safeId = isNaN(id) ? 0 : id;
+  const isHt = trayCount === 1;
+  // AMS-HT uses IDs starting at 128, regular AMS uses 0-3
+  const normalizedId = safeId >= 128 ? safeId - 128 : safeId;
+  const letter = String.fromCharCode(65 + normalizedId); // 0=A, 1=B, 2=C, 3=D
+  return isHt ? `HT-${letter}` : `AMS-${letter}`;
+}
+
 function formatTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function formatETA(remainingMinutes: number): string {
+  const now = new Date();
+  const eta = new Date(now.getTime() + remainingMinutes * 60 * 1000);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const etaDay = new Date(eta);
+  etaDay.setHours(0, 0, 0, 0);
+
+  const timeStr = eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Check if it's tomorrow or later
+  const dayDiff = Math.floor((etaDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (dayDiff === 0) {
+    return timeStr;
+  } else if (dayDiff === 1) {
+    return `Tomorrow ${timeStr}`;
+  } else {
+    return eta.toLocaleDateString([], { weekday: 'short' }) + ' ' + timeStr;
+  }
 }
 
 function getPrinterImage(model: string | null | undefined): string {
@@ -122,14 +251,83 @@ interface PrinterMaintenanceInfo {
   total_print_hours: number;
 }
 
+// Status summary bar component - uses queryClient to read cached statuses
+function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
+  const queryClient = useQueryClient();
+
+  const counts = useMemo(() => {
+    let printing = 0;
+    let idle = 0;
+    let offline = 0;
+
+    printers?.forEach((printer) => {
+      const status = queryClient.getQueryData<{ connected: boolean; state: string | null }>(['printerStatus', printer.id]);
+      if (!status?.connected) {
+        offline++;
+      } else if (status.state === 'RUNNING') {
+        printing++;
+      } else {
+        idle++;
+      }
+    });
+
+    return { printing, idle, offline, total: (printers?.length || 0) };
+  }, [printers, queryClient]);
+
+  // Subscribe to query cache changes to re-render when status updates
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
+      setTick(t => t + 1);
+    });
+    return () => unsubscribe();
+  }, [queryClient]);
+
+  if (!printers?.length) return null;
+
+  return (
+    <div className="flex items-center gap-4 text-sm">
+      {counts.printing > 0 && (
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-bambu-green animate-pulse" />
+          <span className="text-bambu-gray">
+            <span className="text-white font-medium">{counts.printing}</span> printing
+          </span>
+        </div>
+      )}
+      {counts.idle > 0 && (
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-blue-400" />
+          <span className="text-bambu-gray">
+            <span className="text-white font-medium">{counts.idle}</span> idle
+          </span>
+        </div>
+      )}
+      {counts.offline > 0 && (
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-gray-400" />
+          <span className="text-bambu-gray">
+            <span className="text-white font-medium">{counts.offline}</span> offline
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type SortOption = 'name' | 'status' | 'model' | 'location';
+type ViewMode = 'expanded' | 'compact';
+
 function PrinterCard({
   printer,
   hideIfDisconnected,
-  maintenanceInfo
+  maintenanceInfo,
+  viewMode = 'expanded',
 }: {
   printer: Printer;
   hideIfDisconnected?: boolean;
   maintenanceInfo?: PrinterMaintenanceInfo;
+  viewMode?: ViewMode;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -157,6 +355,26 @@ function PrinterCard({
   }, [status?.wifi_signal]);
   const wifiSignal = status?.wifi_signal ?? cachedWifiSignal;
 
+  // Cache ams_extruder_map to prevent L/R indicators bouncing on updates
+  const cachedAmsExtruderMap = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0) {
+      cachedAmsExtruderMap.current = status.ams_extruder_map;
+    }
+  }, [status?.ams_extruder_map]);
+  const amsExtruderMap = (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0)
+    ? status.ams_extruder_map
+    : cachedAmsExtruderMap.current;
+
+  // Cache AMS data to prevent it disappearing on idle/offline printers
+  const cachedAmsData = useRef<AMSUnit[]>([]);
+  useEffect(() => {
+    if (status?.ams && status.ams.length > 0) {
+      cachedAmsData.current = status.ams;
+    }
+  }, [status?.ams]);
+  const amsData = (status?.ams && status.ams.length > 0) ? status.ams : cachedAmsData.current;
+
   // Fetch smart plug for this printer
   const { data: smartPlug } = useQuery({
     queryKey: ['smartPlugByPrinter', printer.id],
@@ -170,6 +388,21 @@ function PrinterCard({
     enabled: !!smartPlug,
     refetchInterval: 10000, // 10 seconds for real-time power display
   });
+
+  // Fetch queue count for this printer
+  const { data: queueItems } = useQuery({
+    queryKey: ['queue', printer.id, 'pending'],
+    queryFn: () => api.getQueue(printer.id, 'pending'),
+  });
+  const queueCount = queueItems?.length || 0;
+
+  // Fetch last completed print for this printer
+  const { data: lastPrints } = useQuery({
+    queryKey: ['archives', printer.id, 'last'],
+    queryFn: () => api.getArchives(printer.id, 1, 0),
+    enabled: status?.connected && status?.state !== 'RUNNING',
+  });
+  const lastPrint = lastPrints?.[0];
 
   // Determine if this card should be hidden
   const shouldHide = hideIfDisconnected && status && !status.connected;
@@ -215,106 +448,48 @@ function PrinterCard({
     <Card className="relative">
       <CardContent>
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {/* Printer Model Image */}
-            <img
-              src={getPrinterImage(printer.model)}
-              alt={printer.model || 'Printer'}
-              className="w-14 h-14 object-contain rounded-lg bg-bambu-dark"
-            />
-            <div>
-              <h3 className="text-lg font-semibold text-white">{printer.name}</h3>
-              <p className="text-sm text-bambu-gray">
-                {printer.model || 'Unknown Model'}
-                {maintenanceInfo && maintenanceInfo.total_print_hours > 0 && (
-                  <span className="ml-2 text-bambu-gray">
-                    <Clock className="w-3 h-3 inline-block mr-1" />
-                    {Math.round(maintenanceInfo.total_print_hours)}h
-                  </span>
-                )}
-              </p>
+        <div className={viewMode === 'compact' ? 'mb-2' : 'mb-4'}>
+          {/* Top row: Image, Name, Menu */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              {/* Printer Model Image */}
+              <img
+                src={getPrinterImage(printer.model)}
+                alt={printer.model || 'Printer'}
+                className={`object-contain rounded-lg bg-bambu-dark flex-shrink-0 ${viewMode === 'compact' ? 'w-10 h-10' : 'w-14 h-14'}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className={`font-semibold text-white ${viewMode === 'compact' ? 'text-base truncate' : 'text-lg'}`}>{printer.name}</h3>
+                  {/* Connection indicator dot for compact mode */}
+                  {viewMode === 'compact' && (
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        status?.connected ? 'bg-bambu-green' : 'bg-red-500'
+                      }`}
+                      title={status?.connected ? 'Connected' : 'Offline'}
+                    />
+                  )}
+                </div>
+                <p className="text-sm text-bambu-gray">
+                  {printer.model || 'Unknown Model'}
+                  {/* Nozzle Info - only in expanded */}
+                  {viewMode === 'expanded' && status?.nozzles && status.nozzles[0]?.nozzle_diameter && (
+                    <span className="ml-1.5 text-bambu-gray" title={status.nozzles[0].nozzle_type || 'Nozzle'}>
+                      • {status.nozzles[0].nozzle_diameter}mm
+                    </span>
+                  )}
+                  {viewMode === 'expanded' && maintenanceInfo && maintenanceInfo.total_print_hours > 0 && (
+                    <span className="ml-2 text-bambu-gray">
+                      <Clock className="w-3 h-3 inline-block mr-1" />
+                      {Math.round(maintenanceInfo.total_print_hours)}h
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Connection status badge */}
-            <span
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
-                status?.connected
-                  ? 'bg-bambu-green/20 text-bambu-green'
-                  : 'bg-red-500/20 text-red-400'
-              }`}
-            >
-              {status?.connected ? (
-                <Link className="w-3 h-3" />
-              ) : (
-                <Unlink className="w-3 h-3" />
-              )}
-              {status?.connected ? 'Connected' : 'Offline'}
-            </span>
-            {/* WiFi signal strength indicator */}
-            {status?.connected && wifiSignal != null && (
-              <span
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                  wifiSignal >= -50
-                    ? 'bg-bambu-green/20 text-bambu-green'
-                    : wifiSignal >= -60
-                    ? 'bg-bambu-green/20 text-bambu-green'
-                    : wifiSignal >= -70
-                    ? 'bg-amber-500/20 text-amber-600'
-                    : wifiSignal >= -80
-                    ? 'bg-orange-500/20 text-orange-600'
-                    : 'bg-red-500/20 text-red-600'
-                }`}
-                title={`WiFi: ${wifiSignal} dBm - ${getWifiStrength(wifiSignal).label}`}
-              >
-                <Signal className="w-3 h-3" />
-                {wifiSignal}dBm
-              </span>
-            )}
-            {/* HMS Status Indicator */}
-            {status?.connected && (
-              <button
-                onClick={() => setShowHMSModal(true)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs cursor-pointer hover:opacity-80 transition-opacity ${
-                  status.hms_errors && status.hms_errors.length > 0
-                    ? status.hms_errors.some(e => e.severity <= 2)
-                      ? 'bg-red-500/20 text-red-400'
-                      : 'bg-orange-500/20 text-orange-400'
-                    : 'bg-bambu-green/20 text-bambu-green'
-                }`}
-                title="Click to view HMS errors"
-              >
-                <AlertTriangle className="w-3 h-3" />
-                {status.hms_errors && status.hms_errors.length > 0
-                  ? status.hms_errors.length
-                  : 'OK'}
-              </button>
-            )}
-            {/* Maintenance Status Indicator - always show */}
-            {maintenanceInfo && (
-              <button
-                onClick={() => navigate('/maintenance')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs cursor-pointer hover:opacity-80 transition-opacity ${
-                  maintenanceInfo.due_count > 0
-                    ? 'bg-red-500/20 text-red-400'
-                    : maintenanceInfo.warning_count > 0
-                    ? 'bg-orange-500/20 text-orange-400'
-                    : 'bg-bambu-green/20 text-bambu-green'
-                }`}
-                title={
-                  maintenanceInfo.due_count > 0 || maintenanceInfo.warning_count > 0
-                    ? `${maintenanceInfo.due_count > 0 ? `${maintenanceInfo.due_count} maintenance due` : ''}${maintenanceInfo.due_count > 0 && maintenanceInfo.warning_count > 0 ? ', ' : ''}${maintenanceInfo.warning_count > 0 ? `${maintenanceInfo.warning_count} due soon` : ''} - Click to view`
-                    : 'All maintenance up to date - Click to view'
-                }
-              >
-                <Wrench className="w-3 h-3" />
-                {maintenanceInfo.due_count > 0 || maintenanceInfo.warning_count > 0
-                  ? maintenanceInfo.due_count + maintenanceInfo.warning_count
-                  : 'OK'}
-              </button>
-            )}
-            <div className="relative">
+            {/* Menu button */}
+            <div className="relative flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
@@ -368,6 +543,100 @@ function PrinterCard({
               )}
             </div>
           </div>
+
+          {/* Badges row - only in expanded mode */}
+          {viewMode === 'expanded' && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* Connection status badge */}
+              <span
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                  status?.connected
+                    ? 'bg-bambu-green/20 text-bambu-green'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {status?.connected ? (
+                  <Link className="w-3 h-3" />
+                ) : (
+                  <Unlink className="w-3 h-3" />
+                )}
+                {status?.connected ? 'Connected' : 'Offline'}
+              </span>
+              {/* WiFi signal strength indicator */}
+              {status?.connected && wifiSignal != null && (
+                <span
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                    wifiSignal >= -50
+                      ? 'bg-bambu-green/20 text-bambu-green'
+                      : wifiSignal >= -60
+                      ? 'bg-bambu-green/20 text-bambu-green'
+                      : wifiSignal >= -70
+                      ? 'bg-amber-500/20 text-amber-600'
+                      : wifiSignal >= -80
+                      ? 'bg-orange-500/20 text-orange-600'
+                      : 'bg-red-500/20 text-red-600'
+                  }`}
+                  title={`WiFi: ${wifiSignal} dBm - ${getWifiStrength(wifiSignal).label}`}
+                >
+                  <Signal className="w-3 h-3" />
+                  {wifiSignal}dBm
+                </span>
+              )}
+              {/* HMS Status Indicator */}
+              {status?.connected && (
+                <button
+                  onClick={() => setShowHMSModal(true)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                    status.hms_errors && status.hms_errors.length > 0
+                      ? status.hms_errors.some(e => e.severity <= 2)
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-orange-500/20 text-orange-400'
+                      : 'bg-bambu-green/20 text-bambu-green'
+                  }`}
+                  title="Click to view HMS errors"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  {status.hms_errors && status.hms_errors.length > 0
+                    ? status.hms_errors.length
+                    : 'OK'}
+                </button>
+              )}
+              {/* Maintenance Status Indicator */}
+              {maintenanceInfo && (
+                <button
+                  onClick={() => navigate('/maintenance')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                    maintenanceInfo.due_count > 0
+                      ? 'bg-red-500/20 text-red-400'
+                      : maintenanceInfo.warning_count > 0
+                      ? 'bg-orange-500/20 text-orange-400'
+                      : 'bg-bambu-green/20 text-bambu-green'
+                  }`}
+                  title={
+                    maintenanceInfo.due_count > 0 || maintenanceInfo.warning_count > 0
+                      ? `${maintenanceInfo.due_count > 0 ? `${maintenanceInfo.due_count} maintenance due` : ''}${maintenanceInfo.due_count > 0 && maintenanceInfo.warning_count > 0 ? ', ' : ''}${maintenanceInfo.warning_count > 0 ? `${maintenanceInfo.warning_count} due soon` : ''} - Click to view`
+                      : 'All maintenance up to date - Click to view'
+                  }
+                >
+                  <Wrench className="w-3 h-3" />
+                  {maintenanceInfo.due_count > 0 || maintenanceInfo.warning_count > 0
+                    ? maintenanceInfo.due_count + maintenanceInfo.warning_count
+                    : 'OK'}
+                </button>
+              )}
+              {/* Queue Count Badge */}
+              {queueCount > 0 && (
+                <button
+                  onClick={() => navigate('/queue')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400 hover:opacity-80 transition-opacity"
+                  title={`${queueCount} print${queueCount > 1 ? 's' : ''} in queue`}
+                >
+                  <Layers className="w-3 h-3" />
+                  {queueCount}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Delete Confirmation */}
@@ -388,78 +657,129 @@ function PrinterCard({
         {/* Status */}
         {status?.connected && (
           <>
-            {/* Current Print or Idle Placeholder */}
-            <div className="mb-4 p-3 bg-bambu-dark rounded-lg">
-              <div className="flex gap-3">
-                {/* Cover Image */}
-                <CoverImage
-                  url={status.state === 'RUNNING' ? status.cover_url : null}
-                  printName={status.state === 'RUNNING' ? (status.subtask_name || status.current_print || undefined) : undefined}
-                />
-                {/* Print Info */}
-                <div className="flex-1 min-w-0">
-                  {status.current_print && status.state === 'RUNNING' ? (
-                    <>
-                      <p className="text-sm text-bambu-gray mb-1">Printing</p>
-                      <p className="text-white text-sm mb-2 truncate">
-                        {status.subtask_name || status.current_print}
-                      </p>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
-                          <div
-                            className="bg-bambu-green h-2 rounded-full transition-all"
-                            style={{ width: `${status.progress || 0}%` }}
-                          />
-                        </div>
-                        <span className="text-white">{Math.round(status.progress || 0)}%</span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-bambu-gray">
-                        {status.remaining_time != null && status.remaining_time > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatTime(status.remaining_time * 60)}
-                          </span>
-                        )}
-                        {status.layer_num != null && status.total_layers != null && status.total_layers > 0 && (
-                          <span>
-                            Layer {status.layer_num}/{status.total_layers}
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-bambu-gray mb-1">Status</p>
-                      <p className="text-white text-sm mb-2 capitalize">
-                        {status.state?.toLowerCase() || 'Idle'}
-                      </p>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
-                          <div className="bg-bambu-dark-tertiary h-2 rounded-full" />
-                        </div>
-                        <span className="text-bambu-gray">—</span>
-                      </div>
-                      <p className="text-xs text-bambu-gray mt-2">Ready to print</p>
-                    </>
-                  )}
-                </div>
+            {/* Compact: Simple status bar */}
+            {viewMode === 'compact' ? (
+              <div className="mt-2">
+                {status.state === 'RUNNING' ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-1.5">
+                      <div
+                        className="bg-bambu-green h-1.5 rounded-full transition-all"
+                        style={{ width: `${status.progress || 0}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-white">{Math.round(status.progress || 0)}%</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-bambu-gray capitalize">{status.state?.toLowerCase() || 'Idle'}</p>
+                )}
               </div>
-            </div>
+            ) : (
+              /* Expanded: Full status section */
+              <>
+                {/* Current Print or Idle Placeholder */}
+                <div className="mb-4 p-3 bg-bambu-dark rounded-lg">
+                  <div className="flex gap-3">
+                    {/* Cover Image */}
+                    <CoverImage
+                      url={status.state === 'RUNNING' ? status.cover_url : null}
+                      printName={status.state === 'RUNNING' ? (status.subtask_name || status.current_print || undefined) : undefined}
+                    />
+                    {/* Print Info */}
+                    <div className="flex-1 min-w-0">
+                      {status.current_print && status.state === 'RUNNING' ? (
+                        <>
+                          <p className="text-sm text-bambu-gray mb-1">Printing</p>
+                          <p className="text-white text-sm mb-2 truncate">
+                            {status.subtask_name || status.current_print}
+                          </p>
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
+                              <div
+                                className="bg-bambu-green h-2 rounded-full transition-all"
+                                style={{ width: `${status.progress || 0}%` }}
+                              />
+                            </div>
+                            <span className="text-white">{Math.round(status.progress || 0)}%</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-bambu-gray">
+                            {status.remaining_time != null && status.remaining_time > 0 && (
+                              <>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {formatTime(status.remaining_time * 60)}
+                                </span>
+                                <span className="text-bambu-green font-medium" title="Estimated completion time">
+                                  ETA {formatETA(status.remaining_time)}
+                                </span>
+                              </>
+                            )}
+                            {status.layer_num != null && status.total_layers != null && status.total_layers > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Layers className="w-3 h-3" />
+                                {status.layer_num}/{status.total_layers}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-bambu-gray mb-1">Status</p>
+                          <p className="text-white text-sm mb-2 capitalize">
+                            {status.state?.toLowerCase() || 'Idle'}
+                          </p>
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
+                              <div className="bg-bambu-dark-tertiary h-2 rounded-full" />
+                            </div>
+                            <span className="text-bambu-gray">—</span>
+                          </div>
+                          {lastPrint ? (
+                            <p className="text-xs text-bambu-gray mt-2 truncate" title={lastPrint.print_name || lastPrint.filename}>
+                              Last: {lastPrint.print_name || lastPrint.filename}
+                              {lastPrint.completed_at && (
+                                <span className="ml-1 text-bambu-gray/60">
+                                  • {new Date(lastPrint.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-bambu-gray mt-2">Ready to print</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-            {/* Queue Widget - shows next scheduled print */}
-            {status.state !== 'RUNNING' && (
-              <PrinterQueueWidget printerId={printer.id} />
+                {/* Queue Widget - shows next scheduled print */}
+                {status.state !== 'RUNNING' && (
+                  <PrinterQueueWidget printerId={printer.id} />
+                )}
+              </>
             )}
 
             {/* Temperatures */}
-            {status.temperatures && (
+            {status.temperatures && viewMode === 'expanded' && (
               <div className="grid grid-cols-3 gap-3">
+                {/* Nozzle temp - combined for dual nozzle */}
                 <div className="text-center p-2 bg-bambu-dark rounded-lg">
                   <Thermometer className="w-4 h-4 mx-auto mb-1 text-orange-400" />
-                  <p className="text-xs text-bambu-gray">Nozzle</p>
-                  <p className="text-sm text-white">
-                    {Math.round(status.temperatures.nozzle || 0)}°C
-                  </p>
+                  {status.temperatures.nozzle_2 !== undefined ? (
+                    <>
+                      <p className="text-xs text-bambu-gray">Left / Right</p>
+                      <p className="text-sm text-white">
+                        {Math.round(status.temperatures.nozzle || 0)}°C / {Math.round(status.temperatures.nozzle_2 || 0)}°C
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-bambu-gray">Nozzle</p>
+                      <p className="text-sm text-white">
+                        {Math.round(status.temperatures.nozzle || 0)}°C
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="text-center p-2 bg-bambu-dark rounded-lg">
                   <Thermometer className="w-4 h-4 mx-auto mb-1 text-blue-400" />
@@ -479,11 +799,92 @@ function PrinterCard({
                 )}
               </div>
             )}
+
+            {/* AMS Units with Filament Colors, Humidity & Temperature */}
+            {amsData && amsData.length > 0 && viewMode === 'expanded' && (
+              <div className="mt-3 p-2 bg-bambu-dark rounded-lg">
+                <div className="space-y-2">
+                  {amsData.map((ams) => {
+                    // For dual nozzle printers, determine which nozzle this AMS is connected to
+                    const normalizedId = ams.id >= 128 ? ams.id - 128 : ams.id;
+                    // Use cached extruder map, or fallback to conventional mapping (0=R, 1=L)
+                    const mappedExtruderId = amsExtruderMap[String(normalizedId)];
+                    const extruderId = mappedExtruderId !== undefined
+                      ? mappedExtruderId
+                      : normalizedId; // Fallback: AMS 0 → extruder 0 (R), AMS 1 → extruder 1 (L)
+                    // Use printer.nozzle_count as primary source (stable), fallback to nozzle_2 temp
+                    const isDualNozzle = printer.nozzle_count === 2 || status?.temperatures?.nozzle_2 !== undefined;
+                    // extruder 0 = Right, extruder 1 = Left
+                    const isLeftNozzle = extruderId === 1;
+                    const isRightNozzle = extruderId === 0;
+
+                    return (
+                      <div key={ams.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {/* Nozzle indicator for dual nozzle printers */}
+                          {isDualNozzle && (isLeftNozzle || isRightNozzle) && (
+                            <NozzleBadge side={isLeftNozzle ? 'L' : 'R'} />
+                          )}
+                          <span className="text-xs text-bambu-gray whitespace-nowrap">
+                            {getAmsLabel(ams.id, ams.tray.length)}
+                          </span>
+                          <div className="flex gap-1">
+                            {ams.tray.map((tray, trayIdx) => (
+                              <div
+                                key={`${ams.id}-${trayIdx}`}
+                                className={`w-5 h-5 rounded-full border border-white/20 ${
+                                  !tray.tray_type ? 'ams-empty-slot' : ''
+                                }`}
+                                style={{
+                                  backgroundColor: tray.tray_color ? `#${tray.tray_color}` : (tray.tray_type ? '#333' : undefined),
+                                }}
+                                title={
+                                  tray.tray_type
+                                    ? `${tray.tray_sub_brands || tray.tray_type}${tray.remain ? ` (${tray.remain}%)` : ''}`
+                                    : 'Empty slot'
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {/* Humidity & Temperature */}
+                        {(ams.humidity != null || ams.temp != null) && (
+                          <div className="flex items-center gap-3 text-xs">
+                            {ams.humidity != null && (
+                              <HumidityIndicator humidity={ams.humidity} />
+                            )}
+                            {ams.temp != null && (
+                              <span className="flex items-center gap-1 text-orange-400" title="Temperature">
+                                <Thermometer className="w-3 h-3" />
+                                {ams.temp}°C
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* External spool indicator */}
+                {status.vt_tray && status.vt_tray.tray_type && (
+                  <div className="flex items-center gap-2 pt-2 mt-2 border-t border-bambu-dark-tertiary">
+                    <span className="text-xs text-bambu-gray w-10">Ext</span>
+                    <div
+                      className="w-5 h-5 rounded-full border border-white/20"
+                      style={{
+                        backgroundColor: status.vt_tray.tray_color ? `#${status.vt_tray.tray_color}` : '#333',
+                      }}
+                      title={status.vt_tray.tray_sub_brands || status.vt_tray.tray_type || 'External'}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
-        {/* Smart Plug Controls */}
-        {smartPlug && (
+        {/* Smart Plug Controls - hidden in compact mode */}
+        {smartPlug && viewMode === 'expanded' && (
           <div className="mt-4 pt-4 border-t border-bambu-dark-tertiary">
             <div className="flex items-center gap-3">
               {/* Plug name and status */}
@@ -568,22 +969,41 @@ function PrinterCard({
           </div>
         )}
 
-        {/* Connection Info & Actions */}
-        <div className="mt-4 pt-4 border-t border-bambu-dark-tertiary flex items-center justify-between">
-          <div className="text-xs text-bambu-gray">
-            <p>{printer.ip_address}</p>
-            <p className="truncate">{printer.serial_number}</p>
+        {/* Connection Info & Actions - hidden in compact mode */}
+        {viewMode === 'expanded' && (
+          <div className="mt-4 pt-4 border-t border-bambu-dark-tertiary flex items-center justify-between">
+            <div className="text-xs text-bambu-gray">
+              <p>{printer.ip_address}</p>
+              <p className="truncate">{printer.serial_number}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  window.open(
+                    `/camera/${printer.id}`,
+                    `camera-${printer.id}`,
+                    'width=640,height=400,menubar=no,toolbar=no,location=no,status=no'
+                  );
+                }}
+                disabled={!status?.connected}
+                title="Open camera in new window"
+              >
+                <Video className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowFileManager(true)}
+                title="Browse printer files"
+              >
+                <HardDrive className="w-4 h-4" />
+                Files
+              </Button>
+            </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowFileManager(true)}
-            title="Browse printer files"
-          >
-            <HardDrive className="w-4 h-4" />
-            Files
-          </Button>
-        </div>
+        )}
       </CardContent>
 
       {/* File Manager Modal */}
@@ -812,6 +1232,7 @@ function EditPrinterModal({
     ip_address: printer.ip_address,
     access_code: '',
     model: printer.model || '',
+    location: printer.location || '',
     auto_archive: printer.auto_archive,
   });
 
@@ -839,6 +1260,7 @@ function EditPrinterModal({
       name: form.name,
       ip_address: form.ip_address,
       model: form.model || undefined,
+      location: form.location || undefined,
       auto_archive: form.auto_archive,
     };
     // Only include access_code if it was changed
@@ -928,6 +1350,17 @@ function EditPrinterModal({
                   <option value="A1 Mini">A1 Mini</option>
                 </optgroup>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm text-bambu-gray mb-1">Location / Group</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                placeholder="e.g., Workshop, Office, Basement"
+              />
+              <p className="text-xs text-bambu-gray mt-1">Used to group printers on the dashboard</p>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1031,6 +1464,15 @@ export function PrintersPage() {
   });
   const [showPowerDropdown, setShowPowerDropdown] = useState(false);
   const [poweringOn, setPoweringOn] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>(() => {
+    return (localStorage.getItem('printerSortBy') as SortOption) || 'name';
+  });
+  const [sortAsc, setSortAsc] = useState<boolean>(() => {
+    return localStorage.getItem('printerSortAsc') !== 'false';
+  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('printerViewMode') as ViewMode) || 'expanded';
+  });
   const queryClient = useQueryClient();
 
   const { data: printers, isLoading } = useQuery({
@@ -1100,14 +1542,131 @@ export function PrintersPage() {
     localStorage.setItem('hideDisconnectedPrinters', String(newValue));
   };
 
+  const handleSortChange = (newSort: SortOption) => {
+    setSortBy(newSort);
+    localStorage.setItem('printerSortBy', newSort);
+  };
+
+  const toggleSortDirection = () => {
+    const newAsc = !sortAsc;
+    setSortAsc(newAsc);
+    localStorage.setItem('printerSortAsc', String(newAsc));
+  };
+
+  const toggleViewMode = () => {
+    const newMode = viewMode === 'expanded' ? 'compact' : 'expanded';
+    setViewMode(newMode);
+    localStorage.setItem('printerViewMode', newMode);
+  };
+
+  // Sort printers based on selected option
+  const sortedPrinters = useMemo(() => {
+    if (!printers) return [];
+    const sorted = [...printers];
+
+    switch (sortBy) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'model':
+        sorted.sort((a, b) => (a.model || '').localeCompare(b.model || ''));
+        break;
+      case 'location':
+        // Sort by location, with ungrouped printers last
+        sorted.sort((a, b) => {
+          const locA = a.location || '';
+          const locB = b.location || '';
+          if (!locA && locB) return 1;
+          if (locA && !locB) return -1;
+          return locA.localeCompare(locB) || a.name.localeCompare(b.name);
+        });
+        break;
+      case 'status':
+        // Sort by status: printing > idle > offline
+        sorted.sort((a, b) => {
+          const statusA = queryClient.getQueryData<{ connected: boolean; state: string | null }>(['printerStatus', a.id]);
+          const statusB = queryClient.getQueryData<{ connected: boolean; state: string | null }>(['printerStatus', b.id]);
+
+          const getPriority = (s: typeof statusA) => {
+            if (!s?.connected) return 2; // offline
+            if (s.state === 'RUNNING') return 0; // printing
+            return 1; // idle
+          };
+
+          return getPriority(statusA) - getPriority(statusB);
+        });
+        break;
+    }
+
+    // Apply ascending/descending
+    if (!sortAsc) {
+      sorted.reverse();
+    }
+
+    return sorted;
+  }, [printers, sortBy, sortAsc, queryClient]);
+
+  // Group printers by location when sorted by location
+  const groupedPrinters = useMemo(() => {
+    if (sortBy !== 'location') return null;
+
+    const groups: Record<string, typeof sortedPrinters> = {};
+    sortedPrinters.forEach(printer => {
+      const location = printer.location || 'Ungrouped';
+      if (!groups[location]) groups[location] = [];
+      groups[location].push(printer);
+    });
+    return groups;
+  }, [sortBy, sortedPrinters]);
+
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Printers</h1>
-          <p className="text-bambu-gray">Manage your Bambu Lab printers</p>
+          <StatusSummaryBar printers={printers} />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Sort dropdown */}
+          <div className="flex items-center gap-1">
+            <select
+              value={sortBy}
+              onChange={(e) => handleSortChange(e.target.value as SortOption)}
+              className="text-sm bg-bambu-dark border border-bambu-dark-tertiary rounded-lg px-2 py-1.5 text-white focus:border-bambu-green focus:outline-none"
+            >
+              <option value="name">Name</option>
+              <option value="status">Status</option>
+              <option value="model">Model</option>
+              <option value="location">Location</option>
+            </select>
+            <button
+              onClick={toggleSortDirection}
+              className="p-1.5 rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
+              title={sortAsc ? 'Sort descending' : 'Sort ascending'}
+            >
+              {sortAsc ? (
+                <ArrowUp className="w-4 h-4 text-bambu-gray" />
+              ) : (
+                <ArrowDown className="w-4 h-4 text-bambu-gray" />
+              )}
+            </button>
+          </div>
+
+          {/* View mode toggle */}
+          <button
+            onClick={toggleViewMode}
+            className="p-1.5 rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
+            title={viewMode === 'expanded' ? 'Switch to compact view' : 'Switch to expanded view'}
+          >
+            {viewMode === 'expanded' ? (
+              <LayoutList className="w-5 h-5 text-bambu-gray" />
+            ) : (
+              <LayoutGrid className="w-5 h-5 text-bambu-gray" />
+            )}
+          </button>
+
+          <div className="w-px h-6 bg-bambu-dark-tertiary" />
+
           <label className="flex items-center gap-2 text-sm text-bambu-gray cursor-pointer">
             <input
               type="checkbox"
@@ -1180,14 +1739,48 @@ export function PrintersPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : groupedPrinters ? (
+        /* Grouped by location view */
+        <div className="space-y-6">
+          {Object.entries(groupedPrinters).map(([location, locationPrinters]) => (
+            <div key={location}>
+              <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-bambu-green" />
+                {location}
+                <span className="text-sm font-normal text-bambu-gray">({locationPrinters.length})</span>
+              </h2>
+              <div className={`grid gap-4 ${
+                viewMode === 'compact'
+                  ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
+                  : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+              }`}>
+                {locationPrinters.map((printer) => (
+                  <PrinterCard
+                    key={printer.id}
+                    printer={printer}
+                    hideIfDisconnected={hideDisconnected}
+                    maintenanceInfo={maintenanceByPrinter[printer.id]}
+                    viewMode={viewMode}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {printers?.map((printer) => (
+        /* Regular grid view */
+        <div className={`grid gap-4 ${
+          viewMode === 'compact'
+            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
+            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+        }`}>
+          {sortedPrinters.map((printer) => (
             <PrinterCard
               key={printer.id}
               printer={printer}
               hideIfDisconnected={hideDisconnected}
               maintenanceInfo={maintenanceByPrinter[printer.id]}
+              viewMode={viewMode}
             />
           ))}
         </div>

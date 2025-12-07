@@ -1,6 +1,3 @@
-import shutil
-from pathlib import Path
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -95,21 +92,9 @@ async def reset_settings(db: AsyncSession = Depends(get_db)):
 @router.get("/check-ffmpeg")
 async def check_ffmpeg():
     """Check if ffmpeg is installed and available."""
-    ffmpeg_path = shutil.which("ffmpeg")
+    from backend.app.services.camera import get_ffmpeg_path
 
-    # If not found via PATH, check common installation locations
-    # (systemd services often have limited PATH)
-    if ffmpeg_path is None:
-        common_paths = [
-            "/usr/bin/ffmpeg",
-            "/usr/local/bin/ffmpeg",
-            "/opt/homebrew/bin/ffmpeg",
-            "/snap/bin/ffmpeg",
-        ]
-        for path in common_paths:
-            if Path(path).exists():
-                ffmpeg_path = path
-                break
+    ffmpeg_path = get_ffmpeg_path()
 
     return {
         "installed": ffmpeg_path is not None,

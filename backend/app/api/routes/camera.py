@@ -15,6 +15,8 @@ from backend.app.services.camera import (
     build_camera_url,
     capture_camera_frame,
     test_camera_connection,
+    get_ffmpeg_path,
+    get_camera_port,
 )
 from backend.app.services.printer_manager import printer_manager
 
@@ -41,20 +43,29 @@ async def generate_mjpeg_stream(
 
     This captures frames continuously and yields them in MJPEG format.
     """
-    from backend.app.services.camera import get_camera_port
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        logger.error("ffmpeg not found - camera streaming requires ffmpeg")
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: text/plain\r\n\r\n"
+            b"Error: ffmpeg not installed\r\n"
+        )
+        return
 
     port = get_camera_port(model)
     camera_url = f"rtsps://bblp:{access_code}@{ip_address}:{port}/streaming/live/1"
 
     # ffmpeg command to output MJPEG stream to stdout
-    # -re: Read input at native frame rate
     # -rtsp_transport tcp: Use TCP for reliability
+    # -rtsp_flags prefer_tcp: Prefer TCP for RTSP
     # -f mjpeg: Output as MJPEG
     # -q:v 5: Quality (lower = better, 2-10 is good range)
     # -r: Output framerate
     cmd = [
-        "ffmpeg",
+        ffmpeg,
         "-rtsp_transport", "tcp",
+        "-rtsp_flags", "prefer_tcp",
         "-i", camera_url,
         "-f", "mjpeg",
         "-q:v", "5",
@@ -63,7 +74,8 @@ async def generate_mjpeg_stream(
         "-"  # Output to stdout
     ]
 
-    logger.info(f"Starting camera stream for {ip_address}")
+    logger.info(f"Starting camera stream for {ip_address} using URL: rtsps://bblp:***@{ip_address}:{port}/streaming/live/1")
+    logger.debug(f"ffmpeg command: {ffmpeg} ... (url hidden)")
 
     process = None
     try:
@@ -72,6 +84,18 @@ async def generate_mjpeg_stream(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+
+        # Give ffmpeg a moment to start and check for immediate failures
+        await asyncio.sleep(0.5)
+        if process.returncode is not None:
+            stderr = await process.stderr.read()
+            logger.error(f"ffmpeg failed immediately: {stderr.decode()}")
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: text/plain\r\n\r\n"
+                b"Error: Camera connection failed. Check printer is on and camera is enabled.\r\n"
+            )
+            return
 
         # Read JPEG frames from ffmpeg output
         # JPEG images start with 0xFFD8 and end with 0xFFD9

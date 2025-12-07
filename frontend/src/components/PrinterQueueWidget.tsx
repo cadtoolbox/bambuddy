@@ -35,11 +35,14 @@ export function PrinterQueueWidget({ printerId }: PrinterQueueWidgetProps) {
   }
 
   return (
-    <div className="mt-3 p-2 bg-bambu-dark rounded-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          <Calendar className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-          <div className="min-w-0">
+    <Link
+      to="/queue"
+      className="block mb-3 p-3 bg-bambu-dark rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">Next in queue</p>
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || `Archive #${nextItem?.archive_id}`}
@@ -56,15 +59,9 @@ export function PrinterQueueWidget({ printerId }: PrinterQueueWidgetProps) {
               +{totalPending - 1}
             </span>
           )}
-          <Link
-            to="/queue"
-            className="p-1 hover:bg-bambu-dark-tertiary rounded transition-colors text-bambu-gray hover:text-white"
-            title="View queue"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          <ChevronRight className="w-4 h-4 text-bambu-gray" />
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

@@ -100,3 +100,12 @@ async def run_migrations(conn):
     except Exception:
         # Column already exists
         pass
+
+    # Migration: Add location column to printers for grouping
+    try:
+        await conn.execute(text(
+            "ALTER TABLE printers ADD COLUMN location VARCHAR(100)"
+        ))
+    except Exception:
+        # Column already exists
+        pass

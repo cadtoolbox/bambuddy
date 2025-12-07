@@ -28,6 +28,7 @@ export interface Printer {
   ip_address: string;
   access_code: string;
   model: string | null;
+  location: string | null;  // Group/location name
   nozzle_count: number;  // 1 or 2, auto-detected from MQTT
   is_active: boolean;
   auto_archive: boolean;
@@ -61,6 +62,7 @@ export interface AMSUnit {
   id: number;
   humidity: number | null;
   temp: number | null;
+  is_ams_ht: boolean;  // True for AMS-HT (single spool), False for regular AMS (4 spools)
   tray: AMSTray[];
 }
 
@@ -106,6 +108,8 @@ export interface PrinterStatus {
     bed_target?: number;
     nozzle?: number;
     nozzle_target?: number;
+    nozzle_2?: number;  // Second nozzle for H2 series (dual nozzle)
+    nozzle_2_target?: number;
     chamber?: number;
   } | null;
   cover_url: string | null;
@@ -157,6 +161,7 @@ export interface PrinterCreate {
   ip_address: string;
   access_code: string;
   model?: string;
+  location?: string;
   auto_archive?: boolean;
 }
 

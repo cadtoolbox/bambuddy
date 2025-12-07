@@ -8,6 +8,7 @@ import { StatsPage } from './pages/StatsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { MaintenancePage } from './pages/MaintenancePage';
+import { CameraPage } from './pages/CameraPage';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -34,6 +35,9 @@ function App() {
           <WebSocketProvider>
             <BrowserRouter>
               <Routes>
+                {/* Camera page - standalone, no layout */}
+                <Route path="/camera/:printerId" element={<CameraPage />} />
+
                 <Route path="/" element={<Layout />}>
                   <Route index element={<PrintersPage />} />
                   <Route path="archives" element={<ArchivesPage />} />

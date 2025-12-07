@@ -190,8 +190,8 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
             # humidity_raw is the actual percentage value from the sensor
             humidity_raw = ams_data.get("humidity_raw")
             humidity_idx = ams_data.get("humidity")
-            # Use humidity_raw if available, otherwise fall back to humidity index
             humidity_value = None
+
             if humidity_raw is not None:
                 try:
                     humidity_value = int(humidity_raw)
@@ -202,10 +202,14 @@ async def get_printer_status(printer_id: int, db: AsyncSession = Depends(get_db)
                     humidity_value = int(humidity_idx)
                 except (ValueError, TypeError):
                     pass
+            # AMS-HT has 1 tray, regular AMS has 4 trays
+            is_ams_ht = len(trays) == 1
+
             ams_units.append(AMSUnit(
                 id=ams_data.get("id", 0),
                 humidity=humidity_value,
                 temp=ams_data.get("temp"),
+                is_ams_ht=is_ams_ht,
                 tray=trays,
             ))
 

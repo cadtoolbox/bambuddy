@@ -5,7 +5,7 @@ Captures images from the printer's RTSPS camera stream using ffmpeg.
 
 import asyncio
 import logging
-import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime
 import uuid
@@ -13,6 +13,46 @@ import uuid
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Cache the ffmpeg path after first lookup
+_ffmpeg_path: str | None = None
+
+
+def get_ffmpeg_path() -> str | None:
+    """Find the ffmpeg executable path.
+
+    Uses shutil.which first, then checks common installation locations
+    for systems where PATH may be limited (e.g., systemd services).
+    """
+    global _ffmpeg_path
+
+    if _ffmpeg_path is not None:
+        return _ffmpeg_path
+
+    # Try PATH first
+    ffmpeg_path = shutil.which("ffmpeg")
+
+    # If not found via PATH, check common installation locations
+    if ffmpeg_path is None:
+        common_paths = [
+            "/usr/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+            "/opt/homebrew/bin/ffmpeg",  # macOS Homebrew
+            "/snap/bin/ffmpeg",  # Ubuntu Snap
+            "C:\\ffmpeg\\bin\\ffmpeg.exe",  # Windows common
+        ]
+        for path in common_paths:
+            if Path(path).exists():
+                ffmpeg_path = path
+                break
+
+    _ffmpeg_path = ffmpeg_path
+    if ffmpeg_path:
+        logger.info(f"Found ffmpeg at: {ffmpeg_path}")
+    else:
+        logger.warning("ffmpeg not found in PATH or common locations")
+
+    return ffmpeg_path
 
 
 def get_camera_port(model: str | None) -> int:
@@ -59,17 +99,26 @@ async def capture_camera_frame(
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        logger.error("ffmpeg not found. Please install ffmpeg to enable camera capture.")
+        return False
+
     # ffmpeg command to capture a single frame from RTSPS stream
     # -rtsp_transport tcp: Use TCP for RTSP (more reliable)
+    # -rtsp_flags prefer_tcp: Prefer TCP for RTSP
     # -y: Overwrite output file
     # -frames:v 1: Capture only 1 frame
+    # -update 1: Allow writing single image without sequence pattern
     # -q:v 2: High quality JPEG (1-31, lower is better)
     cmd = [
-        "ffmpeg",
+        ffmpeg,
         "-y",  # Overwrite output
         "-rtsp_transport", "tcp",
+        "-rtsp_flags", "prefer_tcp",
         "-i", camera_url,
         "-frames:v", "1",
+        "-update", "1",
         "-q:v", "2",
         str(output_path),
     ]
