@@ -3,10 +3,17 @@ FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-COPY frontend/package*.json ./
+# Create non-root user for npm
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs && \
+    chown -R nodejs:nodejs /app
+
+USER nodejs
+
+COPY --chown=nodejs:nodejs frontend/package*.json ./
 RUN npm ci
 
-COPY frontend/ ./
+COPY --chown=nodejs:nodejs frontend/ ./
 RUN npm run build
 
 # Production image
