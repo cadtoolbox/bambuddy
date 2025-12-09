@@ -20,6 +20,7 @@ from backend.app.models.printer import Printer
 from backend.app.models.filament import Filament
 from backend.app.models.maintenance import MaintenanceType, PrinterMaintenance, MaintenanceHistory
 from backend.app.models.archive import PrintArchive
+from backend.app.models.external_link import ExternalLink
 from backend.app.schemas.settings import AppSettings, AppSettingsUpdate
 from backend.app.services.printer_manager import printer_manager
 from backend.app.services.spoolman import init_spoolman_client, get_spoolman_client
@@ -167,6 +168,7 @@ async def export_backup(
     include_notifications: bool = Query(True, description="Include notification providers"),
     include_templates: bool = Query(True, description="Include notification templates"),
     include_smart_plugs: bool = Query(True, description="Include smart plugs"),
+    include_external_links: bool = Query(True, description="Include external sidebar links"),
     include_printers: bool = Query(False, description="Include printers (without access codes)"),
     include_filaments: bool = Query(False, description="Include filament inventory"),
     include_maintenance: bool = Query(False, description="Include maintenance types and records"),
@@ -258,6 +260,28 @@ async def export_backup(
             })
         backup["included"].append("smart_plugs")
 
+    # External links
+    if include_external_links:
+        result = await db.execute(select(ExternalLink).order_by(ExternalLink.sort_order))
+        links = result.scalars().all()
+        backup["external_links"] = []
+        icons_dir = app_settings.base_dir / "icons"
+        for link in links:
+            link_data = {
+                "name": link.name,
+                "url": link.url,
+                "icon": link.icon,
+                "sort_order": link.sort_order,
+            }
+            # Include custom icon file path if exists
+            if link.custom_icon:
+                link_data["custom_icon"] = link.custom_icon
+                icon_path = icons_dir / link.custom_icon
+                if icon_path.exists():
+                    link_data["custom_icon_path"] = f"icons/{link.custom_icon}"
+            backup["external_links"].append(link_data)
+        backup["included"].append("external_links")
+
     # Printers (access codes only included if explicitly requested)
     if include_printers:
         result = await db.execute(select(Printer))
@@ -322,8 +346,19 @@ async def export_backup(
             })
         backup["included"].append("maintenance_types")
 
+    # Collect files for ZIP (icons + archives)
+    backup_files: list[tuple[str, Path]] = []  # (zip_path, local_path)
+
+    # Add external link icon files
+    if include_external_links and "external_links" in backup:
+        icons_dir = app_settings.base_dir / "icons"
+        for link_data in backup["external_links"]:
+            if "custom_icon_path" in link_data:
+                icon_path = icons_dir / link_data["custom_icon"]
+                if icon_path.exists():
+                    backup_files.append((link_data["custom_icon_path"], icon_path))
+
     # Print archives with file paths for ZIP
-    archive_files: list[tuple[str, Path]] = []  # (zip_path, local_path)
     if include_archives:
         result = await db.execute(select(PrintArchive))
         archives = result.scalars().all()
@@ -366,25 +401,25 @@ async def export_backup(
                 file_path = base_dir / a.file_path
                 if file_path.exists():
                     archive_data["file_path"] = a.file_path
-                    archive_files.append((a.file_path, file_path))
+                    backup_files.append((a.file_path, file_path))
 
             if a.thumbnail_path:
                 thumb_path = base_dir / a.thumbnail_path
                 if thumb_path.exists():
                     archive_data["thumbnail_path"] = a.thumbnail_path
-                    archive_files.append((a.thumbnail_path, thumb_path))
+                    backup_files.append((a.thumbnail_path, thumb_path))
 
             if a.timelapse_path:
                 timelapse_path = base_dir / a.timelapse_path
                 if timelapse_path.exists():
                     archive_data["timelapse_path"] = a.timelapse_path
-                    archive_files.append((a.timelapse_path, timelapse_path))
+                    backup_files.append((a.timelapse_path, timelapse_path))
 
             if a.source_3mf_path:
                 source_path = base_dir / a.source_3mf_path
                 if source_path.exists():
                     archive_data["source_3mf_path"] = a.source_3mf_path
-                    archive_files.append((a.source_3mf_path, source_path))
+                    backup_files.append((a.source_3mf_path, source_path))
 
             # Include photos
             if a.photos:
@@ -392,21 +427,21 @@ async def export_backup(
                     photo_path = base_dir / "archive" / "photos" / photo
                     if photo_path.exists():
                         zip_photo_path = f"archive/photos/{photo}"
-                        archive_files.append((zip_photo_path, photo_path))
+                        backup_files.append((zip_photo_path, photo_path))
 
             backup["archives"].append(archive_data)
         backup["included"].append("archives")
 
-    # If archives included, create ZIP file with all files
-    if include_archives and archive_files:
+    # If there are files to include (icons or archives), create ZIP file
+    if backup_files:
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
             # Add backup.json
             zf.writestr("backup.json", json.dumps(backup, indent=2))
 
-            # Add all archive files
+            # Add all backup files (icons, archives, etc.)
             added_files = set()
-            for zip_path, local_path in archive_files:
+            for zip_path, local_path in backup_files:
                 if zip_path not in added_files and local_path.exists():
                     try:
                         zf.write(local_path, zip_path)
@@ -481,6 +516,7 @@ async def import_backup(
         "notification_providers": 0,
         "notification_templates": 0,
         "smart_plugs": 0,
+        "external_links": 0,
         "printers": 0,
         "filaments": 0,
         "maintenance_types": 0,
@@ -490,6 +526,7 @@ async def import_backup(
         "notification_providers": 0,
         "notification_templates": 0,
         "smart_plugs": 0,
+        "external_links": 0,
         "printers": 0,
         "filaments": 0,
         "maintenance_types": 0,
@@ -498,6 +535,7 @@ async def import_backup(
     skipped_details = {
         "notification_providers": [],
         "smart_plugs": [],
+        "external_links": [],
         "printers": [],
         "filaments": [],
         "maintenance_types": [],
@@ -651,6 +689,41 @@ async def import_backup(
                 )
                 db.add(plug)
                 restored["smart_plugs"] += 1
+
+    # Restore external links (skip or overwrite duplicates by name+url)
+    if "external_links" in backup:
+        icons_dir = base_dir / "icons"
+        icons_dir.mkdir(parents=True, exist_ok=True)
+
+        for link_data in backup["external_links"]:
+            result = await db.execute(
+                select(ExternalLink).where(
+                    ExternalLink.name == link_data["name"],
+                    ExternalLink.url == link_data["url"]
+                )
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                if overwrite:
+                    existing.icon = link_data.get("icon", "link")
+                    existing.sort_order = link_data.get("sort_order", 0)
+                    # Handle custom icon
+                    if link_data.get("custom_icon"):
+                        existing.custom_icon = link_data["custom_icon"]
+                    restored["external_links"] += 1
+                else:
+                    skipped["external_links"] += 1
+                    skipped_details["external_links"].append(link_data["name"])
+            else:
+                link = ExternalLink(
+                    name=link_data["name"],
+                    url=link_data["url"],
+                    icon=link_data.get("icon", "link"),
+                    custom_icon=link_data.get("custom_icon"),
+                    sort_order=link_data.get("sort_order", 0),
+                )
+                db.add(link)
+                restored["external_links"] += 1
 
     # Restore printers (skip or overwrite duplicates by serial_number)
     if "printers" in backup:
