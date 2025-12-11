@@ -1907,6 +1907,9 @@ export const api = {
   // AMS History
   getAMSHistory: (printerId: number, amsId: number, hours = 24) =>
     request<AMSHistoryResponse>(`/ams-history/${printerId}/${amsId}?hours=${hours}`),
+
+  // System Info
+  getSystemInfo: () => request<SystemInfo>('/system/info'),
 };
 
 // AMS History types
@@ -1927,4 +1930,75 @@ export interface AMSHistoryResponse {
   min_temperature: number | null;
   max_temperature: number | null;
   avg_temperature: number | null;
+}
+
+// System Info types
+export interface SystemInfo {
+  app: {
+    version: string;
+    base_dir: string;
+    archive_dir: string;
+  };
+  database: {
+    archives: number;
+    archives_completed: number;
+    archives_failed: number;
+    archives_printing: number;
+    printers: number;
+    filaments: number;
+    projects: number;
+    smart_plugs: number;
+    total_print_time_seconds: number;
+    total_print_time_formatted: string;
+    total_filament_grams: number;
+    total_filament_kg: number;
+  };
+  printers: {
+    total: number;
+    connected: number;
+    connected_list: Array<{
+      id: number;
+      name: string;
+      state: string;
+      model: string;
+    }>;
+  };
+  storage: {
+    archive_size_bytes: number;
+    archive_size_formatted: string;
+    database_size_bytes: number;
+    database_size_formatted: string;
+    disk_total_bytes: number;
+    disk_total_formatted: string;
+    disk_used_bytes: number;
+    disk_used_formatted: string;
+    disk_free_bytes: number;
+    disk_free_formatted: string;
+    disk_percent_used: number;
+  };
+  system: {
+    platform: string;
+    platform_release: string;
+    platform_version: string;
+    architecture: string;
+    hostname: string;
+    python_version: string;
+    uptime_seconds: number;
+    uptime_formatted: string;
+    boot_time: string;
+  };
+  memory: {
+    total_bytes: number;
+    total_formatted: string;
+    available_bytes: number;
+    available_formatted: string;
+    used_bytes: number;
+    used_formatted: string;
+    percent_used: number;
+  };
+  cpu: {
+    count: number;
+    count_logical: number;
+    percent: number;
+  };
 }

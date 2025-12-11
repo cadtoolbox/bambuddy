@@ -9,6 +9,7 @@ export default {
     maintenance: 'Maintenance',
     projects: 'Projects',
     settings: 'Settings',
+    system: 'System',
     collapseSidebar: 'Collapse sidebar',
     expandSidebar: 'Expand sidebar',
     update: 'Update',

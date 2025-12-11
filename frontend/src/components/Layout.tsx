@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, X, Menu, type LucideIcon } from 'lucide-react';
+import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, X, Menu, Info, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
@@ -457,6 +457,17 @@ export function Layout() {
                 )}
               </div>
               <div className="flex items-center gap-1">
+                <NavLink
+                  to="/system"
+                  className={({ isActive }) =>
+                    `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
+                      isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
+                    }`
+                  }
+                  title={t('nav.system')}
+                >
+                  <Info className="w-5 h-5" />
+                </NavLink>
                 <a
                   href="https://github.com/maziggy/bambuddy"
                   target="_blank"
@@ -493,6 +504,17 @@ export function Layout() {
                   <ArrowUpCircle className="w-5 h-5" />
                 </button>
               )}
+              <NavLink
+                to="/system"
+                className={({ isActive }) =>
+                  `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
+                    isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
+                  }`
+                }
+                title={t('nav.system')}
+              >
+                <Info className="w-5 h-5" />
+              </NavLink>
               <a
                 href="https://github.com/maziggy/bambuddy"
                 target="_blank"

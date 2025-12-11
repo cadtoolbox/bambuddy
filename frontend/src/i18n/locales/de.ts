@@ -9,6 +9,7 @@ export default {
     maintenance: 'Wartung',
     projects: 'Projekte',
     settings: 'Einstellungen',
+    system: 'System',
     collapseSidebar: 'Seitenleiste einklappen',
     expandSidebar: 'Seitenleiste ausklappen',
     update: 'Update',
