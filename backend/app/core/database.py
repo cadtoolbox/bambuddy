@@ -257,6 +257,34 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add auto_off_pending columns to smart_plugs (for restart recovery)
+    try:
+        await conn.execute(text(
+            "ALTER TABLE smart_plugs ADD COLUMN auto_off_pending BOOLEAN DEFAULT 0"
+        ))
+    except Exception:
+        pass
+    try:
+        await conn.execute(text(
+            "ALTER TABLE smart_plugs ADD COLUMN auto_off_pending_since DATETIME"
+        ))
+    except Exception:
+        pass
+
+    # Migration: Add AMS alarm notification columns to notification_providers
+    try:
+        await conn.execute(text(
+            "ALTER TABLE notification_providers ADD COLUMN on_ams_humidity_high BOOLEAN DEFAULT 0"
+        ))
+    except Exception:
+        pass
+    try:
+        await conn.execute(text(
+            "ALTER TABLE notification_providers ADD COLUMN on_ams_temperature_high BOOLEAN DEFAULT 0"
+        ))
+    except Exception:
+        pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

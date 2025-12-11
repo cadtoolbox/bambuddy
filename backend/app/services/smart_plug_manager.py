@@ -187,6 +187,9 @@ class SmartPlugManager:
             f"Scheduling turn-off for plug '{plug.name}' in {delay_seconds} seconds"
         )
 
+        # Mark as pending in database (survives restarts)
+        asyncio.create_task(self._mark_auto_off_pending(plug.id, True))
+
         task = asyncio.create_task(
             self._delayed_off(plug.id, plug.ip_address, plug.username, plug.password, printer_id, delay_seconds)
         )
@@ -239,6 +242,9 @@ class SmartPlugManager:
             f"Scheduling temperature-based turn-off for plug '{plug.name}' "
             f"(threshold: {temp_threshold}°C)"
         )
+
+        # Mark as pending in database (survives restarts)
+        asyncio.create_task(self._mark_auto_off_pending(plug.id, True))
 
         task = asyncio.create_task(
             self._temp_based_off(
@@ -331,6 +337,25 @@ class SmartPlugManager:
         finally:
             self._pending_off.pop(plug_id, None)
 
+    async def _mark_auto_off_pending(self, plug_id: int, pending: bool):
+        """Mark a plug as having a pending auto-off (survives restarts)."""
+        try:
+            from backend.app.core.database import async_session
+            from backend.app.models.smart_plug import SmartPlug
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(SmartPlug).where(SmartPlug.id == plug_id)
+                )
+                plug = result.scalar_one_or_none()
+                if plug:
+                    plug.auto_off_pending = pending
+                    plug.auto_off_pending_since = datetime.utcnow() if pending else None
+                    await db.commit()
+                    logger.debug(f"Marked plug {plug_id} auto_off_pending={pending}")
+        except Exception as e:
+            logger.warning(f"Failed to update plug {plug_id} pending state: {e}")
+
     async def _mark_auto_off_executed(self, plug_id: int):
         """Disable auto-off after it was executed (one-shot behavior)."""
         try:
@@ -345,6 +370,8 @@ class SmartPlugManager:
                 if plug:
                     plug.auto_off = False  # Disable auto-off (one-shot behavior)
                     plug.auto_off_executed = False  # Reset the flag
+                    plug.auto_off_pending = False  # Clear pending state
+                    plug.auto_off_pending_since = None
                     plug.last_state = "OFF"
                     plug.last_checked = datetime.utcnow()
                     await db.commit()
@@ -358,11 +385,77 @@ class SmartPlugManager:
             logger.debug(f"Cancelling pending turn-off for plug {plug_id}")
             self._pending_off[plug_id].cancel()
             del self._pending_off[plug_id]
+            # Clear pending state in database
+            asyncio.create_task(self._mark_auto_off_pending(plug_id, False))
 
     def cancel_all_pending(self):
         """Cancel all pending turn-off tasks."""
         for plug_id in list(self._pending_off.keys()):
             self._cancel_pending_off(plug_id)
+
+    async def resume_pending_auto_offs(self):
+        """Resume any pending auto-offs that were interrupted by a restart.
+
+        Called on startup to check for plugs that had auto-off pending but
+        never completed (e.g., due to service restart).
+        """
+        try:
+            from backend.app.core.database import async_session
+            from backend.app.models.smart_plug import SmartPlug
+
+            async with async_session() as db:
+                # Find all plugs with pending auto-off
+                result = await db.execute(
+                    select(SmartPlug).where(
+                        SmartPlug.auto_off_pending == True,
+                        SmartPlug.printer_id != None,
+                    )
+                )
+                pending_plugs = result.scalars().all()
+
+                for plug in pending_plugs:
+                    # Check how long it's been pending (timeout after 2 hours)
+                    if plug.auto_off_pending_since:
+                        elapsed = (datetime.utcnow() - plug.auto_off_pending_since).total_seconds()
+                        if elapsed > 7200:  # 2 hours
+                            logger.warning(
+                                f"Auto-off for plug '{plug.name}' was pending for {elapsed/60:.0f} minutes, "
+                                f"clearing stale pending state"
+                            )
+                            plug.auto_off_pending = False
+                            plug.auto_off_pending_since = None
+                            await db.commit()
+                            continue
+
+                    logger.info(
+                        f"Resuming pending auto-off for plug '{plug.name}' "
+                        f"(printer {plug.printer_id})"
+                    )
+
+                    # Resume the appropriate off mode
+                    if plug.off_delay_mode == "temperature":
+                        self._schedule_temp_based_off(plug, plug.printer_id, plug.off_temp_threshold)
+                    else:
+                        # For time mode, just turn off immediately since delay already passed
+                        logger.info(f"Time-based auto-off was pending, turning off plug '{plug.name}' now")
+
+                        class PlugInfo:
+                            def __init__(self, p):
+                                self.ip_address = p.ip_address
+                                self.username = p.username
+                                self.password = p.password
+                                self.name = p.name
+
+                        success = await tasmota_service.turn_off(PlugInfo(plug))
+                        if success:
+                            await self._mark_auto_off_executed(plug.id)
+                            printer_manager.mark_printer_offline(plug.printer_id)
+
+                if pending_plugs:
+                    logger.info(f"Resumed {len(pending_plugs)} pending auto-off(s)")
+
+        except Exception as e:
+            logger.warning(f"Failed to resume pending auto-offs: {e}")
 
 
 # Global singleton

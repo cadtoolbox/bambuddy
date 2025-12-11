@@ -48,6 +48,8 @@ class SmartPlug(Base):
     last_state: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "ON"/"OFF"
     last_checked: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     auto_off_executed: Mapped[bool] = mapped_column(Boolean, default=False)  # True when auto-off was triggered
+    auto_off_pending: Mapped[bool] = mapped_column(Boolean, default=False)  # True when waiting for cooldown
+    auto_off_pending_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # When auto-off was scheduled
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

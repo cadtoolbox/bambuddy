@@ -1178,6 +1178,9 @@ async def lifespan(app: FastAPI):
     # Start the smart plug scheduler for time-based on/off
     smart_plug_manager.start_scheduler()
 
+    # Resume any pending auto-offs that were interrupted by restart
+    await smart_plug_manager.resume_pending_auto_offs()
+
     # Start the notification digest scheduler
     notification_service.start_digest_scheduler()
 
