@@ -491,13 +491,16 @@ class NotificationService:
     ):
         """Send notification to multiple providers and log the results.
 
-        Args:
-            force_immediate: If True, bypass digest mode and send immediately (for alarms)
+        All notifications are always sent immediately. If digest mode is enabled,
+        the notification is ALSO queued for the daily digest summary.
         """
         for provider in providers:
             try:
-                # Check if provider wants digest mode (unless force_immediate is set)
-                if not force_immediate and provider.daily_digest_enabled and provider.daily_digest_time:
+                # Always send notification immediately
+                success, error = await self._send_to_provider(provider, title, message)
+
+                # Also queue for digest if enabled (digest is a summary, not a queue)
+                if provider.daily_digest_enabled and provider.daily_digest_time:
                     await self._queue_for_digest(
                         provider=provider,
                         event_type=event_type,
@@ -507,9 +510,6 @@ class NotificationService:
                         printer_id=printer_id,
                         printer_name=printer_name,
                     )
-                    continue
-
-                success, error = await self._send_to_provider(provider, title, message)
                 await self._update_provider_status(db, provider.id, success, error if not success else None)
                 await self._log_notification(
                     db=db,

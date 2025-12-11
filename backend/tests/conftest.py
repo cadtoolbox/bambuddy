@@ -1,0 +1,380 @@
+"""Shared test fixtures for BamBuddy backend tests."""
+
+import asyncio
+import json
+import os
+import sys
+import pytest
+from typing import AsyncGenerator
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+# IMPORTANT: Set environment variables BEFORE any app imports
+# This must happen before settings/config are loaded
+os.environ["LOG_TO_FILE"] = "false"
+os.environ["DEBUG"] = "false"
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from httpx import AsyncClient, ASGITransport
+
+# Ensure settings use our env vars - import and override before database import
+from backend.app.core.config import settings
+settings.log_to_file = False
+
+from backend.app.core.database import Base
+
+
+# Use in-memory SQLite for tests
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for each test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture
+async def test_engine():
+    """Create a test database engine."""
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+
+    # Import all models to register them
+    from backend.app.models import (
+        printer, archive, filament, settings, smart_plug,
+        print_queue, notification, maintenance, kprofile_note,
+        notification_template, external_link, project, api_key,
+        ams_history
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield engine
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest.fixture
+async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Create a test database session."""
+    async_session_maker = async_sessionmaker(
+        test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with async_session_maker() as session:
+        yield session
+
+
+@pytest.fixture
+async def async_client(test_engine, db_session) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client."""
+    from backend.app.main import app
+    from backend.app.core.database import get_db, async_session
+
+    # Create a new session maker for the test engine
+    test_async_session = async_sessionmaker(
+        test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async def override_get_db():
+        async with test_async_session() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Also patch the module-level async_session used by services
+    with patch('backend.app.core.database.async_session', test_async_session):
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test"
+        ) as client:
+            yield client
+
+    app.dependency_overrides.clear()
+
+
+# ============================================================================
+# Mock External Services
+# ============================================================================
+
+@pytest.fixture
+def mock_tasmota_service():
+    """Mock the Tasmota service for smart plug tests."""
+    # Patch both the module where it's defined and where it's imported
+    with patch('backend.app.services.tasmota.tasmota_service') as mock, \
+         patch('backend.app.api.routes.smart_plugs.tasmota_service') as mock2:
+        mock.turn_on = AsyncMock(return_value=True)
+        mock.turn_off = AsyncMock(return_value=True)
+        mock.toggle = AsyncMock(return_value=True)
+        mock.get_status = AsyncMock(return_value={
+            "state": "ON",
+            "reachable": True,
+            "device_name": "Test Plug"
+        })
+        mock.get_energy = AsyncMock(return_value={
+            "power": 150.5,
+            "voltage": 120.0,
+            "current": 1.25,
+            "today": 2.5,
+            "total": 100.0,
+            "factor": 0.95,
+        })
+        mock.test_connection = AsyncMock(return_value={
+            "success": True,
+            "state": "ON",
+            "device_name": "Test Plug"
+        })
+        # Copy mocks to second patch target
+        mock2.turn_on = mock.turn_on
+        mock2.turn_off = mock.turn_off
+        mock2.toggle = mock.toggle
+        mock2.get_status = mock.get_status
+        mock2.get_energy = mock.get_energy
+        mock2.test_connection = mock.test_connection
+        yield mock
+
+
+@pytest.fixture
+def mock_mqtt_client():
+    """Mock the MQTT client for printer communication tests."""
+    with patch('backend.app.services.bambu_mqtt.BambuMQTTClient') as mock:
+        instance = MagicMock()
+        instance.state = MagicMock(
+            connected=True,
+            state="IDLE",
+            progress=0,
+            temperatures={"nozzle": 25, "bed": 25}
+        )
+        instance.connect = MagicMock()
+        instance.disconnect = MagicMock()
+        mock.return_value = instance
+        yield mock
+
+
+@pytest.fixture
+def mock_ftp_client():
+    """Mock the FTP client for file transfer tests."""
+    with patch('backend.app.services.bambu_ftp.download_file_async') as download_mock, \
+         patch('backend.app.services.bambu_ftp.list_files_async') as list_mock:
+        download_mock.return_value = True
+        list_mock.return_value = []
+        yield {"download": download_mock, "list": list_mock}
+
+
+@pytest.fixture
+def mock_httpx_client():
+    """Mock httpx for webhook/notification HTTP calls."""
+    with patch('httpx.AsyncClient') as mock_class:
+        mock_instance = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "OK"
+        mock_response.json.return_value = {}
+
+        mock_instance.get = AsyncMock(return_value=mock_response)
+        mock_instance.post = AsyncMock(return_value=mock_response)
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_instance.__aexit__ = AsyncMock()
+
+        mock_class.return_value = mock_instance
+        yield mock_instance
+
+
+@pytest.fixture
+def mock_printer_manager():
+    """Mock the printer manager for status checks."""
+    with patch('backend.app.services.printer_manager.printer_manager') as mock:
+        mock.get_status = MagicMock(return_value=MagicMock(
+            connected=True,
+            state="IDLE",
+            progress=0,
+            temperatures={"nozzle": 25, "bed": 25, "chamber": 25},
+            raw_data={}
+        ))
+        mock.mark_printer_offline = MagicMock()
+        yield mock
+
+
+# ============================================================================
+# Factory Fixtures for Test Data
+# ============================================================================
+
+@pytest.fixture
+def smart_plug_factory(db_session):
+    """Factory to create test smart plugs."""
+    async def _create_plug(**kwargs):
+        from backend.app.models.smart_plug import SmartPlug
+
+        defaults = {
+            "name": "Test Plug",
+            "ip_address": "192.168.1.100",
+            "enabled": True,
+            "auto_on": True,
+            "auto_off": True,
+            "off_delay_mode": "time",
+            "off_delay_minutes": 5,
+            "off_temp_threshold": 70,
+            "schedule_enabled": False,
+            "power_alert_enabled": False,
+        }
+        defaults.update(kwargs)
+
+        plug = SmartPlug(**defaults)
+        db_session.add(plug)
+        await db_session.commit()
+        await db_session.refresh(plug)
+        return plug
+
+    return _create_plug
+
+
+@pytest.fixture
+def printer_factory(db_session):
+    """Factory to create test printers."""
+    _counter = [0]  # Use list to allow mutation in nested function
+
+    async def _create_printer(**kwargs):
+        from backend.app.models.printer import Printer
+
+        _counter[0] += 1
+        counter = _counter[0]
+
+        defaults = {
+            "name": "Test Printer",
+            "serial_number": f"00M09A{counter:09d}",  # Unique serial per printer
+            "ip_address": f"192.168.1.{100 + counter}",  # Unique IP per printer
+            "access_code": "12345678",
+            "is_active": True,
+            "auto_archive": True,
+            "model": "X1C",
+        }
+        defaults.update(kwargs)
+
+        printer = Printer(**defaults)
+        db_session.add(printer)
+        await db_session.commit()
+        await db_session.refresh(printer)
+        return printer
+
+    return _create_printer
+
+
+@pytest.fixture
+def notification_provider_factory(db_session):
+    """Factory to create test notification providers."""
+    async def _create_provider(**kwargs):
+        from backend.app.models.notification import NotificationProvider
+
+        config = kwargs.pop("config", {"server": "https://ntfy.sh", "topic": "test-topic"})
+        if isinstance(config, dict):
+            config = json.dumps(config)
+
+        defaults = {
+            "name": "Test Provider",
+            "provider_type": "ntfy",
+            "enabled": True,
+            "config": config,
+            "on_print_start": True,
+            "on_print_complete": True,
+            "on_print_failed": True,
+            "on_print_stopped": True,
+            "on_print_progress": False,
+            "on_printer_offline": False,
+            "on_printer_error": False,
+            "on_filament_low": False,
+            "on_maintenance_due": False,
+            "on_ams_humidity_high": False,
+            "on_ams_temperature_high": False,
+            "quiet_hours_enabled": False,
+            "daily_digest_enabled": False,
+        }
+        defaults.update(kwargs)
+
+        provider = NotificationProvider(**defaults)
+        db_session.add(provider)
+        await db_session.commit()
+        await db_session.refresh(provider)
+        return provider
+
+    return _create_provider
+
+
+@pytest.fixture
+def archive_factory(db_session):
+    """Factory to create test archives."""
+    async def _create_archive(printer_id: int, **kwargs):
+        from backend.app.models.archive import PrintArchive
+
+        defaults = {
+            "printer_id": printer_id,
+            "filename": "test_print.gcode.3mf",
+            "print_name": "Test Print",
+            "file_path": "archives/test/test_print.gcode.3mf",
+            "file_size": 1024000,
+            "status": "completed",
+            "filament_type": "PLA",
+            "filament_used_grams": 50.0,
+            "print_time_seconds": 3600,
+        }
+        defaults.update(kwargs)
+
+        archive = PrintArchive(**defaults)
+        db_session.add(archive)
+        await db_session.commit()
+        await db_session.refresh(archive)
+        return archive
+
+    return _create_archive
+
+
+# ============================================================================
+# Sample Data Fixtures
+# ============================================================================
+
+@pytest.fixture
+def sample_mqtt_print_start():
+    """Sample MQTT message for print start."""
+    return {
+        "print": {
+            "command": "project_file",
+            "param": "/sdcard/test.gcode.3mf",
+            "subtask_name": "test_print",
+            "gcode_state": "RUNNING",
+            "mc_percent": 0,
+        }
+    }
+
+
+@pytest.fixture
+def sample_mqtt_print_complete():
+    """Sample MQTT message for print complete."""
+    return {
+        "print": {
+            "gcode_state": "FINISH",
+            "mc_percent": 100,
+            "subtask_name": "test_print",
+        }
+    }
+
+
+@pytest.fixture
+def sample_printer_status():
+    """Sample printer status data."""
+    return {
+        "connected": True,
+        "state": "IDLE",
+        "progress": 0,
+        "layer_num": 0,
+        "total_layers": 0,
+        "temperatures": {
+            "nozzle": 25.0,
+            "bed": 25.0,
+            "chamber": 25.0,
+        },
+        "remaining_time": 0,
+        "filename": None,
+    }
