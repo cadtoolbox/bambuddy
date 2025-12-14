@@ -453,10 +453,18 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
   }, [printers, queryClient]);
 
   // Subscribe to query cache changes to re-render when status updates
+  // Throttled to prevent rapid re-renders from causing tab crashes
   const [, setTick] = useState(0);
   useEffect(() => {
+    let pending = false;
     const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-      setTick(t => t + 1);
+      if (!pending) {
+        pending = true;
+        requestAnimationFrame(() => {
+          setTick(t => t + 1);
+          pending = false;
+        });
+      }
     });
     return () => unsubscribe();
   }, [queryClient]);
