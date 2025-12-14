@@ -3,9 +3,9 @@
 import asyncio
 import logging
 import os
+import re
 import shutil
 import sys
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends
@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.config import APP_VERSION, GITHUB_REPO, settings
 from backend.app.core.database import get_db
-from backend.app.api.routes.settings import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -52,26 +51,88 @@ def _find_executable(name: str) -> str | None:
     return None
 
 
-def parse_version(version: str) -> tuple[int, ...]:
-    """Parse version string into tuple for comparison."""
+def parse_version(version: str) -> tuple:
+    """Parse version string into tuple for comparison.
+
+    Returns (major, minor, patch, is_prerelease, prerelease_num)
+    where is_prerelease is 0 for release, 1 for prerelease.
+    This ensures releases sort higher than prereleases of same version.
+
+    Examples:
+        "0.1.5" -> (0, 1, 5, 0, 0)       # release
+        "0.1.5b7" -> (0, 1, 5, 1, 7)     # beta 7
+        "0.1.5b10" -> (0, 1, 5, 1, 10)   # beta 10
+    """
     # Remove 'v' prefix if present
     version = version.lstrip("v")
-    # Split and convert to integers
+
+    # Match version pattern: major.minor.patch[b|beta|alpha|rc]N
+    match = re.match(r"(\d+)\.(\d+)\.(\d+)(?:b|beta|alpha|rc)?(\d+)?", version)
+
+    if match:
+        major = int(match.group(1))
+        minor = int(match.group(2))
+        patch = int(match.group(3))
+        prerelease_num = int(match.group(4)) if match.group(4) else 0
+
+        # Check if this is a prerelease (has b/beta/alpha/rc suffix)
+        is_prerelease = 1 if re.search(r"[a-zA-Z]", version.split(".")[-1]) else 0
+
+        return (major, minor, patch, is_prerelease, prerelease_num)
+
+    # Fallback: try simple split
     parts = []
     for part in version.split("."):
         try:
             parts.append(int(part))
         except ValueError:
-            # Handle pre-release versions like "1.0.0-beta"
             num = "".join(c for c in part if c.isdigit())
             parts.append(int(num) if num else 0)
-    return tuple(parts)
+
+    return tuple(parts) + (0, 0)
 
 
 def is_newer_version(latest: str, current: str) -> bool:
-    """Check if latest version is newer than current."""
+    """Check if latest version is newer than current.
+
+    Properly handles prerelease versions:
+    - 0.1.5 > 0.1.5b7 (release is newer than any beta)
+    - 0.1.5b8 > 0.1.5b7 (later beta is newer)
+    - 0.1.6b1 > 0.1.5 (next version beta is newer than current release)
+    """
     try:
-        return parse_version(latest) > parse_version(current)
+        latest_parsed = parse_version(latest)
+        current_parsed = parse_version(current)
+
+        # Compare (major, minor, patch) first
+        latest_base = latest_parsed[:3]
+        current_base = current_parsed[:3]
+
+        if latest_base > current_base:
+            return True
+        elif latest_base < current_base:
+            return False
+
+        # Same base version - compare prerelease status
+        # is_prerelease: 0 = release, 1 = prerelease
+        # Release (0) should be "greater" than prerelease (1)
+        latest_is_prerelease = latest_parsed[3] if len(latest_parsed) > 3 else 0
+        current_is_prerelease = current_parsed[3] if len(current_parsed) > 3 else 0
+
+        if latest_is_prerelease < current_is_prerelease:
+            # latest is release, current is prerelease -> latest is newer
+            return True
+        elif latest_is_prerelease > current_is_prerelease:
+            # latest is prerelease, current is release -> latest is NOT newer
+            return False
+
+        # Both are same type (both release or both prerelease)
+        # Compare prerelease numbers
+        latest_prerelease_num = latest_parsed[4] if len(latest_parsed) > 4 else 0
+        current_prerelease_num = current_parsed[4] if len(current_parsed) > 4 else 0
+
+        return latest_prerelease_num > current_prerelease_num
+
     except Exception:
         return False
 
@@ -197,7 +258,12 @@ async def _perform_update():
         # Ensure remote uses HTTPS (SSH may not be available)
         https_url = f"https://github.com/{GITHUB_REPO}.git"
         process = await asyncio.create_subprocess_exec(
-            git_path, *git_config, "remote", "set-url", "origin", https_url,
+            git_path,
+            *git_config,
+            "remote",
+            "set-url",
+            "origin",
+            https_url,
             cwd=str(base_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -213,7 +279,11 @@ async def _perform_update():
 
         # Fetch from origin
         process = await asyncio.create_subprocess_exec(
-            git_path, *git_config, "fetch", "origin", "main",
+            git_path,
+            *git_config,
+            "fetch",
+            "origin",
+            "main",
             cwd=str(base_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -240,7 +310,11 @@ async def _perform_update():
 
         # Hard reset to origin/main (clean update, no merge conflicts)
         process = await asyncio.create_subprocess_exec(
-            git_path, *git_config, "reset", "--hard", "origin/main",
+            git_path,
+            *git_config,
+            "reset",
+            "--hard",
+            "origin/main",
             cwd=str(base_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -267,7 +341,13 @@ async def _perform_update():
 
         # Install Python dependencies
         process = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "-q",
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            "requirements.txt",
+            "-q",
             cwd=str(base_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -291,7 +371,8 @@ async def _perform_update():
 
             # npm install
             process = await asyncio.create_subprocess_exec(
-                npm_path, "install",
+                npm_path,
+                "install",
                 cwd=str(frontend_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -300,7 +381,9 @@ async def _perform_update():
 
             # npm run build
             process = await asyncio.create_subprocess_exec(
-                npm_path, "run", "build",
+                npm_path,
+                "run",
+                "build",
                 cwd=str(frontend_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
