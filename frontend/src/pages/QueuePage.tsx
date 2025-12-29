@@ -47,6 +47,7 @@ import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { EditQueueItemModal } from '../components/EditQueueItemModal';
+import { AddToQueueModal } from '../components/AddToQueueModal';
 import { useToast } from '../contexts/ToastContext';
 
 function formatDuration(seconds: number | null | undefined): string {
@@ -310,6 +311,7 @@ export function QueuePage() {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [editItem, setEditItem] = useState<PrintQueueItem | null>(null);
+  const [requeueItem, setRequeueItem] = useState<PrintQueueItem | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: 'cancel' | 'remove' | 'stop';
     item: PrintQueueItem;
@@ -397,28 +399,6 @@ export function QueuePage() {
       queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast('Failed to reorder queue', 'error'),
-  });
-
-  const requeueMutation = useMutation({
-    mutationFn: (item: PrintQueueItem) => {
-      // Schedule far in future so it doesn't start immediately
-      const futureDate = new Date();
-      futureDate.setFullYear(futureDate.getFullYear() + 1);
-      return api.addToQueue({
-        printer_id: item.printer_id,
-        archive_id: item.archive_id,
-        scheduled_time: futureDate.toISOString(),
-        require_previous_success: false,
-        auto_off_after: false,
-      });
-    },
-    onSuccess: (newItem) => {
-      queryClient.invalidateQueries({ queryKey: ['queue'] });
-      showToast('Added back to queue - please set schedule');
-      // Open edit modal for the new item
-      setEditItem(newItem);
-    },
-    onError: (error: Error) => showToast(error.message || 'Failed to re-queue item', 'error'),
   });
 
   const clearHistoryMutation = useMutation({
@@ -759,7 +739,7 @@ export function QueuePage() {
                     onCancel={() => {}}
                     onRemove={() => setConfirmAction({ type: 'remove', item })}
                     onStop={() => {}}
-                    onRequeue={() => requeueMutation.mutate(item)}
+                    onRequeue={() => setRequeueItem(item)}
                   />
                 ))}
               </div>
@@ -773,6 +753,15 @@ export function QueuePage() {
         <EditQueueItemModal
           item={editItem}
           onClose={() => setEditItem(null)}
+        />
+      )}
+
+      {/* Re-queue Modal */}
+      {requeueItem && (
+        <AddToQueueModal
+          archiveId={requeueItem.archive_id}
+          archiveName={requeueItem.archive_name || `Archive #${requeueItem.archive_id}`}
+          onClose={() => setRequeueItem(null)}
         />
       )}
 
