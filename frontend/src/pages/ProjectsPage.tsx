@@ -505,11 +505,13 @@ export function ProjectsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteProject(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setDeleteConfirm(null);
       showToast('Project deleted', 'success');
+      // Reload to refresh the list (React Query cache invalidation not working reliably)
+      setTimeout(() => window.location.reload(), 100);
     },
     onError: (error: Error) => {
+      setDeleteConfirm(null);
       showToast(error.message, 'error');
     },
   });

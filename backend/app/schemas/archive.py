@@ -10,6 +10,7 @@ class ArchiveBase(BaseModel):
     notes: str | None = None
     cost: float | None = None
     failure_reason: str | None = None
+    quantity: int | None = None  # Number of items printed
 
 
 class ArchiveUpdate(ArchiveBase):
@@ -72,6 +73,7 @@ class ArchiveResponse(BaseModel):
     cost: float | None
     photos: list | None
     failure_reason: str | None
+    quantity: int = 1  # Number of items printed
 
     # Energy tracking
     energy_kwh: float | None = None

@@ -89,6 +89,9 @@ def archive_to_response(
         "cost": archive.cost,
         "photos": archive.photos,
         "failure_reason": archive.failure_reason,
+        "quantity": archive.quantity,
+        "energy_kwh": archive.energy_kwh,
+        "energy_cost": archive.energy_cost,
         "created_at": archive.created_at,
     }
 

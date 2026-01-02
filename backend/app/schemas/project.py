@@ -37,9 +37,10 @@ class ProjectUpdate(BaseModel):
 class ProjectStats(BaseModel):
     """Statistics for a project."""
 
-    total_archives: int = 0
-    completed_prints: int = 0
-    failed_prints: int = 0
+    total_archives: int = 0  # Number of archive records
+    total_items: int = 0  # Sum of quantities (total items printed)
+    completed_prints: int = 0  # Sum of quantities for completed prints
+    failed_prints: int = 0  # Sum of quantities for failed prints
     queued_prints: int = 0
     in_progress_prints: int = 0
     total_print_time_hours: float = 0.0
@@ -115,7 +116,8 @@ class ProjectListResponse(BaseModel):
     target_count: int | None
     created_at: datetime
     # Quick stats
-    archive_count: int = 0
+    archive_count: int = 0  # Number of print jobs
+    total_items: int = 0  # Sum of quantities (total items printed)
     queue_count: int = 0
     progress_percent: float | None = None
     # Preview of archives (up to 5)

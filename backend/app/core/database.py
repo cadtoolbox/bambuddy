@@ -375,6 +375,12 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add quantity column to print_archives for tracking item count
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN quantity INTEGER DEFAULT 1"))
+    except Exception:
+        pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

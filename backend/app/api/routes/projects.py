@@ -39,21 +39,27 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 async def compute_project_stats(db: AsyncSession, project_id: int, target_count: int | None = None) -> ProjectStats:
     """Compute statistics for a project."""
-    # Count total archives
+    # Count total archives (distinct print jobs)
     total_result = await db.execute(select(func.count(PrintArchive.id)).where(PrintArchive.project_id == project_id))
     total_archives = total_result.scalar() or 0
 
-    # Count completed archives
+    # Sum total items (using quantity field)
+    total_items_result = await db.execute(
+        select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(PrintArchive.project_id == project_id)
+    )
+    total_items = total_items_result.scalar() or 0
+
+    # Sum completed items (using quantity field)
     completed_result = await db.execute(
-        select(func.count(PrintArchive.id)).where(
+        select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
             PrintArchive.project_id == project_id, PrintArchive.status == "completed"
         )
     )
     completed_prints = completed_result.scalar() or 0
 
-    # Count failed archives
+    # Sum failed items (using quantity field)
     failed_result = await db.execute(
-        select(func.count(PrintArchive.id)).where(
+        select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
             PrintArchive.project_id == project_id, PrintArchive.status == "failed"
         )
     )
@@ -107,8 +113,9 @@ async def compute_project_stats(db: AsyncSession, project_id: int, target_count:
 
     return ProjectStats(
         total_archives=total_archives,
-        completed_prints=completed_prints,
-        failed_prints=failed_prints,
+        total_items=int(total_items),
+        completed_prints=int(completed_prints),
+        failed_prints=int(failed_prints),
         queued_prints=queued_prints,
         in_progress_prints=in_progress_prints,
         total_print_time_hours=round((sums.total_time or 0) / 3600, 2),
@@ -141,11 +148,17 @@ async def list_projects(
     # Compute quick stats for each project
     response = []
     for project in projects:
-        # Get archive count
+        # Get archive count (number of print jobs)
         archive_count_result = await db.execute(
             select(func.count(PrintArchive.id)).where(PrintArchive.project_id == project.id)
         )
         archive_count = archive_count_result.scalar() or 0
+
+        # Get total items (sum of quantities)
+        total_items_result = await db.execute(
+            select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(PrintArchive.project_id == project.id)
+        )
+        total_items = int(total_items_result.scalar() or 0)
 
         # Get queue count
         queue_count_result = await db.execute(
@@ -156,14 +169,14 @@ async def list_projects(
         )
         queue_count = queue_count_result.scalar() or 0
 
-        # Get completed count for progress
+        # Get completed count for progress (sum of quantities)
         completed_result = await db.execute(
-            select(func.count(PrintArchive.id)).where(
+            select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
                 PrintArchive.project_id == project.id,
                 PrintArchive.status == "completed",
             )
         )
-        completed_count = completed_result.scalar() or 0
+        completed_count = int(completed_result.scalar() or 0)
 
         progress_percent = None
         if project.target_count and project.target_count > 0:
@@ -199,6 +212,7 @@ async def list_projects(
                 target_count=project.target_count,
                 created_at=project.created_at,
                 archive_count=archive_count,
+                total_items=total_items,
                 queue_count=queue_count,
                 progress_percent=progress_percent,
                 archives=archive_previews,
@@ -392,9 +406,9 @@ async def get_child_previews(db: AsyncSession, parent_id: int) -> list[ProjectCh
 
     previews = []
     for child in children:
-        # Get completed count for progress
+        # Get completed count for progress (sum of quantities)
         completed_result = await db.execute(
-            select(func.count(PrintArchive.id)).where(
+            select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
                 PrintArchive.project_id == child.id,
                 PrintArchive.status == "completed",
             )
@@ -402,7 +416,7 @@ async def get_child_previews(db: AsyncSession, parent_id: int) -> list[ProjectCh
         completed_count = completed_result.scalar() or 0
         progress = None
         if child.target_count and child.target_count > 0:
-            progress = round((completed_count / child.target_count) * 100, 1)
+            progress = round((int(completed_count) / child.target_count) * 100, 1)
 
         previews.append(
             ProjectChildPreview(

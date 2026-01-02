@@ -3,12 +3,11 @@ import io
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.app.models.archive import PrintArchive
-from backend.app.models.project import Project
 
 
 class ExportService:
@@ -20,6 +19,7 @@ class ExportService:
         "print_name",
         "filename",
         "status",
+        "quantity",
         "printer_id",
         "project_name",
         "filament_type",
@@ -46,6 +46,7 @@ class ExportService:
         "print_name": "Print Name",
         "filename": "Filename",
         "status": "Status",
+        "quantity": "Items Printed",
         "printer_id": "Printer ID",
         "project_name": "Project",
         "filament_type": "Filament Type",
@@ -97,9 +98,7 @@ class ExportService:
         """
         # Build query
         query = (
-            select(PrintArchive)
-            .options(selectinload(PrintArchive.project))
-            .order_by(PrintArchive.created_at.desc())
+            select(PrintArchive).options(selectinload(PrintArchive.project)).order_by(PrintArchive.created_at.desc())
         )
 
         # Apply filters
@@ -116,11 +115,11 @@ class ExportService:
         if search:
             like_pattern = f"%{search}%"
             query = query.where(
-                (PrintArchive.print_name.ilike(like_pattern)) |
-                (PrintArchive.filename.ilike(like_pattern)) |
-                (PrintArchive.tags.ilike(like_pattern)) |
-                (PrintArchive.notes.ilike(like_pattern)) |
-                (PrintArchive.designer.ilike(like_pattern))
+                (PrintArchive.print_name.ilike(like_pattern))
+                | (PrintArchive.filename.ilike(like_pattern))
+                | (PrintArchive.tags.ilike(like_pattern))
+                | (PrintArchive.notes.ilike(like_pattern))
+                | (PrintArchive.designer.ilike(like_pattern))
             )
 
         # Execute query
@@ -212,12 +211,14 @@ class ExportService:
         rows.append(["Week", "Total", "Failed", "Rate (%)"])
 
         for week in analysis["trend"]:
-            rows.append([
-                week["week_start"],
-                week["total_prints"],
-                week["failed_prints"],
-                week["failure_rate"],
-            ])
+            rows.append(
+                [
+                    week["week_start"],
+                    week["total_prints"],
+                    week["failed_prints"],
+                    week["failure_rate"],
+                ]
+            )
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -266,7 +267,7 @@ class ExportService:
         """Generate Excel file content."""
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Alignment, Font, PatternFill
             from openpyxl.utils import get_column_letter
         except ImportError:
             raise ImportError("openpyxl is required for Excel export. Install with: pip install openpyxl")
@@ -293,7 +294,7 @@ class ExportService:
                 ws.cell(row=row_idx, column=col_idx, value=value)
 
         # Auto-adjust column widths
-        for col_idx, field in enumerate(fields, 1):
+        for col_idx, _field in enumerate(fields, 1):
             column_letter = get_column_letter(col_idx)
             max_length = len(headers[col_idx - 1])
             for row in rows:

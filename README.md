@@ -75,6 +75,7 @@
 ### 📁 Projects
 - Group related prints (e.g., "Voron Build")
 - Track progress with target counts
+- Quantity tracking for batch prints
 - Color-coded project badges
 - Assign archives via context menu
 

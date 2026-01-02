@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, Text, JSON, Boolean, func
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.core.database import Base
@@ -10,9 +11,7 @@ class PrintArchive(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     printer_id: Mapped[int | None] = mapped_column(ForeignKey("printers.id"), nullable=True)
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
-    )
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
 
     # File info
     filename: Mapped[str] = mapped_column(String(255))
@@ -54,15 +53,14 @@ class PrintArchive(Base):
     cost: Mapped[float | None] = mapped_column(Float)
     photos: Mapped[list | None] = mapped_column(JSON)  # List of photo filenames
     failure_reason: Mapped[str | None] = mapped_column(String(100))  # For failed prints
+    quantity: Mapped[int] = mapped_column(Integer, default=1)  # Number of items printed
 
     # Energy tracking
     energy_kwh: Mapped[float | None] = mapped_column(Float)  # Energy consumed in kWh
     energy_cost: Mapped[float | None] = mapped_column(Float)  # Cost of energy consumed
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
     printer: Mapped["Printer | None"] = relationship(back_populates="archives")

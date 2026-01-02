@@ -42,6 +42,12 @@ All notable changes to Bambuddy will be documented in this file.
   - Loading indicator shows while re-read is in progress
   - Automatically tracks printer status to clear indicator when complete
   - Menu hidden when printer is busy (printing)
+- **Print quantity tracking** - Track number of items per print job for project progress:
+  - Set "Items Printed" quantity when editing archived prints
+  - Project stats now show total items vs print jobs
+  - Progress bar tracks items toward target count
+  - Useful for batch printing (e.g., 10 copies in one print = 10 items)
+  - Default quantity of 1 for backwards compatibility
 
 ### Changed
 - **Temperature cards layout** - Refactored printer card layout with slimmer temperature displays to make room for control buttons
