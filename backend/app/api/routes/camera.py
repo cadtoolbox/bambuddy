@@ -167,7 +167,7 @@ async def generate_rtsp_mjpeg_stream(
     ffmpeg = get_ffmpeg_path()
     if not ffmpeg:
         logger.error("ffmpeg not found - camera streaming requires ffmpeg")
-        yield (b"--frame\r\n" b"Content-Type: text/plain\r\n\r\n" b"Error: ffmpeg not installed\r\n")
+        yield (b"--frame\r\nContent-Type: text/plain\r\n\r\nError: ffmpeg not installed\r\n")
         return
 
     port = get_camera_port(model)
@@ -303,7 +303,7 @@ async def generate_rtsp_mjpeg_stream(
 
     except FileNotFoundError:
         logger.error("ffmpeg not found - camera streaming requires ffmpeg")
-        yield (b"--frame\r\n" b"Content-Type: text/plain\r\n\r\n" b"Error: ffmpeg not installed\r\n")
+        yield (b"--frame\r\nContent-Type: text/plain\r\n\r\nError: ffmpeg not installed\r\n")
     except asyncio.CancelledError:
         logger.info(f"Camera stream task cancelled (stream_id={stream_id})")
     except GeneratorExit:

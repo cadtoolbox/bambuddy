@@ -2,6 +2,28 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
+## [0.1.6b6] - 2026-01-04
+
+### Added
+- **Resizable printer cards** - Adjust printer card size from the Printers page toolbar:
+  - Four sizes: Small, Medium (default), Large, XL
+  - Plus/minus buttons in toolbar header
+  - Size preference saved to localStorage
+  - Responsive grid adapts to selected size
+- **Queue Only mode** - Stage prints without automatic scheduling:
+  - New "Queue Only" option when adding prints to queue
+  - Staged prints show purple "Staged" badge
+  - Play button to manually release staged prints to the queue
+  - Edit queue items to switch between ASAP, Scheduled, and Queue Only modes
+  - Useful for preparing print batches before activating
+
+### Fixed
+- **Camera stream reconnection** - Improved detection of stuck camera streams with automatic reconnection
+
+### Tests
+- Added integration tests for print queue API endpoints (16 new tests)
+- Tests cover queue CRUD, manual_start flag, and start/cancel endpoints
+
 ## [0.1.6b5] - 2026-01-02
 
 ### Added

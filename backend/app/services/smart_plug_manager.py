@@ -162,9 +162,7 @@ class SmartPlugManager:
             )
             return
 
-        logger.info(
-            f"Print completed successfully on printer {printer_id}, " f"scheduling turn-off for plug '{plug.name}'"
-        )
+        logger.info(f"Print completed successfully on printer {printer_id}, scheduling turn-off for plug '{plug.name}'")
 
         if plug.off_delay_mode == "time":
             self._schedule_delayed_off(plug, printer_id, plug.off_delay_minutes * 60)
@@ -227,7 +225,7 @@ class SmartPlugManager:
         # Cancel any existing task for this plug
         self._cancel_pending_off(plug.id)
 
-        logger.info(f"Scheduling temperature-based turn-off for plug '{plug.name}' " f"(threshold: {temp_threshold}°C)")
+        logger.info(f"Scheduling temperature-based turn-off for plug '{plug.name}' (threshold: {temp_threshold}°C)")
 
         # Mark as pending in database (survives restarts)
         asyncio.create_task(self._mark_auto_off_pending(plug.id, True))
@@ -281,9 +279,7 @@ class SmartPlugManager:
                             f"threshold={temp_threshold}°C"
                         )
                     else:
-                        logger.info(
-                            f"Temp check plug {plug_id}: nozzle={nozzle_temp}°C, " f"threshold={temp_threshold}°C"
-                        )
+                        logger.info(f"Temp check plug {plug_id}: nozzle={nozzle_temp}°C, threshold={temp_threshold}°C")
 
                     if max_nozzle_temp < temp_threshold:
                         # All nozzles are below threshold, turn off
@@ -398,7 +394,7 @@ class SmartPlugManager:
                         elapsed = (datetime.utcnow() - plug.auto_off_pending_since).total_seconds()
                         if elapsed > 7200:  # 2 hours
                             logger.warning(
-                                f"Auto-off for plug '{plug.name}' was pending for {elapsed/60:.0f} minutes, "
+                                f"Auto-off for plug '{plug.name}' was pending for {elapsed / 60:.0f} minutes, "
                                 f"clearing stale pending state"
                             )
                             plug.auto_off_pending = False
@@ -406,7 +402,7 @@ class SmartPlugManager:
                             await db.commit()
                             continue
 
-                    logger.info(f"Resuming pending auto-off for plug '{plug.name}' " f"(printer {plug.printer_id})")
+                    logger.info(f"Resuming pending auto-off for plug '{plug.name}' (printer {plug.printer_id})")
 
                     # Resume the appropriate off mode
                     if plug.off_delay_mode == "temperature":

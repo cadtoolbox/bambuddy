@@ -57,6 +57,7 @@
 - Live camera streaming (MJPEG) & snapshots
 - Fan status monitoring (part cooling, auxiliary, chamber)
 - Printer control (stop, pause, resume)
+- Resizable printer cards (S/M/L/XL)
 - Skip objects during print
 - AMS slot RFID re-read
 - HMS error monitoring with history
@@ -68,6 +69,7 @@
 ### ⏰ Scheduling & Automation
 - Print queue with drag-and-drop
 - Scheduled prints (date/time)
+- Queue Only mode (stage without auto-start)
 - Smart plug integration (Tasmota)
 - Energy consumption tracking
 - Auto power-on before print

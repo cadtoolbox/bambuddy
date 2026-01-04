@@ -72,6 +72,10 @@ class PrintScheduler:
                 if item.scheduled_time and item.scheduled_time > datetime.utcnow():
                     continue
 
+                # Skip items that require manual start
+                if item.manual_start:
+                    continue
+
                 # Check if printer is idle
                 printer_idle = self._is_printer_idle(item.printer_id)
                 printer_connected = printer_manager.is_connected(item.printer_id)

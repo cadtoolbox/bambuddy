@@ -21,6 +21,7 @@ class PrintQueueItemCreate(BaseModel):
     scheduled_time: datetime | None = None  # None = ASAP (next when idle)
     require_previous_success: bool = False
     auto_off_after: bool = False  # Power off printer after print completes
+    manual_start: bool = False  # Requires manual trigger to start (staged)
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -29,6 +30,7 @@ class PrintQueueItemUpdate(BaseModel):
     scheduled_time: datetime | None = None
     require_previous_success: bool | None = None
     auto_off_after: bool | None = None
+    manual_start: bool | None = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -39,6 +41,7 @@ class PrintQueueItemResponse(BaseModel):
     scheduled_time: UTCDatetime
     require_previous_success: bool
     auto_off_after: bool
+    manual_start: bool
     status: Literal["pending", "printing", "completed", "failed", "skipped", "cancelled"]
     started_at: UTCDatetime
     completed_at: UTCDatetime

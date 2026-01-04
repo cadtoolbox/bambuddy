@@ -789,6 +789,7 @@ export interface PrintQueueItem {
   scheduled_time: string | null;
   require_previous_success: boolean;
   auto_off_after: boolean;
+  manual_start: boolean;  // Requires manual trigger to start (staged)
   status: 'pending' | 'printing' | 'completed' | 'failed' | 'skipped' | 'cancelled';
   started_at: string | null;
   completed_at: string | null;
@@ -806,6 +807,7 @@ export interface PrintQueueItemCreate {
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
+  manual_start?: boolean;  // Requires manual trigger to start (staged)
 }
 
 export interface PrintQueueItemUpdate {
@@ -814,6 +816,7 @@ export interface PrintQueueItemUpdate {
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
+  manual_start?: boolean;
 }
 
 // MQTT Logging types
@@ -1914,6 +1917,8 @@ export const api = {
     request<{ message: string }>(`/queue/${id}/cancel`, { method: 'POST' }),
   stopQueueItem: (id: number) =>
     request<{ message: string }>(`/queue/${id}/stop`, { method: 'POST' }),
+  startQueueItem: (id: number) =>
+    request<PrintQueueItem>(`/queue/${id}/start`, { method: 'POST' }),
 
   // K-Profiles
   getKProfiles: (printerId: number, nozzleDiameter = '0.4') =>

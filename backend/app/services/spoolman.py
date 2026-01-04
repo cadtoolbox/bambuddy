@@ -577,9 +577,7 @@ class SpoolmanClient:
             )
 
         # Spool not found - auto-create it
-        logger.info(
-            f"Creating new spool in Spoolman for {tray.tray_sub_brands} " f"(tray_uuid: {tray.tray_uuid[:16]}...)"
-        )
+        logger.info(f"Creating new spool in Spoolman for {tray.tray_sub_brands} (tray_uuid: {tray.tray_uuid[:16]}...)")
 
         # First find or create the filament type
         filament = await self._find_or_create_filament(tray)

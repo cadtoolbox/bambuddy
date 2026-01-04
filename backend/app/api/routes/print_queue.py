@@ -89,6 +89,7 @@ async def add_to_queue(
         scheduled_time=data.scheduled_time,
         require_previous_success=data.require_previous_success,
         auto_off_after=data.auto_off_after,
+        manual_start=data.manual_start,
         position=max_pos + 1,
         status="pending",
     )
@@ -272,3 +273,34 @@ async def stop_queue_item(
         asyncio.create_task(cooldown_and_poweroff())
 
     return {"message": "Print stopped" if stop_sent else "Queue item cancelled (printer was offline)"}
+
+
+@router.post("/{item_id}/start")
+async def start_queue_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually start a staged (manual_start) queue item.
+
+    This clears the manual_start flag so the scheduler will pick it up,
+    or starts immediately if the printer is ready.
+    """
+    result = await db.execute(
+        select(PrintQueueItem)
+        .options(selectinload(PrintQueueItem.archive), selectinload(PrintQueueItem.printer))
+        .where(PrintQueueItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(404, "Queue item not found")
+
+    if item.status != "pending":
+        raise HTTPException(400, f"Can only start pending items, current status: '{item.status}'")
+
+    # Clear manual_start flag so scheduler picks it up
+    item.manual_start = False
+    await db.commit()
+    await db.refresh(item, ["archive", "printer"])
+
+    logger.info(f"Manually started queue item {item_id} (cleared manual_start flag)")
+    return _enrich_response(item)

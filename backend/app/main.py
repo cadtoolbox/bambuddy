@@ -1616,7 +1616,7 @@ async def track_printer_runtime():
                                 needs_commit = True
                                 logger.debug(
                                     f"[{printer.name}] Runtime tracking: added {int(elapsed)}s, "
-                                    f"total={printer.runtime_seconds}s ({printer.runtime_seconds/3600:.2f}h)"
+                                    f"total={printer.runtime_seconds}s ({printer.runtime_seconds / 3600:.2f}h)"
                                 )
                             else:
                                 logger.warning(

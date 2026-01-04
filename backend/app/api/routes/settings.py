@@ -478,6 +478,7 @@ async def export_backup(
                     "scheduled_time": qi.scheduled_time.isoformat() if qi.scheduled_time else None,
                     "require_previous_success": qi.require_previous_success,
                     "auto_off_after": qi.auto_off_after,
+                    "manual_start": qi.manual_start,
                     "status": qi.status,
                     "started_at": qi.started_at.isoformat() if qi.started_at else None,
                     "completed_at": qi.completed_at.isoformat() if qi.completed_at else None,
@@ -1468,6 +1469,7 @@ async def import_backup(
                 position=qi_data.get("position", 0),
                 require_previous_success=qi_data.get("require_previous_success", False),
                 auto_off_after=qi_data.get("auto_off_after", False),
+                manual_start=qi_data.get("manual_start", False),
                 status=qi_data.get("status", "pending"),
                 error_message=qi_data.get("error_message"),
             )
