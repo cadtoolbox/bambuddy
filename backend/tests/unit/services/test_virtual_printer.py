@@ -126,7 +126,7 @@ class TestVirtualPrinterManager:
         assert status["running"] is True
         assert status["mode"] == "immediate"
         assert status["name"] == "Bambuddy"
-        assert status["serial"] == "00M09A391800001"
+        assert status["serial"] == "00M09A391800001"  # Constant X1C serial for cert stability
         assert status["model"] == "C11"
         assert status["model_name"] == "P1S"
         assert status["pending_files"] == 1

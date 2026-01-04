@@ -23,7 +23,13 @@ vi.mock('../../api/client', () => ({
   virtualPrinterApi: {
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
-    getModels: vi.fn(),
+    getModels: vi.fn().mockResolvedValue({
+      models: {
+        '3DPrinter-X1-Carbon': 'X1C',
+        'C12': 'P1S',
+        'N7': 'P2S',
+      },
+    }),
   },
 }));
 
@@ -35,30 +41,19 @@ const createMockSettings = (overrides = {}) => ({
   enabled: false,
   access_code_set: false,
   mode: 'immediate' as const,
-  model: 'BL-P001',
+  model: '3DPrinter-X1-Carbon',
   status: {
     enabled: false,
     running: false,
     mode: 'immediate',
     name: 'Bambuddy',
-    serial: '00M09A391800001',
-    model: 'BL-P001',
+    serial: '00M00A391800001',
+    model: '3DPrinter-X1-Carbon',
     model_name: 'X1C',
     pending_files: 0,
   },
   ...overrides,
 });
-
-const mockModelsData = {
-  models: {
-    'BL-P001': 'X1C',
-    'BL-P002': 'X1',
-    'BL-P003': 'X1E',
-    'C11': 'P1S',
-    'C12': 'P1P',
-  },
-  default: 'BL-P001',
-};
 
 describe('VirtualPrinterSettings', () => {
   beforeEach(() => {
@@ -66,7 +61,6 @@ describe('VirtualPrinterSettings', () => {
     // Default mock implementation
     vi.mocked(virtualPrinterApi.getSettings).mockResolvedValue(createMockSettings());
     vi.mocked(virtualPrinterApi.updateSettings).mockResolvedValue(createMockSettings());
-    vi.mocked(virtualPrinterApi.getModels).mockResolvedValue(mockModelsData);
   });
 
   describe('rendering', () => {
@@ -159,7 +153,9 @@ describe('VirtualPrinterSettings', () => {
             running: true,
             mode: 'immediate',
             name: 'Bambuddy',
-            serial: '00M09A391800001',
+            serial: '00M00A391800001',
+            model: '3DPrinter-X1-Carbon',
+            model_name: 'X1C',
             pending_files: 0,
           },
         })
@@ -170,7 +166,7 @@ describe('VirtualPrinterSettings', () => {
       await waitFor(() => {
         expect(screen.getByText('Status Details')).toBeInTheDocument();
         expect(screen.getByText('Bambuddy')).toBeInTheDocument();
-        expect(screen.getByText('00M09A391800001')).toBeInTheDocument();
+        expect(screen.getByText('00M00A391800001')).toBeInTheDocument();
       });
     });
   });
@@ -409,19 +405,28 @@ describe('VirtualPrinterSettings', () => {
   });
 
   describe('info section', () => {
-    it('shows required ports warning', async () => {
+    it('shows setup required warning', async () => {
       render(<VirtualPrinterSettings />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Required ports: 2021.*8883.*990/)).toBeInTheDocument();
+        expect(screen.getByText('Setup Required')).toBeInTheDocument();
       });
     });
 
-    it('shows iptables instructions', async () => {
+    it('shows link to setup guide', async () => {
       render(<VirtualPrinterSettings />);
 
       await waitFor(() => {
-        expect(screen.getByText(/iptables -t nat -A PREROUTING/)).toBeInTheDocument();
+        expect(screen.getByText('Read the setup guide before enabling')).toBeInTheDocument();
+      });
+    });
+
+    it('shows how it works section', async () => {
+      render(<VirtualPrinterSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How it works:')).toBeInTheDocument();
+        expect(screen.getByText(/Complete the setup guide for your platform/)).toBeInTheDocument();
       });
     });
   });

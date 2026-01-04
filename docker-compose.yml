@@ -18,7 +18,10 @@ services:
     volumes:
       - bambuddy_data:/app/data
       - bambuddy_logs:/app/logs
-      - bambuddy_vprinter:/app/virtual_printer
+      #
+      # Share virtual printer certs with native installation
+      # This ensures the slicer only needs to trust one CA certificate.
+      - ./virtual_printer:/app/data/virtual_printer
     environment:
       - TZ=Europe/Berlin
     restart: unless-stopped
@@ -26,4 +29,3 @@ services:
 volumes:
   bambuddy_data:
   bambuddy_logs:
-  bambuddy_vprinter:

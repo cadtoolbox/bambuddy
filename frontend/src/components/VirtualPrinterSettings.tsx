@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Check, AlertTriangle, Printer, Eye, EyeOff, Info, ChevronDown } from 'lucide-react';
+import { Loader2, Check, AlertTriangle, Printer, Eye, EyeOff, Info, ChevronDown, ExternalLink } from 'lucide-react';
 import { virtualPrinterApi } from '../api/client';
 import { Card, CardContent, CardHeader } from './Card';
 import { Button } from './Button';
@@ -13,8 +13,9 @@ export function VirtualPrinterSettings() {
   const [localEnabled, setLocalEnabled] = useState(false);
   const [localAccessCode, setLocalAccessCode] = useState('');
   const [localMode, setLocalMode] = useState<'immediate' | 'queue'>('immediate');
-  const [localModel, setLocalModel] = useState('BL-P001');
+  const [localModel, setLocalModel] = useState('3DPrinter-X1-Carbon');
   const [showAccessCode, setShowAccessCode] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'toggle' | 'accessCode' | 'mode' | 'model' | null>(null);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -45,6 +46,7 @@ export function VirtualPrinterSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['virtual-printer-settings'] });
       showToast('Virtual printer settings updated');
+      setPendingAction(null);
     },
     onError: (error: Error) => {
       showToast(error.message || 'Failed to update settings', 'error');
@@ -54,6 +56,7 @@ export function VirtualPrinterSettings() {
         setLocalMode(settings.mode);
         setLocalModel(settings.model);
       }
+      setPendingAction(null);
     },
   });
 
@@ -67,6 +70,7 @@ export function VirtualPrinterSettings() {
     }
 
     setLocalEnabled(newEnabled);
+    setPendingAction('toggle');
     updateMutation.mutate({
       enabled: newEnabled,
       access_code: localAccessCode || undefined,
@@ -85,6 +89,7 @@ export function VirtualPrinterSettings() {
       return;
     }
 
+    setPendingAction('accessCode');
     updateMutation.mutate({
       access_code: localAccessCode,
     });
@@ -93,11 +98,13 @@ export function VirtualPrinterSettings() {
 
   const handleModeChange = (mode: 'immediate' | 'queue') => {
     setLocalMode(mode);
+    setPendingAction('mode');
     updateMutation.mutate({ mode });
   };
 
   const handleModelChange = (model: string) => {
     setLocalModel(model);
+    setPendingAction('model');
     updateMutation.mutate({ model });
   };
 
@@ -149,10 +156,10 @@ export function VirtualPrinterSettings() {
             </div>
             <button
               onClick={handleToggleEnabled}
-              disabled={updateMutation.isPending}
+              disabled={pendingAction === 'toggle'}
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 localEnabled ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
-              } ${updateMutation.isPending ? 'opacity-50' : ''}`}
+              } ${pendingAction === 'toggle' ? 'opacity-50' : ''}`}
             >
               <span
                 className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
@@ -172,18 +179,20 @@ export function VirtualPrinterSettings() {
               <select
                 value={localModel}
                 onChange={(e) => handleModelChange(e.target.value)}
-                disabled={updateMutation.isPending || isRunning}
+                disabled={pendingAction === 'model' || (localEnabled && isRunning)}
                 className="w-full bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-md px-3 py-2 text-white appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed pr-10"
               >
-                {modelsData?.models && Object.entries(modelsData.models).map(([code, name]) => (
+                {modelsData?.models && Object.entries(modelsData.models)
+                  .sort(([, a], [, b]) => (a as string).localeCompare(b as string))
+                  .map(([code, name]) => (
                   <option key={code} value={code}>
-                    {name} ({code})
+                    {name}
                   </option>
                 ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray pointer-events-none" />
             </div>
-            {isRunning && (
+            {localEnabled && isRunning && (
               <p className="text-xs text-yellow-400 mt-2">
                 <AlertTriangle className="w-3 h-3 inline mr-1" />
                 Disable the virtual printer to change the model
@@ -226,10 +235,10 @@ export function VirtualPrinterSettings() {
               </div>
               <Button
                 onClick={handleAccessCodeChange}
-                disabled={!localAccessCode || updateMutation.isPending}
+                disabled={!localAccessCode || pendingAction === 'accessCode'}
                 variant="primary"
               >
-                {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                {pendingAction === 'accessCode' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
               </Button>
             </div>
             <p className="text-xs text-bambu-gray mt-2">
@@ -248,7 +257,7 @@ export function VirtualPrinterSettings() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleModeChange('immediate')}
-                disabled={updateMutation.isPending}
+                disabled={pendingAction === 'mode'}
                 className={`p-3 rounded-lg border text-left transition-colors ${
                   localMode === 'immediate'
                     ? 'border-bambu-green bg-bambu-green/10'
@@ -260,7 +269,7 @@ export function VirtualPrinterSettings() {
               </button>
               <button
                 onClick={() => handleModeChange('queue')}
-                disabled={updateMutation.isPending}
+                disabled={pendingAction === 'mode'}
                 className={`p-3 rounded-lg border text-left transition-colors ${
                   localMode === 'queue'
                     ? 'border-bambu-green bg-bambu-green/10'
@@ -278,7 +287,34 @@ export function VirtualPrinterSettings() {
 
       {/* Right Column - Info & Status */}
       <div className="space-y-6 lg:w-[480px] lg:flex-shrink-0">
-        {/* Info Card */}
+        {/* Setup Required Warning */}
+        <Card className="border-l-4 border-l-yellow-500">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="text-white font-medium mb-2">
+                  Setup Required
+                </p>
+                <p className="text-bambu-gray mb-3">
+                  The virtual printer feature requires additional system configuration before it will work.
+                  This includes port forwarding, firewall rules, and platform-specific settings.
+                </p>
+                <a
+                  href="https://wiki.bambuddy.cool/features/virtual-printer/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-md text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Read the setup guide before enabling
+                </a>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* How it works */}
         <Card>
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
@@ -288,39 +324,13 @@ export function VirtualPrinterSettings() {
                   <strong className="text-white">How it works:</strong>
                 </p>
                 <ol className="list-decimal list-inside space-y-1">
+                  <li>Complete the setup guide for your platform</li>
                   <li>Enable the virtual printer and set an access code</li>
                   <li>In Bambu Studio or OrcaSlicer, go to "Add Printer"</li>
                   <li>The "Bambuddy" printer should appear in the discovery list</li>
                   <li>Connect using the access code you set</li>
                   <li>When you "print" to Bambuddy, the 3MF file is archived instead</li>
                 </ol>
-                <p className="mt-3 text-yellow-400/80">
-                  <AlertTriangle className="w-4 h-4 inline mr-1" />
-                  Required ports: 2021 (SSDP), 8883 (MQTT), 990 (FTP)
-                </p>
-                <div className="mt-2 text-xs text-bambu-gray space-y-1">
-                  <p>Port 990 requires root or iptables redirect:</p>
-                  <code className="block bg-bambu-dark-tertiary px-2 py-1 rounded text-[10px]">
-                    sudo iptables -t nat -A PREROUTING -p tcp --dport 990 -j REDIRECT --to-port 9990
-                  </code>
-                  <code className="block bg-bambu-dark-tertiary px-2 py-1 rounded text-[10px]">
-                    sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport 990 -j REDIRECT --to-port 9990
-                  </code>
-                </div>
-                <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs">
-                  <strong className="text-blue-400">Docker users:</strong>{' '}
-                  <span className="text-bambu-gray">
-                    Host network mode is required for SSDP discovery.{' '}
-                    <a
-                      href="https://wiki.bambuddy.cool/features/virtual-printer/#docker-configuration"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline"
-                    >
-                      See Docker configuration guide →
-                    </a>
-                  </span>
-                </div>
               </div>
             </div>
           </CardContent>

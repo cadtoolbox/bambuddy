@@ -17,15 +17,18 @@ logger = logging.getLogger(__name__)
 
 # Mapping of SSDP model codes to display names
 # These are the codes that slicers expect during discovery
+# Sources:
+#   - https://gist.github.com/Alex-Schaefer/72a9e2491a42da2ef99fb87601955cc3
+#   - https://github.com/psychoticbeef/BambuLabOrcaSlicerDiscovery
 VIRTUAL_PRINTER_MODELS = {
     # X1 Series
-    "BL-P001": "X1C",  # X1 Carbon
-    "BL-P002": "X1",  # X1
-    "BL-P003": "X1E",  # X1E
+    "3DPrinter-X1-Carbon": "X1C",  # X1 Carbon
+    "3DPrinter-X1": "X1",  # X1
+    "C13": "X1E",  # X1E
     # P Series
-    "C11": "P1S",  # P1S
-    "C12": "P1P",  # P1P
-    "C13": "P2S",  # P2S
+    "C11": "P1P",  # P1P
+    "C12": "P1S",  # P1S
+    "N7": "P2S",  # P2S
     # A1 Series
     "N2S": "A1",  # A1
     "N1": "A1 Mini",  # A1 Mini
@@ -35,8 +38,35 @@ VIRTUAL_PRINTER_MODELS = {
     "O1S": "H2S",  # H2S
 }
 
+# Serial number prefixes for each model (based on Bambu Lab serial number format)
+# Format: MMM??RYMDDUUUUU (15 chars total)
+#   MMM = Model prefix (3 chars)
+#   ?? = Unknown/revision code (2 chars)
+#   R = Revision letter (1 char)
+#   Y = Year digit (1 char)
+#   M = Month (1 char, hex: 1-9, A=Oct, B=Nov, C=Dec)
+#   DD = Day (2 chars)
+#   UUUUU = Unit number (5 chars)
+MODEL_SERIAL_PREFIXES = {
+    # X1 Series
+    "3DPrinter-X1-Carbon": "00M00A",  # X1C
+    "3DPrinter-X1": "00M00A",  # X1
+    "C13": "03W00A",  # X1E
+    # P Series
+    "C11": "01S00A",  # P1P
+    "C12": "01P00A",  # P1S
+    "N7": "22E00A",  # P2S
+    # A1 Series
+    "N2S": "03900A",  # A1
+    "N1": "03000A",  # A1 Mini
+    # H2 Series
+    "O1D": "09400A",  # H2D
+    "O1C": "09400A",  # H2C
+    "O1S": "09400A",  # H2S
+}
+
 # Default model
-DEFAULT_VIRTUAL_PRINTER_MODEL = "BL-P001"  # X1C
+DEFAULT_VIRTUAL_PRINTER_MODEL = "3DPrinter-X1-Carbon"  # X1C
 
 
 class VirtualPrinterManager:
@@ -44,7 +74,7 @@ class VirtualPrinterManager:
 
     # Fixed configuration
     PRINTER_NAME = "Bambuddy"
-    PRINTER_SERIAL = "00M09A391800001"  # X1C serial format
+    SERIAL_SUFFIX = "391800001"  # Fixed suffix for virtual printer
 
     def __init__(self):
         """Initialize the virtual printer manager."""
@@ -67,11 +97,28 @@ class VirtualPrinterManager:
         self._upload_dir = self._base_dir / "uploads"
         self._cert_dir = self._base_dir / "certs"
 
-        # Certificate service - pass serial to match CN in certificate
-        self._cert_service = CertificateService(self._cert_dir, serial=self.PRINTER_SERIAL)
+        # Certificate service
+        self._cert_service = CertificateService(self._cert_dir)
 
         # Track pending uploads for MQTT correlation
         self._pending_files: dict[str, Path] = {}
+
+    def _get_serial_for_model(self, model: str) -> str:
+        """Get appropriate serial number for the given model.
+
+        Args:
+            model: SSDP model code (e.g., 'BL-P001', 'C11')
+
+        Returns:
+            Serial number with correct prefix for the model
+        """
+        prefix = MODEL_SERIAL_PREFIXES.get(model, "00M09A")
+        return f"{prefix}{self.SERIAL_SUFFIX}"
+
+    @property
+    def printer_serial(self) -> str:
+        """Get the current printer serial number based on model."""
+        return self._get_serial_for_model(self._model)
 
     def set_session_factory(self, session_factory: Callable) -> None:
         """Set the database session factory.
@@ -112,6 +159,7 @@ class VirtualPrinterManager:
         # Validate model if provided
         new_model = model if model and model in VIRTUAL_PRINTER_MODELS else self._model
         model_changed = new_model != self._model
+        old_model = self._model
 
         self._access_code = access_code
         self._mode = mode
@@ -123,8 +171,12 @@ class VirtualPrinterManager:
             await self._stop()
         elif enabled and self._enabled and model_changed:
             # Model changed while running - restart services
+            logger.info(f"Model changed from {old_model} to {new_model}, restarting...")
             await self._stop()
+            # Give time for ports to be released
+            await asyncio.sleep(0.5)
             await self._start()
+            logger.info("Virtual printer restarted with new model")
 
         self._enabled = enabled
 
@@ -132,8 +184,14 @@ class VirtualPrinterManager:
         """Start all virtual printer services."""
         logger.info("Starting virtual printer services...")
 
-        # Ensure certificates exist
-        cert_path, key_path = self._cert_service.ensure_certificates()
+        # Update certificate service with current serial (based on model)
+        current_serial = self.printer_serial
+        self._cert_service.serial = current_serial
+
+        # Regenerate printer cert if serial changed (CA is preserved)
+        self._cert_service.delete_printer_certificate()
+        cert_path, key_path = self._cert_service.generate_certificates()
+        logger.info(f"Generated certificate for serial: {current_serial}")
 
         # Create directories
         self._upload_dir.mkdir(parents=True, exist_ok=True)
@@ -142,7 +200,7 @@ class VirtualPrinterManager:
         # Initialize services
         self._ssdp = VirtualPrinterSSDPServer(
             name=self.PRINTER_NAME,
-            serial=self.PRINTER_SERIAL,
+            serial=self.printer_serial,
             model=self._model,
         )
 
@@ -155,7 +213,7 @@ class VirtualPrinterManager:
         )
 
         self._mqtt = SimpleMQTTServer(
-            serial=self.PRINTER_SERIAL,
+            serial=self.printer_serial,
             access_code=self._access_code,
             cert_path=cert_path,
             key_path=key_path,
@@ -176,27 +234,13 @@ class VirtualPrinterManager:
             asyncio.create_task(run_with_logging(self._mqtt.start(), "MQTT"), name="virtual_printer_mqtt"),
         ]
 
-        logger.info(f"Virtual printer '{self.PRINTER_NAME}' started (serial: {self.PRINTER_SERIAL})")
+        logger.info(f"Virtual printer '{self.PRINTER_NAME}' started (serial: {self.printer_serial})")
 
     async def _stop(self) -> None:
         """Stop all virtual printer services."""
         logger.info("Stopping virtual printer services...")
 
-        # Cancel all tasks
-        for task in self._tasks:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
-        self._tasks = []
-
-        # Stop services
-        if self._ssdp:
-            await self._ssdp.stop()
-            self._ssdp = None
-
+        # Stop services first - this closes servers and cancels active sessions
         if self._ftp:
             await self._ftp.stop()
             self._ftp = None
@@ -204,6 +248,22 @@ class VirtualPrinterManager:
         if self._mqtt:
             await self._mqtt.stop()
             self._mqtt = None
+
+        if self._ssdp:
+            await self._ssdp.stop()
+            self._ssdp = None
+
+        # Cancel remaining tasks with short timeout
+        for task in self._tasks:
+            task.cancel()
+
+        if self._tasks:
+            try:
+                await asyncio.wait_for(asyncio.gather(*self._tasks, return_exceptions=True), timeout=1.0)
+            except TimeoutError:
+                logger.debug("Some tasks didn't stop in time")
+
+        self._tasks = []
 
         logger.info("Virtual printer stopped")
 
@@ -348,7 +408,7 @@ class VirtualPrinterManager:
             "running": self.is_running,
             "mode": self._mode,
             "name": self.PRINTER_NAME,
-            "serial": self.PRINTER_SERIAL,
+            "serial": self.printer_serial,
             "model": self._model,
             "model_name": VIRTUAL_PRINTER_MODELS.get(self._model, self._model),
             "pending_files": len(self._pending_files),
