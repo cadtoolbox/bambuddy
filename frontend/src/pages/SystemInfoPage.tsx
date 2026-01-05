@@ -105,8 +105,9 @@ export function SystemInfoPage() {
   const handleToggleDebugLogging = async () => {
     setDebugToggling(true);
     try {
-      await supportApi.setDebugLogging(!debugLoggingState?.enabled);
-      queryClient.invalidateQueries({ queryKey: ['debugLogging'] });
+      const newState = await supportApi.setDebugLogging(!debugLoggingState?.enabled);
+      // Immediately update the cache with the new state (includes fresh enabled_at timestamp)
+      queryClient.setQueryData(['debugLogging'], newState);
     } catch (err) {
       console.error('Failed to toggle debug logging:', err);
     } finally {
