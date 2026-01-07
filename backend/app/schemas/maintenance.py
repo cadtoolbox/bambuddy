@@ -13,6 +13,7 @@ class MaintenanceTypeBase(BaseModel):
     # "hours" = print hours, "days" = calendar days
     interval_type: str = Field(default="hours", pattern="^(hours|days)$")
     icon: str | None = None
+    wiki_url: str | None = None  # Documentation link for custom types
 
 
 class MaintenanceTypeCreate(MaintenanceTypeBase):
@@ -25,6 +26,7 @@ class MaintenanceTypeUpdate(BaseModel):
     default_interval_hours: float | None = Field(default=None, ge=1.0)
     interval_type: str | None = Field(default=None, pattern="^(hours|days)$")
     icon: str | None = None
+    wiki_url: str | None = None
 
 
 class MaintenanceTypeResponse(MaintenanceTypeBase):
@@ -96,9 +98,11 @@ class MaintenanceStatus(BaseModel):
     id: int
     printer_id: int
     printer_name: str
+    printer_model: str | None  # For model-specific documentation links
     maintenance_type_id: int
     maintenance_type_name: str
     maintenance_type_icon: str | None
+    maintenance_type_wiki_url: str | None  # Custom wiki URL for the type
     enabled: bool
     # Interval configuration
     interval_hours: float  # custom or default (hours for print-based, days for time-based)
@@ -121,6 +125,7 @@ class PrinterMaintenanceOverview(BaseModel):
 
     printer_id: int
     printer_name: str
+    printer_model: str | None  # For model-specific documentation links
     total_print_hours: float
     maintenance_items: list[MaintenanceStatus]
     due_count: int

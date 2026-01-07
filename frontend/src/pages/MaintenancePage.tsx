@@ -33,6 +33,7 @@ import {
   Filter,
   CircleDot,
   Printer,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { MaintenanceStatus, PrinterMaintenanceOverview, MaintenanceType } from '../api/client';
@@ -108,6 +109,89 @@ function formatIntervalLabel(value: number, type: 'hours' | 'days'): string {
     return `${value} days`;
   }
   return `${value}h`;
+}
+
+// Get Bambu Lab wiki URL for a maintenance task based on printer model
+function getMaintenanceWikiUrl(typeName: string, printerModel: string | null): string | null {
+  const model = (printerModel || '').toUpperCase().replace(/[- ]/g, '');
+
+  // Helper to match model families
+  const isX1 = model.includes('X1');
+  const isP1 = model.includes('P1');
+  const isA1Mini = model.includes('A1MINI');
+  const isA1 = model.includes('A1') && !isA1Mini;
+  const isH2D = model.includes('H2D');
+  const isH2C = model.includes('H2C');
+  const isH2S = model.includes('H2S');
+  const isH2 = isH2D || isH2C || isH2S;
+  const isP2S = model.includes('P2S');
+
+  switch (typeName) {
+    case 'Lubricate Linear Rails':
+      if (isX1) return 'https://wiki.bambulab.com/en/x1/maintenance/basic-maintenance';
+      if (isP1) return 'https://wiki.bambulab.com/en/p1/maintenance/p1p-maintenance';
+      if (isA1Mini) return 'https://wiki.bambulab.com/en/a1-mini/maintenance/lubricate-y-axis';
+      if (isA1) return 'https://wiki.bambulab.com/en/a1/maintenance/lubricate-y-axis';
+      if (isH2) return 'https://wiki.bambulab.com/en/h2/maintenance/x-axis-lubrication';
+      if (isP2S) return 'https://wiki.bambulab.com/en/p2s/maintenance/belt-tension'; // P2S maintenance page
+      return 'https://wiki.bambulab.com/en/general/lead-screws-lubrication';
+
+    case 'Clean Nozzle/Hotend':
+      if (isX1 || isP1) return 'https://wiki.bambulab.com/en/x1/troubleshooting/nozzle-clog';
+      if (isA1Mini || isA1) return 'https://wiki.bambulab.com/en/a1-mini/troubleshooting/nozzle-clog';
+      if (isH2) return 'https://wiki.bambulab.com/en/h2/maintenance/nozzl-cold-pull-maintenance-and-cleaning';
+      if (isP2S) return 'https://wiki.bambulab.com/en/p2s/maintenance/cold-pull-maintenance-hotend';
+      return 'https://wiki.bambulab.com/en/x1/troubleshooting/nozzle-clog';
+
+    case 'Check Belt Tension':
+      if (isX1) return 'https://wiki.bambulab.com/en/x1/maintenance/belt-tension';
+      if (isP1) return 'https://wiki.bambulab.com/en/p1/maintenance/p1p-maintenance';
+      if (isA1Mini) return 'https://wiki.bambulab.com/en/a1-mini/maintenance/belt_tension';
+      if (isA1) return 'https://wiki.bambulab.com/en/a1/maintenance/belt_tension';
+      if (isH2D) return 'https://wiki.bambulab.com/en/h2/maintenance/belt-tension';
+      if (isH2C) return 'https://wiki.bambulab.com/en/h2c/maintenance/belt-tension';
+      if (isH2S) return 'https://wiki.bambulab.com/en/h2s/maintenance/belt-tension';
+      if (isP2S) return 'https://wiki.bambulab.com/en/p2s/maintenance/belt-tension';
+      return 'https://wiki.bambulab.com/en/x1/maintenance/belt-tension';
+
+    case 'Clean Carbon Rods':
+      // Only X1 and P1 series have carbon rods
+      if (isX1 || isP1) return 'https://wiki.bambulab.com/en/general/carbon-rods-clearance';
+      // A1, H2, P2S don't have carbon rods - return null
+      if (isA1Mini || isA1 || isH2 || isP2S) return null;
+      return 'https://wiki.bambulab.com/en/general/carbon-rods-clearance';
+
+    case 'Clean Build Plate':
+      // Same for all printers
+      return 'https://wiki.bambulab.com/en/filament-acc/acc/pei-plate-clean-guide';
+
+    case 'Check PTFE Tube':
+      if (isX1 || isP1) return 'https://wiki.bambulab.com/en/x1/maintenance/replace-ptfe-tube';
+      if (isA1Mini || isA1) return 'https://wiki.bambulab.com/en/a1-mini/maintenance/ptfe-tube';
+      if (isH2D) return 'https://wiki.bambulab.com/en/h2/maintenance/replace-ptfe-tube-on-h2d-printer';
+      if (isH2S) return 'https://wiki.bambulab.com/en/h2s/maintenance/replace-ptfe-tube-on-h2s-printer';
+      if (isH2C) return 'https://wiki.bambulab.com/en/h2/maintenance/replace-ptfe-tube-on-h2d-printer'; // H2C uses H2D guide
+      if (isP2S) return 'https://wiki.bambulab.com/en/x1/maintenance/replace-ptfe-tube'; // P2S uses similar PTFE
+      return 'https://wiki.bambulab.com/en/x1/maintenance/replace-ptfe-tube';
+
+    case 'Replace HEPA Filter':
+    case 'HEPA Filter':
+    case 'Replace Carbon Filter':
+    case 'Carbon Filter':
+      if (isH2) return 'https://wiki.bambulab.com/en/h2/maintenance/replace-smoke-purifier-air-filte';
+      // X1/P1 use the activated carbon filter
+      return 'https://wiki.bambulab.com/en/x1/maintenance/replace-carbon-filter';
+
+    case 'Lubricate Left Nozzle Rail':
+    case 'Left Nozzle Rail':
+      // H2 series specific - dual nozzle system
+      if (isH2) return 'https://wiki.bambulab.com/en/h2/maintenance/x-axis-lubrication';
+      return null;
+
+    default:
+      // Custom maintenance types don't have wiki URLs
+      return null;
+  }
 }
 
 // Maintenance item card - cleaner, more visual design
@@ -200,6 +284,23 @@ function MaintenanceCard({
                 <Calendar className="w-3.5 h-3.5 text-bambu-gray shrink-0" />
               </span>
             )}
+            {/* Wiki link - next to name */}
+            {(() => {
+              // Use custom wiki_url from type if available, otherwise use computed URL
+              const wikiUrl = item.maintenance_type_wiki_url || getMaintenanceWikiUrl(item.maintenance_type_name, item.printer_model);
+              return wikiUrl ? (
+                <a
+                  href={wikiUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-bambu-gray hover:text-bambu-green transition-colors shrink-0"
+                  title="View documentation"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              ) : null;
+            })()}
           </div>
 
           {/* Progress bar */}
@@ -418,8 +519,8 @@ function SettingsSection({
   overview: PrinterMaintenanceOverview[] | undefined;
   types: MaintenanceType[];
   onUpdateInterval: (id: number, data: { custom_interval_hours?: number | null; custom_interval_type?: 'hours' | 'days' | null }) => void;
-  onAddType: (data: { name: string; description?: string; default_interval_hours: number; interval_type: 'hours' | 'days'; icon?: string }, printerIds: number[]) => void;
-  onUpdateType: (id: number, data: { name?: string; default_interval_hours?: number; interval_type?: 'hours' | 'days'; icon?: string }) => void;
+  onAddType: (data: { name: string; description?: string; default_interval_hours: number; interval_type: 'hours' | 'days'; icon?: string; wiki_url?: string | null }, printerIds: number[]) => void;
+  onUpdateType: (id: number, data: { name?: string; default_interval_hours?: number; interval_type?: 'hours' | 'days'; icon?: string; wiki_url?: string | null }) => void;
   onDeleteType: (id: number) => void;
   onAssignType: (printerId: number, typeId: number) => void;
   onRemoveItem: (itemId: number) => void;
@@ -432,6 +533,7 @@ function SettingsSection({
   const [newTypeInterval, setNewTypeInterval] = useState('100');
   const [newTypeIntervalType, setNewTypeIntervalType] = useState<'hours' | 'days'>('hours');
   const [newTypeIcon, setNewTypeIcon] = useState('Wrench');
+  const [newTypeWikiUrl, setNewTypeWikiUrl] = useState('');
   const [selectedPrinters, setSelectedPrinters] = useState<Set<number>>(new Set());
   const [expandedType, setExpandedType] = useState<number | null>(null);
 
@@ -466,6 +568,7 @@ function SettingsSection({
   const [editTypeInterval, setEditTypeInterval] = useState('');
   const [editTypeIntervalType, setEditTypeIntervalType] = useState<'hours' | 'days'>('hours');
   const [editTypeIcon, setEditTypeIcon] = useState('Wrench');
+  const [editTypeWikiUrl, setEditTypeWikiUrl] = useState('');
 
   const startEditType = (type: MaintenanceType) => {
     setEditingType(type);
@@ -473,6 +576,7 @@ function SettingsSection({
     setEditTypeInterval(type.default_interval_hours.toString());
     setEditTypeIntervalType(type.interval_type || 'hours');
     setEditTypeIcon(type.icon || 'Wrench');
+    setEditTypeWikiUrl(type.wiki_url || '');
   };
 
   const handleSaveEditType = () => {
@@ -482,6 +586,7 @@ function SettingsSection({
         default_interval_hours: parseFloat(editTypeInterval),
         interval_type: editTypeIntervalType,
         icon: editTypeIcon,
+        wiki_url: editTypeWikiUrl.trim() || null,
       });
       setEditingType(null);
     }
@@ -508,10 +613,12 @@ function SettingsSection({
         default_interval_hours: parseFloat(newTypeInterval),
         interval_type: newTypeIntervalType,
         icon: newTypeIcon,
+        wiki_url: newTypeWikiUrl.trim() || null,
       }, Array.from(selectedPrinters));
       setNewTypeName('');
       setNewTypeInterval('100');
       setNewTypeIntervalType('hours');
+      setNewTypeWikiUrl('');
       setSelectedPrinters(new Set());
       setShowAddType(false);
     }
@@ -626,6 +733,17 @@ function SettingsSection({
                     </div>
                   </div>
                 </div>
+                {/* Wiki URL */}
+                <div className="mt-4">
+                  <label className="block text-xs text-bambu-gray mb-1.5">Documentation Link (optional)</label>
+                  <input
+                    type="url"
+                    value={newTypeWikiUrl}
+                    onChange={(e) => setNewTypeWikiUrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:border-bambu-green focus:outline-none"
+                    placeholder="https://wiki.bambulab.com/..."
+                  />
+                </div>
                 {/* Printer selection */}
                 <div className="mt-4">
                   <label className="block text-xs text-bambu-gray mb-1.5">Assign to Printers</label>
@@ -739,6 +857,13 @@ function SettingsSection({
                         );
                       })}
                     </div>
+                    <input
+                      type="url"
+                      value={editTypeWikiUrl}
+                      onChange={(e) => setEditTypeWikiUrl(e.target.value)}
+                      className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:border-bambu-green focus:outline-none"
+                      placeholder="Documentation link (optional)"
+                    />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveEditType} disabled={!editTypeName.trim()}>
                         Save

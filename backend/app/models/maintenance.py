@@ -20,6 +20,7 @@ class MaintenanceType(Base):
     # Interval type: "hours" (print hours) or "days" (calendar days)
     interval_type: Mapped[str] = mapped_column(String(20), default="hours")
     icon: Mapped[str | None] = mapped_column(String(50))  # Icon name for UI
+    wiki_url: Mapped[str | None] = mapped_column(String(500))  # Documentation link
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)  # Pre-defined vs custom
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

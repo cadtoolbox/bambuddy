@@ -294,9 +294,11 @@ async def _get_printer_maintenance_internal(
                 id=item_id,
                 printer_id=printer_id,
                 printer_name=printer.name,
+                printer_model=printer.model,
                 maintenance_type_id=maint_type.id,
                 maintenance_type_name=maint_type.name,
                 maintenance_type_icon=maint_type.icon,
+                maintenance_type_wiki_url=getattr(maint_type, "wiki_url", None),
                 enabled=enabled,
                 interval_hours=interval,
                 interval_type=interval_type,
@@ -317,6 +319,7 @@ async def _get_printer_maintenance_internal(
     return PrinterMaintenanceOverview(
         printer_id=printer_id,
         printer_name=printer.name,
+        printer_model=printer.model,
         total_print_hours=total_hours,
         maintenance_items=maintenance_items,
         due_count=due_count,
@@ -417,7 +420,16 @@ async def assign_maintenance_type(
     )
     db.add(item)
     await db.commit()
-    await db.refresh(item)
+
+    # Re-fetch with relationship loaded for response serialization
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(PrinterMaintenance)
+        .options(selectinload(PrinterMaintenance.maintenance_type))
+        .where(PrinterMaintenance.id == item.id)
+    )
+    item = result.scalar_one()
 
     return item
 
@@ -494,9 +506,11 @@ async def perform_maintenance(
         id=item.id,
         printer_id=item.printer_id,
         printer_name=printer.name,
+        printer_model=printer.model,
         maintenance_type_id=item.maintenance_type_id,
         maintenance_type_name=item.maintenance_type.name,
         maintenance_type_icon=item.maintenance_type.icon,
+        maintenance_type_wiki_url=getattr(item.maintenance_type, "wiki_url", None),
         enabled=item.enabled,
         interval_hours=interval,
         interval_type=interval_type,

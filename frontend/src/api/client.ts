@@ -1189,6 +1189,7 @@ export interface MaintenanceType {
   default_interval_hours: number;
   interval_type: 'hours' | 'days';  // "hours" = print hours, "days" = calendar days
   icon: string | null;
+  wiki_url: string | null;  // Documentation link
   is_system: boolean;
   created_at: string;
 }
@@ -1199,15 +1200,18 @@ export interface MaintenanceTypeCreate {
   default_interval_hours?: number;
   interval_type?: 'hours' | 'days';
   icon?: string | null;
+  wiki_url?: string | null;
 }
 
 export interface MaintenanceStatus {
   id: number;
   printer_id: number;
   printer_name: string;
+  printer_model: string | null;
   maintenance_type_id: number;
   maintenance_type_name: string;
   maintenance_type_icon: string | null;
+  maintenance_type_wiki_url: string | null;  // Custom wiki URL from type
   enabled: boolean;
   interval_hours: number;  // For hours type: print hours; for days type: number of days
   interval_type: 'hours' | 'days';
@@ -1224,6 +1228,7 @@ export interface MaintenanceStatus {
 export interface PrinterMaintenanceOverview {
   printer_id: number;
   printer_name: string;
+  printer_model: string | null;
   total_print_hours: number;
   maintenance_items: MaintenanceStatus[];
   due_count: number;
