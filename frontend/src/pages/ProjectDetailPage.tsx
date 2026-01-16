@@ -436,7 +436,10 @@ export function ProjectDetailPage() {
   }
 
   const stats = project.stats;
-  const progressPercent = stats?.progress_percent ?? 0;
+  // Plates progress: total_archives / target_count
+  const platesProgressPercent = stats?.progress_percent ?? 0;
+  // Parts progress: completed_prints / target_parts_count
+  const partsProgressPercent = stats?.parts_progress_percent ?? 0;
 
   return (
     <div className="p-4 md:p-8 space-y-8">
@@ -478,35 +481,70 @@ export function ProjectDetailPage() {
         </Button>
       </div>
 
-      {/* Progress bar (if target set) */}
-      {project.target_count && (
+      {/* Progress bars (if targets set) */}
+      {(project.target_count || project.target_parts_count) && (
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-bambu-gray">Progress</span>
-              <span className="text-sm font-medium text-white">
-                {stats?.completed_prints || 0} / {project.target_count} completed
-              </span>
-            </div>
-            <div className="h-3 bg-bambu-dark rounded-full overflow-hidden">
-              <div
-                className="h-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(progressPercent, 100)}%`,
-                  backgroundColor: progressPercent >= 100 ? '#22c55e' : project.color || '#6b7280',
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1">
-              <span className="text-xs text-bambu-gray/70">
-                {progressPercent.toFixed(0)}% complete
-              </span>
-              {project.target_count - (stats?.completed_prints || 0) > 0 && (
-                <span className="text-xs text-bambu-gray/70">
-                  {project.target_count - (stats?.completed_prints || 0)} remaining
-                </span>
-              )}
-            </div>
+          <CardContent className="p-4 space-y-4">
+            {/* Plates progress */}
+            {project.target_count && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-bambu-gray">Plates Progress</span>
+                  <span className="text-sm font-medium text-white">
+                    {stats?.total_archives || 0} / {project.target_count} print jobs
+                  </span>
+                </div>
+                <div className="h-3 bg-bambu-dark rounded-full overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(platesProgressPercent, 100)}%`,
+                      backgroundColor: platesProgressPercent >= 100 ? '#22c55e' : project.color || '#6b7280',
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-xs text-bambu-gray/70">
+                    {platesProgressPercent.toFixed(0)}% complete
+                  </span>
+                  {stats?.remaining_prints != null && stats.remaining_prints > 0 && (
+                    <span className="text-xs text-bambu-gray/70">
+                      {stats.remaining_prints} remaining
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Parts progress */}
+            {project.target_parts_count && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-bambu-gray">Parts Progress</span>
+                  <span className="text-sm font-medium text-white">
+                    {stats?.completed_prints || 0} / {project.target_parts_count} parts
+                  </span>
+                </div>
+                <div className="h-3 bg-bambu-dark rounded-full overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(partsProgressPercent, 100)}%`,
+                      backgroundColor: partsProgressPercent >= 100 ? '#22c55e' : project.color || '#6b7280',
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-xs text-bambu-gray/70">
+                    {partsProgressPercent.toFixed(0)}% complete
+                  </span>
+                  {stats?.remaining_parts != null && stats.remaining_parts > 0 && (
+                    <span className="text-xs text-bambu-gray/70">
+                      {stats.remaining_parts} remaining
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -522,13 +560,11 @@ export function ProjectDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-bambu-gray">Print Jobs</p>
-                  <p className="text-xl font-semibold text-white">{stats.completed_prints} <span className="text-sm font-normal text-bambu-gray">successful</span></p>
+                  <p className="text-xl font-semibold text-white">{stats.total_archives} <span className="text-sm font-normal text-bambu-gray">total</span></p>
                   {stats.failed_prints > 0 && (
                     <p className="text-sm text-red-400">{stats.failed_prints} failed</p>
                   )}
-                  {stats.total_archives - stats.completed_prints - stats.failed_prints > 0 && (
-                    <p className="text-sm text-yellow-400">{stats.total_archives - stats.completed_prints - stats.failed_prints} in progress</p>
-                  )}
+                  <p className="text-sm text-bambu-gray">{stats.completed_prints} parts printed</p>
                 </div>
               </div>
             </CardContent>

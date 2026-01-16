@@ -399,6 +399,12 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add target_parts_count column to projects for tracking total parts needed
+    try:
+        await conn.execute(text("ALTER TABLE projects ADD COLUMN target_parts_count INTEGER"))
+    except Exception:
+        pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

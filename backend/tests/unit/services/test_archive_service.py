@@ -214,3 +214,81 @@ class TestArchiveThumbnails:
         ]
         for path in expected_thumbnail_paths:
             assert "png" in path.lower()
+
+
+class TestPrintableObjectsExtraction:
+    """Tests for extracting printable objects count from 3MF files."""
+
+    def test_extract_printable_objects_from_slice_info(self):
+        """Test parsing printable objects from slice_info.config XML."""
+        from xml.etree import ElementTree as ET
+
+        # Example slice_info.config content with 4 objects
+        slice_info_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <config>
+            <plate plate_idx="1">
+                <metadata key="prediction" value="3600" />
+                <metadata key="weight" value="50.5" />
+                <object identify_id="1" name="Part_A" skipped="false" />
+                <object identify_id="2" name="Part_B" skipped="false" />
+                <object identify_id="3" name="Part_C" skipped="false" />
+                <object identify_id="4" name="Part_D" skipped="true" />
+            </plate>
+        </config>
+        """
+        root = ET.fromstring(slice_info_xml)
+        plate = root.find(".//plate")
+
+        # Count non-skipped objects (should be 3, not 4)
+        count = 0
+        for obj in plate.findall("object"):
+            skipped = obj.get("skipped", "false")
+            if skipped.lower() != "true":
+                count += 1
+
+        assert count == 3  # 3 objects (Part_D is skipped)
+
+    def test_extract_printable_objects_empty_plate(self):
+        """Test handling plate with no objects."""
+        from xml.etree import ElementTree as ET
+
+        slice_info_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <config>
+            <plate plate_idx="1">
+                <metadata key="prediction" value="0" />
+            </plate>
+        </config>
+        """
+        root = ET.fromstring(slice_info_xml)
+        plate = root.find(".//plate")
+
+        count = 0
+        for obj in plate.findall("object"):
+            skipped = obj.get("skipped", "false")
+            if skipped.lower() != "true":
+                count += 1
+
+        assert count == 0
+
+    def test_extract_printable_objects_all_skipped(self):
+        """Test handling plate where all objects are skipped."""
+        from xml.etree import ElementTree as ET
+
+        slice_info_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <config>
+            <plate plate_idx="1">
+                <object identify_id="1" name="Part_A" skipped="true" />
+                <object identify_id="2" name="Part_B" skipped="true" />
+            </plate>
+        </config>
+        """
+        root = ET.fromstring(slice_info_xml)
+        plate = root.find(".//plate")
+
+        count = 0
+        for obj in plate.findall("object"):
+            skipped = obj.get("skipped", "false")
+            if skipped.lower() != "true":
+                count += 1
+
+        assert count == 0  # All objects skipped

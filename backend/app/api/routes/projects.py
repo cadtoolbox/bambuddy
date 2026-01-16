@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-async def compute_project_stats(db: AsyncSession, project_id: int, target_count: int | None = None) -> ProjectStats:
+async def compute_project_stats(
+    db: AsyncSession, project_id: int, target_count: int | None = None, target_parts_count: int | None = None
+) -> ProjectStats:
     """Compute statistics for a project."""
     # Count total archives (distinct print jobs)
     total_result = await db.execute(select(func.count(PrintArchive.id)).where(PrintArchive.project_id == project_id))
@@ -48,14 +50,6 @@ async def compute_project_stats(db: AsyncSession, project_id: int, target_count:
         select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(PrintArchive.project_id == project_id)
     )
     total_items = total_items_result.scalar() or 0
-
-    # Count completed archives (number of print jobs) - includes "archived" as successful
-    completed_result = await db.execute(
-        select(func.count(PrintArchive.id)).where(
-            PrintArchive.project_id == project_id, PrintArchive.status.in_(["completed", "archived"])
-        )
-    )
-    completed_prints = completed_result.scalar() or 0
 
     # Count failed archives (number of print jobs) - includes all failure states
     failed_result = await db.execute(
@@ -94,12 +88,28 @@ async def compute_project_stats(db: AsyncSession, project_id: int, target_count:
     )
     in_progress_prints = in_progress_result.scalar() or 0
 
-    # Calculate progress
+    # Sum completed items (parts) - sum of quantities for successful prints
+    completed_items_result = await db.execute(
+        select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
+            PrintArchive.project_id == project_id,
+            PrintArchive.status.in_(["completed", "archived"]),
+        )
+    )
+    completed_items = int(completed_items_result.scalar() or 0)
+
+    # Calculate progress for plates (target_count vs total_archives)
     progress_percent = None
     remaining_prints = None
     if target_count and target_count > 0:
-        progress_percent = round((completed_prints / target_count) * 100, 1)
-        remaining_prints = max(0, target_count - completed_prints)
+        progress_percent = round((total_archives / target_count) * 100, 1)
+        remaining_prints = max(0, target_count - total_archives)
+
+    # Calculate progress for parts (target_parts_count vs completed_items)
+    parts_progress_percent = None
+    remaining_parts = None
+    if target_parts_count and target_parts_count > 0:
+        parts_progress_percent = round((completed_items / target_parts_count) * 100, 1)
+        remaining_parts = max(0, target_parts_count - completed_items)
 
     # BOM stats
     bom_result = await db.execute(
@@ -115,17 +125,19 @@ async def compute_project_stats(db: AsyncSession, project_id: int, target_count:
     return ProjectStats(
         total_archives=total_archives,
         total_items=int(total_items),
-        completed_prints=int(completed_prints),
+        completed_prints=completed_items,  # Now reflects sum of quantities for completed prints
         failed_prints=int(failed_prints),
         queued_prints=queued_prints,
         in_progress_prints=in_progress_prints,
         total_print_time_hours=round((sums.total_time or 0) / 3600, 2),
         total_filament_grams=round(sums.total_filament or 0, 2),
         progress_percent=progress_percent,
+        parts_progress_percent=parts_progress_percent,
         estimated_cost=round((sums.total_filament_cost or 0), 2),
         total_energy_kwh=round((sums.total_energy or 0), 3),
         total_energy_cost=round((sums.total_energy_cost or 0), 2),
         remaining_prints=remaining_prints,
+        remaining_parts=remaining_parts,
         bom_total_items=bom_stats.total or 0,
         bom_completed_items=int(bom_stats.completed or 0),
     )
@@ -170,27 +182,28 @@ async def list_projects(
         )
         queue_count = queue_count_result.scalar() or 0
 
-        # Count completed archives - includes "archived" as successful
+        # Sum completed parts (quantities) - includes "archived" as successful
         completed_result = await db.execute(
-            select(func.count(PrintArchive.id)).where(
+            select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
                 PrintArchive.project_id == project.id,
                 PrintArchive.status.in_(["completed", "archived"]),
             )
         )
         completed_count = int(completed_result.scalar() or 0)
 
-        # Count failed archives - includes all failure states
+        # Sum failed parts (quantities) - includes all failure states
         failed_result = await db.execute(
-            select(func.count(PrintArchive.id)).where(
+            select(func.coalesce(func.sum(PrintArchive.quantity), 0)).where(
                 PrintArchive.project_id == project.id,
                 PrintArchive.status.in_(["failed", "aborted", "cancelled", "stopped"]),
             )
         )
         failed_count = int(failed_result.scalar() or 0)
 
+        # Plates progress: archive_count / target_count
         progress_percent = None
         if project.target_count and project.target_count > 0:
-            progress_percent = round((completed_count / project.target_count) * 100, 1)
+            progress_percent = round((archive_count / project.target_count) * 100, 1)
 
         # Get archive previews (up to 6 most recent)
         archives_result = await db.execute(
@@ -220,6 +233,7 @@ async def list_projects(
                 color=project.color,
                 status=project.status,
                 target_count=project.target_count,
+                target_parts_count=project.target_parts_count,
                 created_at=project.created_at,
                 archive_count=archive_count,
                 total_items=total_items,
@@ -254,6 +268,7 @@ async def create_project(
         description=data.description,
         color=data.color,
         target_count=data.target_count,
+        target_parts_count=data.target_parts_count,
         notes=data.notes,
         tags=data.tags,
         due_date=data.due_date,
@@ -265,7 +280,7 @@ async def create_project(
     await db.flush()
     await db.refresh(project)
 
-    stats = await compute_project_stats(db, project.id, project.target_count)
+    stats = await compute_project_stats(db, project.id, project.target_count, project.target_parts_count)
 
     return ProjectResponse(
         id=project.id,
@@ -274,6 +289,7 @@ async def create_project(
         color=project.color,
         status=project.status,
         target_count=project.target_count,
+        target_parts_count=project.target_parts_count,
         notes=project.notes,
         attachments=project.attachments,
         tags=project.tags,
@@ -351,6 +367,7 @@ async def create_project_from_template(
         description=template.description,
         color=template.color,
         target_count=template.target_count,
+        target_parts_count=template.target_parts_count,
         notes=template.notes,
         tags=template.tags,
         priority=template.priority,
@@ -382,7 +399,7 @@ async def create_project_from_template(
     await db.flush()
     await db.refresh(project)
 
-    stats = await compute_project_stats(db, project.id, project.target_count)
+    stats = await compute_project_stats(db, project.id, project.target_count, project.target_parts_count)
 
     return ProjectResponse(
         id=project.id,
@@ -391,6 +408,7 @@ async def create_project_from_template(
         color=project.color,
         status=project.status,
         target_count=project.target_count,
+        target_parts_count=project.target_parts_count,
         notes=project.notes,
         attachments=project.attachments,
         tags=project.tags,
@@ -463,7 +481,7 @@ async def get_project(
     # Get children
     children = await get_child_previews(db, project.id)
 
-    stats = await compute_project_stats(db, project.id, project.target_count)
+    stats = await compute_project_stats(db, project.id, project.target_count, project.target_parts_count)
 
     return ProjectResponse(
         id=project.id,
@@ -472,6 +490,7 @@ async def get_project(
         color=project.color,
         status=project.status,
         target_count=project.target_count,
+        target_parts_count=project.target_parts_count,
         notes=project.notes,
         attachments=project.attachments,
         tags=project.tags,
@@ -515,6 +534,8 @@ async def update_project(
         project.status = data.status
     if data.target_count is not None:
         project.target_count = data.target_count
+    if data.target_parts_count is not None:
+        project.target_parts_count = data.target_parts_count
     if data.notes is not None:
         project.notes = data.notes
     if data.tags is not None:
@@ -551,7 +572,7 @@ async def update_project(
     # Get children
     children = await get_child_previews(db, project.id)
 
-    stats = await compute_project_stats(db, project.id, project.target_count)
+    stats = await compute_project_stats(db, project.id, project.target_count, project.target_parts_count)
 
     return ProjectResponse(
         id=project.id,
@@ -560,6 +581,7 @@ async def update_project(
         color=project.color,
         status=project.status,
         target_count=project.target_count,
+        target_parts_count=project.target_parts_count,
         notes=project.notes,
         attachments=project.attachments,
         tags=project.tags,
@@ -1143,6 +1165,7 @@ async def create_template_from_project(
         description=source.description,
         color=source.color,
         target_count=source.target_count,
+        target_parts_count=source.target_parts_count,
         notes=source.notes,
         tags=source.tags,
         priority=source.priority,
@@ -1174,7 +1197,7 @@ async def create_template_from_project(
     await db.flush()
     await db.refresh(template)
 
-    stats = await compute_project_stats(db, template.id, template.target_count)
+    stats = await compute_project_stats(db, template.id, template.target_count, template.target_parts_count)
 
     return ProjectResponse(
         id=template.id,
@@ -1183,6 +1206,7 @@ async def create_template_from_project(
         color=template.color,
         status=template.status,
         target_count=template.target_count,
+        target_parts_count=template.target_parts_count,
         notes=template.notes,
         attachments=template.attachments,
         tags=template.tags,

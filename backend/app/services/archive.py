@@ -834,6 +834,14 @@ class ArchiveService:
                 default_cost_per_kg = 25.0
                 cost = round((filament_grams / 1000) * default_cost_per_kg, 2)
 
+        # Calculate quantity from printable objects count
+        # printable_objects is a dict of {identify_id: name} for non-skipped objects
+        quantity = 1  # Default to 1
+        printable_objects = metadata.get("printable_objects")
+        if printable_objects and isinstance(printable_objects, dict):
+            quantity = len(printable_objects)
+            logger.debug(f"Auto-detected {quantity} parts from 3MF printable objects")
+
         # Create archive record
         archive = PrintArchive(
             printer_id=printer_id,
@@ -858,6 +866,7 @@ class ArchiveService:
             started_at=started_at,
             completed_at=completed_at,
             cost=cost,
+            quantity=quantity,
             extra_data=metadata,
         )
 

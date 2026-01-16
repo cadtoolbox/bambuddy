@@ -341,17 +341,19 @@ export interface SimilarArchive {
 export interface ProjectStats {
   total_archives: number;
   total_items: number;  // Sum of quantities (total items printed)
-  completed_prints: number;
+  completed_prints: number;  // Sum of quantities for completed prints (parts)
   failed_prints: number;
   queued_prints: number;
   in_progress_prints: number;
   total_print_time_hours: number;
   total_filament_grams: number;
-  progress_percent: number | null;
+  progress_percent: number | null;  // Plates progress (total_archives / target_count)
+  parts_progress_percent: number | null;  // Parts progress (completed_prints / target_parts_count)
   estimated_cost: number;
   total_energy_kwh: number;
   total_energy_cost: number;
-  remaining_prints: number | null;
+  remaining_prints: number | null;  // Remaining plates
+  remaining_parts: number | null;  // Remaining parts
   bom_total_items: number;
   bom_completed_items: number;
 }
@@ -370,7 +372,8 @@ export interface Project {
   description: string | null;
   color: string | null;
   status: string;  // active, completed, archived
-  target_count: number | null;
+  target_count: number | null;  // Target number of plates/print jobs
+  target_parts_count: number | null;  // Target number of parts/objects
   notes: string | null;
   attachments: ProjectAttachment[] | null;
   tags: string | null;
@@ -409,14 +412,15 @@ export interface ProjectListItem {
   description: string | null;
   color: string | null;
   status: string;
-  target_count: number | null;
+  target_count: number | null;  // Target number of plates/print jobs
+  target_parts_count: number | null;  // Target number of parts/objects
   created_at: string;
-  archive_count: number;  // Number of print jobs
+  archive_count: number;  // Number of print jobs (plates)
   total_items: number;  // Sum of quantities (total items printed, including failed)
-  completed_count: number;  // Sum of quantities for completed prints only
+  completed_count: number;  // Sum of quantities for completed prints only (parts)
   failed_count: number;  // Sum of quantities for failed prints
   queue_count: number;
-  progress_percent: number | null;
+  progress_percent: number | null;  // Plates progress
   archives: ArchivePreview[];
 }
 
@@ -425,6 +429,7 @@ export interface ProjectCreate {
   description?: string;
   color?: string;
   target_count?: number;
+  target_parts_count?: number;
   notes?: string;
   tags?: string;
   due_date?: string;
@@ -439,6 +444,7 @@ export interface ProjectUpdate {
   color?: string;
   status?: string;
   target_count?: number;
+  target_parts_count?: number;
   notes?: string;
   tags?: string;
   due_date?: string;

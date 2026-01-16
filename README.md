@@ -78,8 +78,8 @@
 
 ### 📁 Projects
 - Group related prints (e.g., "Voron Build")
-- Track progress with target counts
-- Quantity tracking for batch prints
+- Track plates (print jobs) and parts separately
+- Auto-detect parts count from 3MF files
 - Color-coded project badges
 - Bulk assign archives via multi-select toolbar
 

@@ -16,7 +16,12 @@ class Project(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Hex color for UI
     status: Mapped[str] = mapped_column(String(20), default="active")  # active, completed, archived
-    target_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Optional target number of prints
+    target_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Optional target number of prints (plates)
+    target_parts_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Optional target number of parts/objects
 
     # Phase 2: Rich text notes (HTML from WYSIWYG editor)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -10,6 +10,7 @@ class ProjectCreate(BaseModel):
     description: str | None = None
     color: str | None = None
     target_count: int | None = None
+    target_parts_count: int | None = None
     notes: str | None = None
     tags: str | None = None
     due_date: datetime | None = None
@@ -26,6 +27,7 @@ class ProjectUpdate(BaseModel):
     color: str | None = None
     status: str | None = None  # active, completed, archived
     target_count: int | None = None
+    target_parts_count: int | None = None
     notes: str | None = None
     tags: str | None = None
     due_date: datetime | None = None
@@ -45,12 +47,14 @@ class ProjectStats(BaseModel):
     in_progress_prints: int = 0
     total_print_time_hours: float = 0.0
     total_filament_grams: float = 0.0
-    progress_percent: float | None = None  # Based on target_count
+    progress_percent: float | None = None  # Based on target_count (plates)
+    parts_progress_percent: float | None = None  # Based on target_parts_count
     # Cost tracking (Phase 6)
     estimated_cost: float = 0.0  # Based on filament cost
     total_energy_kwh: float = 0.0
     total_energy_cost: float = 0.0
-    remaining_prints: int | None = None  # target_count - completed_prints
+    remaining_prints: int | None = None  # target_count - total_archives
+    remaining_parts: int | None = None  # target_parts_count - completed_prints
     # BOM stats (Phase 7)
     bom_total_items: int = 0
     bom_completed_items: int = 0
@@ -75,6 +79,7 @@ class ProjectResponse(BaseModel):
     color: str | None
     status: str
     target_count: int | None
+    target_parts_count: int | None = None
     notes: str | None = None
     attachments: list | None = None
     tags: str | None = None
@@ -114,6 +119,7 @@ class ProjectListResponse(BaseModel):
     color: str | None
     status: str
     target_count: int | None
+    target_parts_count: int | None = None
     created_at: datetime
     # Quick stats
     archive_count: int = 0  # Number of print jobs

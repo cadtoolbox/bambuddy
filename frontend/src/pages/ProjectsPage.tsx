@@ -10,6 +10,7 @@ import {
   Archive,
   ListTodo,
   Package,
+  Layers,
   Clock,
   CheckCircle2,
   AlertTriangle,
@@ -46,6 +47,7 @@ export function ProjectModal({ project, onClose, onSave, isLoading }: ProjectMod
   const [description, setDescription] = useState(project?.description || '');
   const [color, setColor] = useState(project?.color || PROJECT_COLORS[0]);
   const [targetCount, setTargetCount] = useState(project?.target_count?.toString() || '');
+  const [targetPartsCount, setTargetPartsCount] = useState(project?.target_parts_count?.toString() || '');
   const [status, setStatus] = useState(project?.status || 'active');
   const [tags, setTags] = useState((project as ProjectListItem & { tags?: string })?.tags || '');
   const [dueDate, setDueDate] = useState((project as ProjectListItem & { due_date?: string })?.due_date?.split('T')[0] || '');
@@ -58,6 +60,7 @@ export function ProjectModal({ project, onClose, onSave, isLoading }: ProjectMod
       description: description.trim() || undefined,
       color,
       target_count: targetCount ? parseInt(targetCount, 10) : undefined,
+      target_parts_count: targetPartsCount ? parseInt(targetPartsCount, 10) : undefined,
       tags: tags.trim() || undefined,
       due_date: dueDate || undefined,
       priority,
@@ -121,18 +124,36 @@ export function ProjectModal({ project, onClose, onSave, isLoading }: ProjectMod
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">
-              Target Print Count (optional)
-            </label>
-            <input
-              type="number"
-              value={targetCount}
-              onChange={(e) => setTargetCount(e.target.value)}
-              className="w-full bg-bambu-dark border border-bambu-dark-tertiary rounded px-3 py-2 text-white placeholder-bambu-gray focus:outline-none focus:border-bambu-green"
-              placeholder="e.g., 50 parts to print"
-              min="1"
-            />
+          {/* Target Counts - Plates and Parts side by side */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-white mb-1">
+                Target Plates
+              </label>
+              <input
+                type="number"
+                value={targetCount}
+                onChange={(e) => setTargetCount(e.target.value)}
+                className="w-full bg-bambu-dark border border-bambu-dark-tertiary rounded px-3 py-2 text-white placeholder-bambu-gray focus:outline-none focus:border-bambu-green"
+                placeholder="e.g., 25"
+                min="1"
+              />
+              <p className="text-xs text-bambu-gray mt-1">Number of print jobs</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white mb-1">
+                Target Parts
+              </label>
+              <input
+                type="number"
+                value={targetPartsCount}
+                onChange={(e) => setTargetPartsCount(e.target.value)}
+                className="w-full bg-bambu-dark border border-bambu-dark-tertiary rounded px-3 py-2 text-white placeholder-bambu-gray focus:outline-none focus:border-bambu-green"
+                placeholder="e.g., 150"
+                min="1"
+              />
+              <p className="text-xs text-bambu-gray mt-1">Total objects needed</p>
+            </div>
           </div>
 
           {/* Tags */}
@@ -224,7 +245,14 @@ interface ProjectCardProps {
 }
 
 function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardProps) {
-  const progressPercent = project.progress_percent ?? 0;
+  // Plates progress: archive_count / target_count
+  const platesProgressPercent = project.target_count
+    ? Math.round((project.archive_count / project.target_count) * 100)
+    : 0;
+  // Parts progress: completed_count / target_parts_count
+  const partsProgressPercent = project.target_parts_count
+    ? Math.round((project.completed_count / project.target_parts_count) * 100)
+    : 0;
   const isCompleted = project.status === 'completed';
   const isArchived = project.status === 'archived';
   const [showActions, setShowActions] = useState(false);
@@ -262,17 +290,25 @@ function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-white truncate">{project.name}</h3>
-                {project.target_count ? (
+                {project.target_parts_count ? (
                   <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap font-medium ${
-                    progressPercent >= 100
+                    partsProgressPercent >= 100
                       ? 'bg-bambu-green/20 text-bambu-green'
                       : 'bg-bambu-dark text-bambu-gray'
                   }`}>
-                    {project.completed_count}/{project.target_count} completed
+                    {project.completed_count}/{project.target_parts_count} parts
+                  </span>
+                ) : project.target_count ? (
+                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap font-medium ${
+                    platesProgressPercent >= 100
+                      ? 'bg-bambu-green/20 text-bambu-green'
+                      : 'bg-bambu-dark text-bambu-gray'
+                  }`}>
+                    {project.archive_count}/{project.target_count} plates
                   </span>
                 ) : project.completed_count > 0 ? (
                   <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap font-medium bg-bambu-dark text-bambu-gray">
-                    {project.completed_count} completed
+                    {project.completed_count} parts
                   </span>
                 ) : null}
                 {isCompleted && (
@@ -372,33 +408,61 @@ function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardProps) {
 
         {/* Progress section - show for all projects */}
         <div className="mb-4">
-          {project.target_count ? (
-            <>
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="text-bambu-gray">Progress</span>
-                <span className={progressPercent >= 100 ? 'text-bambu-green font-medium' : 'text-white'}>
-                  {project.completed_count} / {project.target_count}
-                </span>
-              </div>
-              <div className="h-2.5 bg-bambu-dark/80 rounded-full overflow-hidden backdrop-blur-sm">
-                <div
-                  className="h-full transition-all duration-500 ease-out rounded-full relative"
-                  style={{
-                    width: `${Math.min(progressPercent, 100)}%`,
-                    background: progressPercent >= 100
-                      ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-                      : `linear-gradient(90deg, ${project.color || '#6b7280'}, ${project.color || '#6b7280'}cc)`,
-                    boxShadow: `0 0 8px ${progressPercent >= 100 ? '#22c55e' : project.color || '#6b7280'}60`
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-bambu-gray/60 mt-1">
-                <span>
-                  {project.failed_count > 0 && `${project.failed_count} failed`}
-                </span>
-                <span>{progressPercent.toFixed(0)}% complete</span>
-              </div>
-            </>
+          {(project.target_count || project.target_parts_count) ? (
+            <div className="space-y-3">
+              {/* Plates progress */}
+              {project.target_count && (
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-bambu-gray">Plates</span>
+                    <span className={platesProgressPercent >= 100 ? 'text-bambu-green font-medium' : 'text-white'}>
+                      {project.archive_count} / {project.target_count}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-bambu-dark/80 rounded-full overflow-hidden backdrop-blur-sm">
+                    <div
+                      className="h-full transition-all duration-500 ease-out rounded-full relative"
+                      style={{
+                        width: `${Math.min(platesProgressPercent, 100)}%`,
+                        background: platesProgressPercent >= 100
+                          ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+                          : `linear-gradient(90deg, ${project.color || '#6b7280'}, ${project.color || '#6b7280'}cc)`,
+                        boxShadow: `0 0 8px ${platesProgressPercent >= 100 ? '#22c55e' : project.color || '#6b7280'}60`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Parts progress */}
+              {project.target_parts_count && (
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-bambu-gray">Parts</span>
+                    <span className={partsProgressPercent >= 100 ? 'text-bambu-green font-medium' : 'text-white'}>
+                      {project.completed_count} / {project.target_parts_count}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-bambu-dark/80 rounded-full overflow-hidden backdrop-blur-sm">
+                    <div
+                      className="h-full transition-all duration-500 ease-out rounded-full relative"
+                      style={{
+                        width: `${Math.min(partsProgressPercent, 100)}%`,
+                        background: partsProgressPercent >= 100
+                          ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+                          : `linear-gradient(90deg, ${project.color || '#6b7280'}, ${project.color || '#6b7280'}cc)`,
+                        boxShadow: `0 0 8px ${partsProgressPercent >= 100 ? '#22c55e' : project.color || '#6b7280'}60`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Failed count */}
+              {project.failed_count > 0 && (
+                <div className="text-xs text-red-400">
+                  {project.failed_count} failed
+                </div>
+              )}
+            </div>
           ) : project.completed_count > 0 || project.failed_count > 0 ? (
             <div className="flex items-center gap-4 text-xs">
               {project.completed_count > 0 && (
@@ -467,18 +531,22 @@ function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardProps) {
         {/* Stats footer */}
         <div className="flex items-center justify-between pt-3 border-t border-bambu-dark-tertiary">
           <div className="flex items-center gap-4 text-xs text-bambu-gray">
-            <div className="flex items-center gap-1.5" title="Completed prints">
-              <CheckCircle2 className="w-3.5 h-3.5 text-bambu-green" />
-              <span>{project.completed_count}</span>
+            <div className="flex items-center gap-1.5" title="Print jobs (plates)">
+              <Layers className="w-3.5 h-3.5 text-blue-400" />
+              <span>{project.archive_count} plates</span>
+            </div>
+            <div className="flex items-center gap-1.5" title="Parts printed">
+              <Package className="w-3.5 h-3.5 text-bambu-green" />
+              <span>{project.completed_count} parts</span>
             </div>
             {project.failed_count > 0 && (
-              <div className="flex items-center gap-1.5 text-red-400" title="Failed prints">
+              <div className="flex items-center gap-1.5 text-red-400" title="Failed parts">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>{project.failed_count}</span>
               </div>
             )}
             {project.queue_count > 0 && (
-              <div className="flex items-center gap-1.5 text-blue-400" title="In queue">
+              <div className="flex items-center gap-1.5 text-yellow-400" title="In queue">
                 <ListTodo className="w-3.5 h-3.5" />
                 <span>{project.queue_count}</span>
               </div>

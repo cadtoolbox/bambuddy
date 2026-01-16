@@ -2,6 +2,30 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
+## [0.1.6b12] - 2026-01-16
+
+### Added
+- **Project parts tracking** - Track individual parts/objects separately from print plates:
+  - New "Target Parts" field in project create/edit modal alongside "Target Plates"
+  - Separate progress bars for plates (print jobs) vs parts (objects printed)
+  - Parts count auto-detected from 3MF files when archiving prints
+  - Project cards show both plates and parts counts in footer stats
+  - Example: Voron build with 25 plates producing 150 parts total
+  - Closes [#85](https://github.com/maziggy/bambuddy/issues/85)
+- **Archive quantity auto-detection** - Automatically set parts count when archiving:
+  - Extracts printable object count from 3MF `slice_info.config`
+  - Respects skipped objects (not counted)
+  - Falls back to 1 if extraction fails
+- **Migration script for existing archives** - Update quantities on existing archives:
+  - Run `python scripts/update_archive_quantities.py` to update existing archives
+  - Use `--dry-run` flag to preview changes without applying them
+  - Parses 3MF files to extract correct object counts
+
+### Changed
+- Project stats now correctly distinguish between plates (archive count) and parts (sum of quantities)
+- Project list `completed_count` now represents parts printed, not print jobs
+- Progress calculations: plates use `archive_count/target_count`, parts use `completed_count/target_parts_count`
+
 ## [0.1.6b11] - 2026-01-13
 
 ### Added
