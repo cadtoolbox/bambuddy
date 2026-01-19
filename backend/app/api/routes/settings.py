@@ -53,6 +53,7 @@ async def set_setting(db: AsyncSession, key: str, value: str) -> None:
     await db.execute(stmt)
 
 
+@router.get("", response_model=AppSettings)
 @router.get("/", response_model=AppSettings)
 async def get_settings(db: AsyncSession = Depends(get_db)):
     """Get all application settings."""
@@ -76,9 +77,16 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
                 "ftp_retry_enabled",
                 "mqtt_enabled",
                 "mqtt_use_tls",
+                "ha_enabled",
             ]:
                 settings_dict[setting.key] = setting.value.lower() == "true"
-            elif setting.key in ["default_filament_cost", "energy_cost_per_kwh", "ams_temp_good", "ams_temp_fair"]:
+            elif setting.key in [
+                "default_filament_cost",
+                "energy_cost_per_kwh",
+                "ams_temp_good",
+                "ams_temp_fair",
+                "library_disk_warning_gb",
+            ]:
                 settings_dict[setting.key] = float(setting.value)
             elif setting.key in [
                 "ams_humidity_good",
@@ -323,7 +331,9 @@ async def export_backup(
             backup["smart_plugs"].append(
                 {
                     "name": plug.name,
+                    "plug_type": plug.plug_type,
                     "ip_address": plug.ip_address,
+                    "ha_entity_id": plug.ha_entity_id,
                     "printer_serial": printer_id_to_serial.get(plug.printer_id) if plug.printer_id else None,
                     "enabled": plug.enabled,
                     "auto_on": plug.auto_on,
@@ -522,6 +532,13 @@ async def export_backup(
                     "auto_off_after": qi.auto_off_after,
                     "manual_start": qi.manual_start,
                     "ams_mapping": qi.ams_mapping,
+                    "plate_id": qi.plate_id,
+                    "bed_levelling": qi.bed_levelling,
+                    "flow_cali": qi.flow_cali,
+                    "vibration_cali": qi.vibration_cali,
+                    "layer_inspect": qi.layer_inspect,
+                    "timelapse": qi.timelapse,
+                    "use_ams": qi.use_ams,
                     "status": qi.status,
                     "started_at": qi.started_at.isoformat() if qi.started_at else None,
                     "completed_at": qi.completed_at.isoformat() if qi.completed_at else None,
@@ -621,6 +638,12 @@ async def export_backup(
                 if source_path.exists():
                     archive_data["source_3mf_path"] = a.source_3mf_path
                     backup_files.append((a.source_3mf_path, source_path))
+
+            if a.f3d_path:
+                f3d_path = base_dir / a.f3d_path
+                if f3d_path.exists():
+                    archive_data["f3d_path"] = a.f3d_path
+                    backup_files.append((a.f3d_path, f3d_path))
 
             # Include photos
             if a.photos:
@@ -1050,11 +1073,28 @@ async def import_backup(
             printer_serial = plug_data.get("printer_serial")
             printer_id = printer_serial_to_id.get(printer_serial) if printer_serial else plug_data.get("printer_id")
 
-            result = await db.execute(select(SmartPlug).where(SmartPlug.ip_address == plug_data["ip_address"]))
-            existing = result.scalar_one_or_none()
+            # Determine plug type (default to tasmota for backwards compatibility)
+            plug_type = plug_data.get("plug_type", "tasmota")
+
+            # Find existing plug by IP (Tasmota) or entity_id (Home Assistant)
+            existing = None
+            if plug_type == "homeassistant" and plug_data.get("ha_entity_id"):
+                result = await db.execute(select(SmartPlug).where(SmartPlug.ha_entity_id == plug_data["ha_entity_id"]))
+                existing = result.scalar_one_or_none()
+                plug_identifier = plug_data["ha_entity_id"]
+            elif plug_data.get("ip_address"):
+                result = await db.execute(select(SmartPlug).where(SmartPlug.ip_address == plug_data["ip_address"]))
+                existing = result.scalar_one_or_none()
+                plug_identifier = plug_data["ip_address"]
+            else:
+                # Skip invalid plug data
+                continue
+
             if existing:
                 if overwrite:
                     existing.name = plug_data["name"]
+                    existing.plug_type = plug_type
+                    existing.ha_entity_id = plug_data.get("ha_entity_id")
                     existing.printer_id = printer_id
                     existing.enabled = plug_data.get("enabled", True)
                     existing.auto_on = plug_data.get("auto_on", True)
@@ -1074,11 +1114,13 @@ async def import_backup(
                     restored["smart_plugs"] += 1
                 else:
                     skipped["smart_plugs"] += 1
-                    skipped_details["smart_plugs"].append(f"{plug_data['name']} ({plug_data['ip_address']})")
+                    skipped_details["smart_plugs"].append(f"{plug_data['name']} ({plug_identifier})")
             else:
                 plug = SmartPlug(
                     name=plug_data["name"],
-                    ip_address=plug_data["ip_address"],
+                    plug_type=plug_type,
+                    ip_address=plug_data.get("ip_address"),
+                    ha_entity_id=plug_data.get("ha_entity_id"),
                     printer_id=printer_id,
                     enabled=plug_data.get("enabled", True),
                     auto_on=plug_data.get("auto_on", True),
@@ -1366,6 +1408,7 @@ async def import_backup(
                     thumbnail_path=archive_data.get("thumbnail_path"),
                     timelapse_path=archive_data.get("timelapse_path"),
                     source_3mf_path=archive_data.get("source_3mf_path"),
+                    f3d_path=archive_data.get("f3d_path"),
                     print_name=archive_data.get("print_name"),
                     print_time_seconds=archive_data.get("print_time_seconds"),
                     filament_used_grams=archive_data.get("filament_used_grams"),
@@ -1558,6 +1601,13 @@ async def import_backup(
                 auto_off_after=qi_data.get("auto_off_after", False),
                 manual_start=qi_data.get("manual_start", False),
                 ams_mapping=qi_data.get("ams_mapping"),
+                plate_id=qi_data.get("plate_id"),
+                bed_levelling=qi_data.get("bed_levelling", True),
+                flow_cali=qi_data.get("flow_cali", False),
+                vibration_cali=qi_data.get("vibration_cali", True),
+                layer_inspect=qi_data.get("layer_inspect", False),
+                timelapse=qi_data.get("timelapse", False),
+                use_ams=qi_data.get("use_ams", True),
                 status=qi_data.get("status", "pending"),
                 error_message=qi_data.get("error_message"),
             )

@@ -50,7 +50,7 @@
 - Duplicate detection & full-text search
 - Photo attachments & failure analysis
 - Timelapse editor (trim, speed, music)
-- Re-print to any connected printer with AMS mapping (auto-match or manual slot selection)
+- Re-print to any connected printer with AMS mapping (auto-match or manual slot selection, multi-plate support)
 - Archive comparison (side-by-side diff)
 
 ### 📊 Monitoring & Control
@@ -71,7 +71,7 @@
 - Print queue with drag-and-drop
 - Scheduled prints (date/time)
 - Queue Only mode (stage without auto-start)
-- Smart plug integration (Tasmota)
+- Smart plug integration (Tasmota, Home Assistant)
 - Energy consumption tracking
 - Auto power-on before print
 - Auto power-off after cooldown

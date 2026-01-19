@@ -40,6 +40,7 @@ class ArchiveResponse(BaseModel):
     thumbnail_path: str | None
     timelapse_path: str | None
     source_3mf_path: str | None = None  # Original project 3MF from slicer
+    f3d_path: str | None = None  # Fusion 360 design file
 
     # Duplicate detection
     duplicates: list[ArchiveDuplicate] | None = None
@@ -168,6 +169,10 @@ class ProjectPageUpdate(BaseModel):
 
 class ReprintRequest(BaseModel):
     """Request body for reprinting an archive."""
+
+    # Plate selection for multi-plate 3MF files
+    # If not specified, auto-detects from file (legacy behavior for single-plate files)
+    plate_id: int | None = None
 
     # AMS slot mapping: list of tray IDs for each filament slot in the 3MF
     # Global tray ID = (ams_id * 4) + slot_id, external = 254

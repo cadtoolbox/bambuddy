@@ -61,6 +61,7 @@ from backend.app.api.routes import (
     filaments,
     firmware,
     kprofiles,
+    library,
     maintenance,
     notification_templates,
     notifications,
@@ -1963,6 +1964,7 @@ app.include_router(maintenance.router, prefix=app_settings.api_prefix)
 app.include_router(camera.router, prefix=app_settings.api_prefix)
 app.include_router(external_links.router, prefix=app_settings.api_prefix)
 app.include_router(projects.router, prefix=app_settings.api_prefix)
+app.include_router(library.router, prefix=app_settings.api_prefix)
 app.include_router(api_keys.router, prefix=app_settings.api_prefix)
 app.include_router(webhook.router, prefix=app_settings.api_prefix)
 app.include_router(ams_history.router, prefix=app_settings.api_prefix)
@@ -2036,9 +2038,11 @@ async def serve_service_worker():
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
     """Serve React app for client-side routing."""
-    # Don't intercept API routes
+    # Don't intercept API routes - raise proper 404 so FastAPI can handle redirects
     if full_path.startswith("api/"):
-        return {"error": "Not found"}
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Not found")
 
     index_file = app_settings.static_dir / "index.html"
     if index_file.exists():

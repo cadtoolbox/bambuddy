@@ -202,6 +202,7 @@ export interface Archive {
   thumbnail_path: string | null;
   timelapse_path: string | null;
   source_3mf_path: string | null;
+  f3d_path: string | null;
   duplicates: ArchiveDuplicate[] | null;
   duplicate_count: number;
   object_count: number | null;
@@ -585,6 +586,13 @@ export interface AppSettings {
   mqtt_password: string;
   mqtt_topic_prefix: string;
   mqtt_use_tls: boolean;
+  // Home Assistant integration
+  ha_enabled: boolean;
+  ha_url: string;
+  ha_token: string;
+  // File Manager / Library settings
+  library_archive_mode: 'always' | 'never' | 'ask';
+  library_disk_warning_gb: number;
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>;
@@ -694,7 +702,9 @@ export interface CloudDevice {
 export interface SmartPlug {
   id: number;
   name: string;
-  ip_address: string;
+  plug_type: 'tasmota' | 'homeassistant';
+  ip_address: string | null;  // Required for Tasmota
+  ha_entity_id: string | null;  // Required for Home Assistant (e.g., "switch.printer_plug")
   printer_id: number | null;
   enabled: boolean;
   auto_on: boolean;
@@ -725,7 +735,9 @@ export interface SmartPlug {
 
 export interface SmartPlugCreate {
   name: string;
-  ip_address: string;
+  plug_type?: 'tasmota' | 'homeassistant';
+  ip_address?: string | null;  // Required for Tasmota
+  ha_entity_id?: string | null;  // Required for Home Assistant
   printer_id?: number | null;
   enabled?: boolean;
   auto_on?: boolean;
@@ -749,7 +761,9 @@ export interface SmartPlugCreate {
 
 export interface SmartPlugUpdate {
   name?: string;
-  ip_address?: string;
+  plug_type?: 'tasmota' | 'homeassistant';
+  ip_address?: string | null;
+  ha_entity_id?: string | null;
   printer_id?: number | null;
   enabled?: boolean;
   auto_on?: boolean;
@@ -769,6 +783,20 @@ export interface SmartPlugUpdate {
   schedule_off_time?: string | null;
   // Switchbar visibility
   show_in_switchbar?: boolean;
+}
+
+// Home Assistant entity for smart plug selection
+export interface HAEntity {
+  entity_id: string;
+  friendly_name: string;
+  state: string | null;
+  domain: string;  // "switch", "light", "input_boolean"
+}
+
+export interface HATestConnectionResult {
+  success: boolean;
+  message: string | null;
+  error: string | null;
 }
 
 export interface SmartPlugEnergy {
@@ -822,6 +850,14 @@ export interface PrintQueueItem {
   auto_off_after: boolean;
   manual_start: boolean;  // Requires manual trigger to start (staged)
   ams_mapping: number[] | null;  // AMS slot mapping for multi-color prints
+  plate_id: number | null;  // Plate ID for multi-plate 3MF files
+  // Print options
+  bed_levelling: boolean;
+  flow_cali: boolean;
+  vibration_cali: boolean;
+  layer_inspect: boolean;
+  timelapse: boolean;
+  use_ams: boolean;
   status: 'pending' | 'printing' | 'completed' | 'failed' | 'skipped' | 'cancelled';
   started_at: string | null;
   completed_at: string | null;
@@ -841,6 +877,14 @@ export interface PrintQueueItemCreate {
   auto_off_after?: boolean;
   manual_start?: boolean;  // Requires manual trigger to start (staged)
   ams_mapping?: number[] | null;  // AMS slot mapping for multi-color prints
+  plate_id?: number | null;  // Plate ID for multi-plate 3MF files
+  // Print options
+  bed_levelling?: boolean;
+  flow_cali?: boolean;
+  vibration_cali?: boolean;
+  layer_inspect?: boolean;
+  timelapse?: boolean;
+  use_ams?: boolean;
 }
 
 export interface PrintQueueItemUpdate {
@@ -851,6 +895,14 @@ export interface PrintQueueItemUpdate {
   auto_off_after?: boolean;
   manual_start?: boolean;
   ams_mapping?: number[];
+  plate_id?: number | null;  // Plate ID for multi-plate 3MF files
+  // Print options
+  bed_levelling?: boolean;
+  flow_cali?: boolean;
+  vibration_cali?: boolean;
+  layer_inspect?: boolean;
+  timelapse?: boolean;
+  use_ams?: boolean;
 }
 
 // MQTT Logging types
@@ -1682,6 +1734,26 @@ export const api = {
     request<{ status: string }>(`/archives/${archiveId}/source`, {
       method: 'DELETE',
     }),
+  // F3D (Fusion 360 design file)
+  getF3dDownloadUrl: (archiveId: number) =>
+    `${API_BASE}/archives/${archiveId}/f3d`,
+  uploadF3d: async (archiveId: number, file: File): Promise<{ status: string; filename: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/archives/${archiveId}/f3d`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  deleteF3d: (archiveId: number) =>
+    request<{ status: string }>(`/archives/${archiveId}/f3d`, {
+      method: 'DELETE',
+    }),
 
   // QR Code
   getArchiveQRCodeUrl: (archiveId: number, size = 200) =>
@@ -1735,10 +1807,32 @@ export const api = {
     `${API_BASE}/archives/${archiveId}/project-image/${encodeURIComponent(imagePath)}`,
   getArchiveForSlicer: (id: number, filename: string) =>
     `${API_BASE}/archives/${id}/file/${encodeURIComponent(filename.endsWith('.3mf') ? filename : filename + '.3mf')}`,
-  getArchiveFilamentRequirements: (archiveId: number) =>
+  getArchivePlates: (archiveId: number) =>
     request<{
       archive_id: number;
       filename: string;
+      plates: Array<{
+        index: number;
+        name: string | null;
+        has_thumbnail: boolean;
+        thumbnail_url: string | null;
+        print_time_seconds: number | null;
+        filament_used_grams: number | null;
+        filaments: Array<{
+          slot_id: number;
+          type: string;
+          color: string;
+          used_grams: number;
+          used_meters: number;
+        }>;
+      }>;
+      is_multi_plate: boolean;
+    }>(`/archives/${archiveId}/plates`),
+  getArchiveFilamentRequirements: (archiveId: number, plateId?: number) =>
+    request<{
+      archive_id: number;
+      filename: string;
+      plate_id: number | null;
       filaments: Array<{
         slot_id: number;
         type: string;
@@ -1746,11 +1840,12 @@ export const api = {
         used_grams: number;
         used_meters: number;
       }>;
-    }>(`/archives/${archiveId}/filament-requirements`),
+    }>(`/archives/${archiveId}/filament-requirements${plateId !== undefined ? `?plate_id=${plateId}` : ''}`),
   reprintArchive: (
     archiveId: number,
     printerId: number,
     options?: {
+      plate_id?: number;
       ams_mapping?: number[];
       timelapse?: boolean;
       bed_levelling?: boolean;
@@ -1957,6 +2052,15 @@ export const api = {
       .then(res => res.ok ? res.json() : res.json().then(e => { throw new Error(e.detail || `HTTP ${res.status}`); })),
   getDiscoveredTasmotaDevices: () =>
     request<DiscoveredTasmotaDevice[]>('/smart-plugs/discover/devices'),
+
+  // Home Assistant Integration
+  testHAConnection: (url: string, token: string) =>
+    request<HATestConnectionResult>('/smart-plugs/ha/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ url, token }),
+    }),
+  getHAEntities: () =>
+    request<HAEntity[]>('/smart-plugs/ha/entities'),
 
   // Print Queue
   getQueue: (printerId?: number, status?: string) => {
@@ -2366,6 +2470,75 @@ export const api = {
 
   // System Info
   getSystemInfo: () => request<SystemInfo>('/system/info'),
+
+  // Library (File Manager)
+  getLibraryFolders: () => request<LibraryFolderTree[]>('/library/folders'),
+  createLibraryFolder: (data: LibraryFolderCreate) =>
+    request<LibraryFolder>('/library/folders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateLibraryFolder: (id: number, data: LibraryFolderUpdate) =>
+    request<LibraryFolder>(`/library/folders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteLibraryFolder: (id: number) =>
+    request<{ status: string; message: string }>(`/library/folders/${id}`, { method: 'DELETE' }),
+  getLibraryFoldersByProject: (projectId: number) =>
+    request<LibraryFolder[]>(`/library/folders/by-project/${projectId}`),
+  getLibraryFoldersByArchive: (archiveId: number) =>
+    request<LibraryFolder[]>(`/library/folders/by-archive/${archiveId}`),
+
+  getLibraryFiles: (folderId?: number | null, includeRoot = true) => {
+    const params = new URLSearchParams();
+    if (folderId !== undefined && folderId !== null) {
+      params.set('folder_id', String(folderId));
+    }
+    params.set('include_root', String(includeRoot));
+    return request<LibraryFileListItem[]>(`/library/files?${params}`);
+  },
+  getLibraryFile: (id: number) => request<LibraryFile>(`/library/files/${id}`),
+  uploadLibraryFile: async (file: File, folderId?: number | null): Promise<LibraryFileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const params = folderId ? `?folder_id=${folderId}` : '';
+    const response = await fetch(`${API_BASE}/library/files${params}`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  updateLibraryFile: (id: number, data: LibraryFileUpdate) =>
+    request<LibraryFile>(`/library/files/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteLibraryFile: (id: number) =>
+    request<{ status: string; message: string }>(`/library/files/${id}`, { method: 'DELETE' }),
+  getLibraryFileDownloadUrl: (id: number) => `${API_BASE}/library/files/${id}/download`,
+  getLibraryFileThumbnailUrl: (id: number) => `${API_BASE}/library/files/${id}/thumbnail`,
+  getLibraryFileGcodeUrl: (id: number) => `${API_BASE}/library/files/${id}/gcode`,
+  moveLibraryFiles: (fileIds: number[], folderId: number | null) =>
+    request<{ status: string; moved: number }>('/library/files/move', {
+      method: 'POST',
+      body: JSON.stringify({ file_ids: fileIds, folder_id: folderId }),
+    }),
+  bulkDeleteLibrary: (fileIds: number[], folderIds: number[]) =>
+    request<{ deleted_files: number; deleted_folders: number }>('/library/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ file_ids: fileIds, folder_ids: folderIds }),
+    }),
+  getLibraryStats: () => request<LibraryStats>('/library/stats'),
+  addLibraryFilesToQueue: (fileIds: number[]) =>
+    request<AddToQueueResponse>('/library/files/add-to-queue', {
+      method: 'POST',
+      body: JSON.stringify({ file_ids: fileIds }),
+    }),
 };
 
 // AMS History types
@@ -2457,6 +2630,137 @@ export interface SystemInfo {
     count_logical: number;
     percent: number;
   };
+}
+
+// Library (File Manager) types
+export interface LibraryFolderTree {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  project_id: number | null;
+  archive_id: number | null;
+  project_name: string | null;
+  archive_name: string | null;
+  file_count: number;
+  children: LibraryFolderTree[];
+}
+
+export interface LibraryFolder {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  project_id: number | null;
+  archive_id: number | null;
+  project_name: string | null;
+  archive_name: string | null;
+  file_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LibraryFolderCreate {
+  name: string;
+  parent_id?: number | null;
+  project_id?: number | null;
+  archive_id?: number | null;
+}
+
+export interface LibraryFolderUpdate {
+  name?: string;
+  parent_id?: number | null;
+  project_id?: number | null;  // 0 to unlink
+  archive_id?: number | null;  // 0 to unlink
+}
+
+export interface LibraryFileDuplicate {
+  id: number;
+  filename: string;
+  folder_id: number | null;
+  folder_name: string | null;
+  created_at: string;
+}
+
+export interface LibraryFile {
+  id: number;
+  folder_id: number | null;
+  folder_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  filename: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  file_hash: string | null;
+  thumbnail_path: string | null;
+  metadata: Record<string, unknown> | null;
+  print_count: number;
+  last_printed_at: string | null;
+  notes: string | null;
+  duplicates: LibraryFileDuplicate[] | null;
+  duplicate_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LibraryFileListItem {
+  id: number;
+  folder_id: number | null;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  thumbnail_path: string | null;
+  print_count: number;
+  duplicate_count: number;
+  created_at: string;
+  print_name: string | null;
+  print_time_seconds: number | null;
+  filament_used_grams: number | null;
+}
+
+export interface LibraryFileUpdate {
+  folder_id?: number | null;
+  project_id?: number | null;
+  notes?: string | null;
+}
+
+export interface LibraryFileUploadResponse {
+  id: number;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  thumbnail_path: string | null;
+  duplicate_of: number | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface LibraryStats {
+  total_files: number;
+  total_folders: number;
+  total_size_bytes: number;
+  files_by_type: Record<string, number>;
+  total_prints: number;
+  disk_free_bytes: number;
+  disk_total_bytes: number;
+  disk_used_bytes: number;
+}
+
+// Library Queue types
+export interface AddToQueueResult {
+  file_id: number;
+  filename: string;
+  queue_item_id: number;
+  archive_id: number;
+}
+
+export interface AddToQueueError {
+  file_id: number;
+  filename: string;
+  error: string;
+}
+
+export interface AddToQueueResponse {
+  added: AddToQueueResult[];
+  errors: AddToQueueError[];
 }
 
 // Discovery types

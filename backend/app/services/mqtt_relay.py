@@ -92,11 +92,17 @@ class MQTTRelayService:
                 self.client.tls_set(cert_reqs=ssl.CERT_NONE)
                 self.client.tls_insecure_set(True)  # Allow self-signed certs
 
-            # Connect (non-blocking with loop_start)
-            self.client.connect_async(broker, port, keepalive=60)
+            # Run connect_async in thread pool with timeout to avoid blocking
+            # on unreachable brokers (connect_async does synchronous socket creation)
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self.client.connect_async, broker, port, 60), timeout=3.0)
+            except TimeoutError:
+                logger.warning(f"MQTT relay connection to {broker}:{port} timed out")
+                return False
+
             self.client.loop_start()
 
-            # Wait briefly for connection
+            # Wait briefly for connection callback
             await asyncio.sleep(1.0)
 
             if self.connected:

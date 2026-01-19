@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Upload, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, Info, X, Shield, Printer, Cylinder, Wifi } from 'lucide-react';
+import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Upload, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, Info, X, Shield, Printer, Cylinder, Wifi, Home } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { formatDateOnly } from '../utils/date';
@@ -66,6 +66,10 @@ export function SettingsPage() {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showTelemetryInfo, setShowTelemetryInfo] = useState(false);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+
+  // Home Assistant test connection state
+  const [haTestResult, setHaTestResult] = useState<{ success: boolean; message: string | null; error: string | null } | null>(null);
+  const [haTestLoading, setHaTestLoading] = useState(false);
 
   const handleDefaultViewChange = (path: string) => {
     setDefaultViewState(path);
@@ -300,6 +304,7 @@ export function SettingsPage() {
 
   // Ref for debounce timeout
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSavingRef = useRef(false);
   const isInitialLoadRef = useRef(true);
 
   // Sync local state when settings load
@@ -317,12 +322,18 @@ export function SettingsPage() {
     mutationFn: api.updateSettings,
     onSuccess: (data) => {
       queryClient.setQueryData(['settings'], data);
+      // Sync localSettings with the saved data to prevent re-triggering saves
+      setLocalSettings(data);
       // Invalidate archive stats to reflect energy tracking mode change
       queryClient.invalidateQueries({ queryKey: ['archiveStats'] });
       showToast('Settings saved', 'success');
     },
     onError: (error: Error) => {
       showToast(`Failed to save: ${error.message}`, 'error');
+    },
+    onSettled: () => {
+      // Reset saving flag when mutation completes (success or error)
+      isSavingRef.current = false;
     },
   });
 
@@ -363,9 +374,19 @@ export function SettingsPage() {
       settings.mqtt_username !== localSettings.mqtt_username ||
       settings.mqtt_password !== localSettings.mqtt_password ||
       settings.mqtt_topic_prefix !== localSettings.mqtt_topic_prefix ||
-      settings.mqtt_use_tls !== localSettings.mqtt_use_tls;
+      settings.mqtt_use_tls !== localSettings.mqtt_use_tls ||
+      settings.ha_enabled !== localSettings.ha_enabled ||
+      settings.ha_url !== localSettings.ha_url ||
+      settings.ha_token !== localSettings.ha_token ||
+      (settings.library_archive_mode ?? 'ask') !== (localSettings.library_archive_mode ?? 'ask') ||
+      Number(settings.library_disk_warning_gb ?? 5) !== Number(localSettings.library_disk_warning_gb ?? 5);
 
     if (!hasChanges) {
+      return;
+    }
+
+    // Don't queue more saves while one is in progress
+    if (isSavingRef.current) {
       return;
     }
 
@@ -376,6 +397,11 @@ export function SettingsPage() {
 
     // Set new debounced save (500ms delay)
     saveTimeoutRef.current = setTimeout(() => {
+      // Skip if a save is already in progress
+      if (isSavingRef.current) {
+        return;
+      }
+      isSavingRef.current = true;
       // Only send the fields we manage on this page (exclude virtual_printer_* which are managed separately)
       const settingsToSave: AppSettingsUpdate = {
         auto_archive: localSettings.auto_archive,
@@ -407,6 +433,11 @@ export function SettingsPage() {
         mqtt_password: localSettings.mqtt_password,
         mqtt_topic_prefix: localSettings.mqtt_topic_prefix,
         mqtt_use_tls: localSettings.mqtt_use_tls,
+        ha_enabled: localSettings.ha_enabled,
+        ha_url: localSettings.ha_url,
+        ha_token: localSettings.ha_token,
+        library_archive_mode: localSettings.library_archive_mode,
+        library_disk_warning_gb: localSettings.library_disk_warning_gb,
       };
       updateMutation.mutate(settingsToSave);
     }, 500);
@@ -918,140 +949,62 @@ export function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* File Manager Settings */}
           <Card>
             <CardHeader>
-              <h2 className="text-lg font-semibold text-white">AMS Display Thresholds</h2>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-bambu-green" />
+                File Manager
+              </h2>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-bambu-gray">
-                Configure color thresholds for AMS humidity and temperature indicators.
-              </p>
-
-              {/* Humidity Thresholds */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-white">
-                  <Droplets className="w-4 h-4 text-blue-400" />
-                  <span className="font-medium">Humidity</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Good (green) ≤
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={localSettings.ams_humidity_good ?? 40}
-                        onChange={(e) => updateSetting('ams_humidity_good', parseInt(e.target.value) || 40)}
-                        className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Fair (orange) ≤
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={localSettings.ams_humidity_fair ?? 60}
-                        onChange={(e) => updateSetting('ams_humidity_fair', parseInt(e.target.value) || 60)}
-                        className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">%</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-bambu-gray">
-                  Above fair threshold shows as red (bad)
+              {/* Archive Mode */}
+              <div>
+                <label className="block text-sm text-bambu-gray mb-1">
+                  Create Archive Entry When Printing
+                </label>
+                <select
+                  value={localSettings.library_archive_mode ?? 'ask'}
+                  onChange={(e) => updateSetting('library_archive_mode', e.target.value as 'always' | 'never' | 'ask')}
+                  className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                >
+                  <option value="always">Always create archive entry</option>
+                  <option value="never">Never create archive entry</option>
+                  <option value="ask">Ask each time</option>
+                </select>
+                <p className="text-xs text-bambu-gray mt-1">
+                  When printing from File Manager, optionally create an archive entry
                 </p>
               </div>
 
-              {/* Temperature Thresholds */}
-              <div className="space-y-3 pt-2 border-t border-bambu-dark-tertiary">
-                <div className="flex items-center gap-2 text-white">
-                  <Thermometer className="w-4 h-4 text-orange-400" />
-                  <span className="font-medium">Temperature</span>
+              {/* Disk Space Warning Threshold */}
+              <div>
+                <label className="block text-sm text-bambu-gray mb-1">
+                  Low Disk Space Warning
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="100"
+                    step="0.5"
+                    value={localSettings.library_disk_warning_gb ?? 5}
+                    onChange={(e) => updateSetting('library_disk_warning_gb', parseFloat(e.target.value) || 5)}
+                    className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                  />
+                  <span className="text-bambu-gray">GB</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Good (blue) ≤
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="60"
-                        value={localSettings.ams_temp_good ?? 28}
-                        onChange={(e) => updateSetting('ams_temp_good', parseFloat(e.target.value) || 28)}
-                        className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">°C</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Fair (orange) ≤
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="60"
-                        value={localSettings.ams_temp_fair ?? 35}
-                        onChange={(e) => updateSetting('ams_temp_fair', parseFloat(e.target.value) || 35)}
-                        className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">°C</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-bambu-gray">
-                  Above fair threshold shows as red (hot)
-                </p>
-              </div>
-
-              {/* History Retention */}
-              <div className="space-y-3 pt-4 border-t border-bambu-dark-tertiary">
-                <div className="flex items-center gap-2 text-white">
-                  <Database className="w-4 h-4 text-purple-400" />
-                  <span className="font-medium">History Retention</span>
-                </div>
-                <div>
-                  <label className="block text-sm text-bambu-gray mb-1">
-                    Keep sensor history for
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={localSettings.ams_history_retention_days ?? 30}
-                      onChange={(e) => updateSetting('ams_history_retention_days', parseInt(e.target.value) || 30)}
-                      className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                    />
-                    <span className="text-bambu-gray">days</span>
-                  </div>
-                </div>
-                <p className="text-xs text-bambu-gray">
-                  Older humidity and temperature data will be automatically deleted
+                <p className="text-xs text-bambu-gray mt-1">
+                  Show warning when free disk space falls below this threshold
                 </p>
               </div>
             </CardContent>
           </Card>
-
         </div>
 
-        {/* Third Column - Updates */}
+        {/* Third Column - Sidebar Links & Updates */}
         <div className="space-y-6 flex-1 lg:max-w-sm">
+          {/* Sidebar Links */}
           <ExternalLinksSettings />
 
           <Card>
@@ -1299,7 +1252,205 @@ export function SettingsPage() {
       {/* Network Tab */}
       {activeTab === 'network' && localSettings && (
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Column - MQTT */}
+        {/* Left Column - FTP Retry & Home Assistant */}
+        <div className="flex-1 lg:max-w-xl space-y-4">
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-blue-400" />
+                FTP Retry
+              </h2>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-bambu-gray">
+                Retry FTP operations when printer WiFi is unreliable. Applies to 3MF downloads, print uploads, timelapse downloads, and firmware updates.
+              </p>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white">Enable retry</p>
+                  <p className="text-sm text-bambu-gray">
+                    Automatically retry failed FTP operations
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.ftp_retry_enabled ?? true}
+                    onChange={(e) => updateSetting('ftp_retry_enabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-bambu-green"></div>
+                </label>
+              </div>
+
+              {localSettings.ftp_retry_enabled && (
+                <div className="space-y-4 pt-2 border-t border-bambu-dark-tertiary">
+                  <div>
+                    <label className="block text-sm text-bambu-gray mb-1">
+                      Retry attempts
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={localSettings.ftp_retry_count ?? 3}
+                        onChange={(e) => updateSetting('ftp_retry_count', Math.min(10, Math.max(1, parseInt(e.target.value) || 3)))}
+                        className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                      />
+                      <span className="text-bambu-gray">times</span>
+                    </div>
+                    <p className="text-xs text-bambu-gray mt-1">
+                      Number of retry attempts before giving up (1-10)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-bambu-gray mb-1">
+                      Retry delay
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={localSettings.ftp_retry_delay ?? 2}
+                        onChange={(e) => updateSetting('ftp_retry_delay', Math.min(30, Math.max(1, parseInt(e.target.value) || 2)))}
+                        className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                      />
+                      <span className="text-bambu-gray">seconds</span>
+                    </div>
+                    <p className="text-xs text-bambu-gray mt-1">
+                      Wait time between retries (1-30)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-bambu-dark-tertiary">
+                <label className="block text-sm text-bambu-gray mb-1">
+                  Connection timeout
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="10"
+                    max="120"
+                    value={localSettings.ftp_timeout ?? 30}
+                    onChange={(e) => updateSetting('ftp_timeout', Math.min(120, Math.max(10, parseInt(e.target.value) || 30)))}
+                    className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                  />
+                  <span className="text-bambu-gray">seconds</span>
+                </div>
+                <p className="text-xs text-bambu-gray mt-1">
+                  Socket timeout for slow connections. Increase for A1/A1 Mini printers with weak WiFi (10-120)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Home Assistant Integration */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Home className="w-5 h-5 text-bambu-green" />
+                  Home Assistant
+                </h2>
+                {localSettings.ha_enabled && haTestResult && (
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${haTestResult.success ? 'bg-green-400' : 'bg-red-400'}`} />
+                    <span className={`text-sm ${haTestResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                      {haTestResult.success ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-bambu-gray">
+                Connect to Home Assistant to control smart plugs via HA's REST API. Supports switch, light, and input_boolean entities.
+              </p>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white">Enable Home Assistant</p>
+                  <p className="text-xs text-bambu-gray">Control smart plugs via Home Assistant</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.ha_enabled ?? false}
+                    onChange={(e) => updateSetting('ha_enabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-bambu-green"></div>
+                </label>
+              </div>
+
+              {localSettings.ha_enabled && (
+                <>
+                  <div>
+                    <label className="block text-sm text-bambu-gray mb-1">
+                      Home Assistant URL
+                    </label>
+                    <input
+                      type="text"
+                      value={localSettings.ha_url ?? ''}
+                      onChange={(e) => updateSetting('ha_url', e.target.value)}
+                      placeholder="http://192.168.1.100:8123"
+                      className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-bambu-gray mb-1">
+                      Long-Lived Access Token
+                    </label>
+                    <input
+                      type="password"
+                      value={localSettings.ha_token ?? ''}
+                      onChange={(e) => updateSetting('ha_token', e.target.value)}
+                      placeholder="eyJ0eXAiOiJKV1QiLC..."
+                      className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                    />
+                    <p className="text-xs text-bambu-gray mt-1">
+                      Create a token in HA: Profile → Long-Lived Access Tokens → Create Token
+                    </p>
+                  </div>
+
+                  {localSettings.ha_url && localSettings.ha_token && (
+                    <div className="pt-2 border-t border-bambu-dark-tertiary">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={haTestLoading}
+                        onClick={async () => {
+                          setHaTestLoading(true);
+                          setHaTestResult(null);
+                          try {
+                            const result = await api.testHAConnection(localSettings.ha_url!, localSettings.ha_token!);
+                            setHaTestResult(result);
+                          } catch (e) {
+                            setHaTestResult({ success: false, message: null, error: e instanceof Error ? e.message : 'Unknown error' });
+                          } finally {
+                            setHaTestLoading(false);
+                          }
+                        }}
+                      >
+                        {haTestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+                        Test Connection
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - MQTT Publishing */}
         <div className="flex-1 lg:max-w-xl space-y-4">
           <Card>
             <CardHeader>
@@ -1456,106 +1607,38 @@ export function SettingsPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Right Column - FTP Retry */}
-        <div className="flex-1 lg:max-w-xl space-y-4">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-blue-400" />
-                FTP Retry
-              </h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-bambu-gray">
-                Retry FTP operations when printer WiFi is unreliable. Applies to 3MF downloads, print uploads, timelapse downloads, and firmware updates.
-              </p>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white">Enable retry</p>
-                  <p className="text-sm text-bambu-gray">
-                    Automatically retry failed FTP operations
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localSettings.ftp_retry_enabled ?? true}
-                    onChange={(e) => updateSetting('ftp_retry_enabled', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-bambu-green"></div>
-                </label>
-              </div>
-
-              {localSettings.ftp_retry_enabled && (
-                <div className="space-y-4 pt-2 border-t border-bambu-dark-tertiary">
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Retry attempts
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={localSettings.ftp_retry_count ?? 3}
-                        onChange={(e) => updateSetting('ftp_retry_count', Math.min(10, Math.max(1, parseInt(e.target.value) || 3)))}
-                        className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">times</span>
-                    </div>
-                    <p className="text-xs text-bambu-gray mt-1">
-                      Number of retry attempts before giving up (1-10)
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-bambu-gray mb-1">
-                      Retry delay
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={localSettings.ftp_retry_delay ?? 2}
-                        onChange={(e) => updateSetting('ftp_retry_delay', Math.min(30, Math.max(1, parseInt(e.target.value) || 2)))}
-                        className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                      />
-                      <span className="text-bambu-gray">seconds</span>
-                    </div>
-                    <p className="text-xs text-bambu-gray mt-1">
-                      Wait time between retries (1-30)
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 border-t border-bambu-dark-tertiary">
-                <label className="block text-sm text-bambu-gray mb-1">
-                  Connection timeout
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="10"
-                    max="120"
-                    value={localSettings.ftp_timeout ?? 30}
-                    onChange={(e) => updateSetting('ftp_timeout', Math.min(120, Math.max(10, parseInt(e.target.value) || 30)))}
-                    className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
-                  />
-                  <span className="text-bambu-gray">seconds</span>
-                </div>
-                <p className="text-xs text-bambu-gray mt-1">
-                  Socket timeout for slow connections. Increase for A1/A1 Mini printers with weak WiFi (10-120)
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
+      )}
+
+      {/* Home Assistant Test Connection Modal */}
+      {haTestResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-bambu-dark-secondary rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              {haTestResult.success ? (
+                <CheckCircle className="w-8 h-8 text-green-400" />
+              ) : (
+                <XCircle className="w-8 h-8 text-red-400" />
+              )}
+              <h3 className="text-lg font-medium text-white">
+                {haTestResult.success ? 'Connection Successful' : 'Connection Failed'}
+              </h3>
+            </div>
+            <p className="text-bambu-gray mb-6">
+              {haTestResult.success
+                ? haTestResult.message || 'Successfully connected to Home Assistant.'
+                : haTestResult.error || 'Failed to connect to Home Assistant.'}
+            </p>
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                onClick={() => setHaTestResult(null)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Smart Plugs Tab */}
@@ -1568,7 +1651,7 @@ export function SettingsPage() {
                 Smart Plugs
               </h2>
               <p className="text-sm text-bambu-gray mt-1">
-                Connect Tasmota-based smart plugs to automate power control and track energy usage for your printers.
+                Connect smart plugs (Tasmota or Home Assistant) to automate power control and track energy usage for your printers.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-1 shrink-0">
@@ -2273,9 +2356,145 @@ export function SettingsPage() {
       )}
 
       {/* Filament Tab */}
-      {activeTab === 'filament' && (
-        <div className="max-w-2xl">
-          <SpoolmanSettings />
+      {activeTab === 'filament' && localSettings && (
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+          {/* Left Column - AMS Display Thresholds */}
+          <div className="flex-1 lg:max-w-xl">
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-white">AMS Display Thresholds</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-bambu-gray">
+                  Configure color thresholds for AMS humidity and temperature indicators.
+                </p>
+
+                {/* Humidity Thresholds */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-white">
+                    <Droplets className="w-4 h-4 text-blue-400" />
+                    <span className="font-medium">Humidity</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-bambu-gray mb-1">
+                        Good (green) ≤
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={localSettings.ams_humidity_good ?? 40}
+                          onChange={(e) => updateSetting('ams_humidity_good', parseInt(e.target.value) || 40)}
+                          className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                        />
+                        <span className="text-bambu-gray">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-bambu-gray mb-1">
+                        Fair (orange) ≤
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={localSettings.ams_humidity_fair ?? 60}
+                          onChange={(e) => updateSetting('ams_humidity_fair', parseInt(e.target.value) || 60)}
+                          className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                        />
+                        <span className="text-bambu-gray">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-bambu-gray">
+                    Above fair threshold shows as red (bad)
+                  </p>
+                </div>
+
+                {/* Temperature Thresholds */}
+                <div className="space-y-3 pt-2 border-t border-bambu-dark-tertiary">
+                  <div className="flex items-center gap-2 text-white">
+                    <Thermometer className="w-4 h-4 text-orange-400" />
+                    <span className="font-medium">Temperature</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-bambu-gray mb-1">
+                        Good (blue) ≤
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="60"
+                          value={localSettings.ams_temp_good ?? 28}
+                          onChange={(e) => updateSetting('ams_temp_good', parseFloat(e.target.value) || 28)}
+                          className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                        />
+                        <span className="text-bambu-gray">°C</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-bambu-gray mb-1">
+                        Fair (orange) ≤
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="60"
+                          value={localSettings.ams_temp_fair ?? 35}
+                          onChange={(e) => updateSetting('ams_temp_fair', parseFloat(e.target.value) || 35)}
+                          className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                        />
+                        <span className="text-bambu-gray">°C</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-bambu-gray">
+                    Above fair threshold shows as red (hot)
+                  </p>
+                </div>
+
+                {/* History Retention */}
+                <div className="space-y-3 pt-4 border-t border-bambu-dark-tertiary">
+                  <div className="flex items-center gap-2 text-white">
+                    <Database className="w-4 h-4 text-purple-400" />
+                    <span className="font-medium">History Retention</span>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-bambu-gray mb-1">
+                      Keep sensor history for
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={localSettings.ams_history_retention_days ?? 30}
+                        onChange={(e) => updateSetting('ams_history_retention_days', parseInt(e.target.value) || 30)}
+                        className="w-24 px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                      />
+                      <span className="text-bambu-gray">days</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-bambu-gray">
+                    Older humidity and temperature data will be automatically deleted
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column - Spoolman Integration */}
+          <div className="flex-1 lg:max-w-xl">
+            <SpoolmanSettings />
+          </div>
         </div>
       )}
 
