@@ -33,7 +33,9 @@ async def set_auth_enabled(db: AsyncSession, enabled: bool) -> None:
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
     stmt = sqlite_insert(Settings).values(key="auth_enabled", value="true" if enabled else "false")
-    stmt = stmt.on_conflict_do_update(index_elements=["key"], set_={"value": "true" if enabled else "false", "updated_at": func.now()})
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["key"], set_={"value": "true" if enabled else "false", "updated_at": func.now()}
+    )
     await db.execute(stmt)
     # Note: Don't commit here - let get_db handle it or commit explicitly in the route
 

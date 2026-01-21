@@ -106,9 +106,7 @@ async def get_current_user_optional(
         return user
 
 
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
-) -> User:
+async def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]) -> User:
     """Get the current authenticated user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -136,9 +134,7 @@ async def get_current_user(
         return user
 
 
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> User:
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Get the current active user (alias for clarity)."""
     return current_user
 
@@ -189,9 +185,7 @@ async def require_auth_if_enabled(
 def require_role(required_role: str):
     """Dependency factory for role-based access control."""
 
-    async def role_checker(
-        current_user: Annotated[User, Depends(get_current_user)]
-    ) -> User:
+    async def role_checker(current_user: Annotated[User, Depends(get_current_user)]) -> User:
         if current_user.role != required_role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -345,6 +339,7 @@ def check_printer_access(api_key: "APIKey", printer_id: int) -> None:
 def RequireAdmin():
     """Dependency that requires admin role."""
     return Depends(require_role("admin"))
+
 
 def RequireAdminIfAuthEnabled():
     """Dependency that requires admin role if auth is enabled."""

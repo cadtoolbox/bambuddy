@@ -48,7 +48,7 @@ async def list_printers(db: AsyncSession = Depends(get_db)):
 async def create_printer(
     printer_data: PrinterCreate,
     db: AsyncSession = Depends(get_db),
-    _current_user = RequireAdminIfAuthEnabled(),
+    _current_user=RequireAdminIfAuthEnabled(),
 ):
     """Add a new printer."""
     # Check if serial number already exists
@@ -83,7 +83,7 @@ async def update_printer(
     printer_id: int,
     printer_data: PrinterUpdate,
     db: AsyncSession = Depends(get_db),
-    _current_user = RequireAdminIfAuthEnabled(),
+    _current_user=RequireAdminIfAuthEnabled(),
 ):
     """Update a printer."""
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
@@ -112,7 +112,7 @@ async def delete_printer(
     printer_id: int,
     delete_archives: bool = True,
     db: AsyncSession = Depends(get_db),
-    _current_user = RequireAdminIfAuthEnabled(),
+    _current_user=RequireAdminIfAuthEnabled(),
 ):
     """Delete a printer.
 

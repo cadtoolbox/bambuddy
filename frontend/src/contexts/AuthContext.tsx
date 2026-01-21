@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const currentUser = await api.getCurrentUser();
             setUser(currentUser);
-          } catch (error) {
+          } catch {
             // Token invalid, clear it
             setAuthToken(null);
             setUser(null);
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const currentUser = await api.getCurrentUser();
         setUser(currentUser);
-      } catch (error) {
+      } catch {
         setAuthToken(null);
         setUser(null);
       }
