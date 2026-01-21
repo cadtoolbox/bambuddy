@@ -2,21 +2,9 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
-## [Unreleased]
+## [0.1.6b10] - 2026-01-21
 
 ### New Features
-- **Multiple Embedded Camera Viewers** - Open camera streams for multiple printers simultaneously in embedded mode:
-  - Each viewer has its own remembered position and size
-  - New viewers are automatically offset to prevent stacking
-  - Printer-specific persistence in localStorage
-  - **Navigation persistence** - Open cameras stay open when navigating away and back to Printers page
-- **Application Log Viewer** - View and filter application logs in real-time from System Information page:
-  - Start/Stop live streaming with 2-second auto-refresh
-  - Filter by log level (DEBUG, INFO, WARNING, ERROR)
-  - Text search across messages and logger names
-  - Clear logs with one click
-  - Expandable multi-line log entries (stack traces, etc.)
-  - Auto-scroll to follow new entries
 - **Unified Print Modal** - Consolidated three separate modals into one unified component:
   - Single modal handles reprint, add-to-queue, and edit-queue-item operations
   - Consistent UI/UX across all print operations
@@ -40,6 +28,22 @@ All notable changes to Bambuddy will be documented in this file.
   - Plate selection for multi-plate 3MF files with thumbnails
   - Filament slot mapping with comparison to loaded filaments
   - All print options (bed levelling, flow calibration, etc.)
+- **File Manager Print Button** - Print directly from multi-selection toolbar:
+  - "Print" button appears when exactly one sliced file is selected
+  - Opens full PrintModal with plate selection and print options
+  - "Add to Queue" button now uses Clock icon for clarity
+- **Multiple Embedded Camera Viewers** - Open camera streams for multiple printers simultaneously in embedded mode:
+  - Each viewer has its own remembered position and size
+  - New viewers are automatically offset to prevent stacking
+  - Printer-specific persistence in localStorage
+  - **Navigation persistence** - Open cameras stay open when navigating away and back to Printers page
+- **Application Log Viewer** - View and filter application logs in real-time from System Information page:
+  - Start/Stop live streaming with 2-second auto-refresh
+  - Filter by log level (DEBUG, INFO, WARNING, ERROR)
+  - Text search across messages and logger names
+  - Clear logs with one click
+  - Expandable multi-line log entries (stack traces, etc.)
+  - Auto-scroll to follow new entries
 - **Deferred archive creation** - Queue items from File Manager no longer create archives upfront:
   - Queue items store `library_file_id` directly
   - Archives are created automatically when prints start
@@ -63,10 +67,6 @@ All notable changes to Bambuddy will be documented in this file.
   - Right-click context menu "Rename" option for files and folders
   - Inline rename button in list view
   - Validates filenames (no path separators allowed)
-- **File Manager Print Button** - Print directly from multi-selection toolbar:
-  - "Print" button appears when exactly one sliced file is selected
-  - Opens full PrintModal with plate selection and print options
-  - "Add to Queue" button now uses Clock icon for clarity
 - **File Manager Mobile Accessibility** - Improved touch device support:
   - Three-dot menu button always visible on mobile (hover-only on desktop)
   - Selection checkbox always visible on mobile devices
