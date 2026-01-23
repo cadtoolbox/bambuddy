@@ -356,22 +356,33 @@ class NotificationService:
             return False, f"HTTP {response.status_code}: {response.text[:200]}"
 
     async def _send_webhook(self, config: dict, title: str, message: str) -> tuple[bool, str]:
-        """Send notification via generic webhook (POST JSON)."""
+        """Send notification via generic webhook (POST JSON).
+
+        Supports two payload formats:
+        - generic: Custom field names with timestamp/source metadata
+        - slack: Slack/Mattermost compatible format (just {"text": "..."})
+        """
         webhook_url = config.get("webhook_url", "").strip()
         auth_header = config.get("auth_header", "").strip()
-        custom_field_title = config.get("field_title", "title").strip() or "title"
-        custom_field_message = config.get("field_message", "message").strip() or "message"
+        payload_format = config.get("payload_format", "generic").strip()
 
         if not webhook_url:
             return False, "Webhook URL is required"
 
-        # Build payload with custom field names
-        data = {
-            custom_field_title: title,
-            custom_field_message: message,
-            "timestamp": datetime.now().isoformat(),
-            "source": "Bambuddy",
-        }
+        # Build payload based on format
+        if payload_format == "slack":
+            # Slack/Mattermost format - just text field
+            data = {"text": f"*{title}*\n{message}"}
+        else:
+            # Generic format with custom field names
+            custom_field_title = config.get("field_title", "title").strip() or "title"
+            custom_field_message = config.get("field_message", "message").strip() or "message"
+            data = {
+                custom_field_title: title,
+                custom_field_message: message,
+                "timestamp": datetime.now().isoformat(),
+                "source": "Bambuddy",
+            }
 
         headers = {"Content-Type": "application/json"}
         if auth_header:

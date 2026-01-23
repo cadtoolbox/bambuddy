@@ -557,6 +557,38 @@ class TestNotificationProviderTypes:
             assert success is False
             assert "Connection failed" in message or "error" in message.lower()
 
+    @pytest.mark.asyncio
+    async def test_webhook_slack_format_sends_text_only(self, service):
+        """Verify Slack/Mattermost format sends only text field."""
+        config = {
+            "webhook_url": "http://mattermost.local/hooks/abc123",
+            "payload_format": "slack",
+        }
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch.object(service, "_get_client", new_callable=AsyncMock) as mock_get_client:
+            mock_get_client.return_value = mock_client
+
+            success, message = await service._send_webhook(config, "Test Title", "Test Message")
+
+            assert success is True
+            mock_client.post.assert_called_once()
+
+            # Verify payload format is Slack-compatible
+            call_args = mock_client.post.call_args
+            payload = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert "text" in payload
+            assert "*Test Title*" in payload["text"]
+            assert "Test Message" in payload["text"]
+            # Should NOT have generic fields
+            assert "timestamp" not in payload
+            assert "source" not in payload
+
 
 class TestNotificationVariableFallbacks:
     """Tests for notification variable fallback values."""
