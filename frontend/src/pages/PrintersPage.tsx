@@ -3110,10 +3110,12 @@ function AddPrinterModal({
   };
 
   const selectPrinter = (printer: DiscoveredPrinter) => {
+    // Don't pre-fill serial if it's a placeholder (unknown-*) - user needs to enter actual serial
+    const serialNumber = printer.serial.startsWith('unknown-') ? '' : printer.serial;
     setForm({
       ...form,
       name: printer.name || '',
-      serial_number: printer.serial,
+      serial_number: serialNumber,
       ip_address: printer.ip_address,
       model: mapModelCode(printer.model),
     });
@@ -3209,6 +3211,9 @@ function AddPrinterModal({
                       </p>
                       <p className="text-xs text-bambu-gray truncate">
                         {mapModelCode(printer.model) || 'Unknown'} • {printer.ip_address}
+                        {printer.serial.startsWith('unknown-') && (
+                          <span className="text-yellow-500"> • Serial required</span>
+                        )}
                       </p>
                     </div>
                     <ChevronDown className="w-4 h-4 text-bambu-gray -rotate-90 flex-shrink-0 ml-2" />
