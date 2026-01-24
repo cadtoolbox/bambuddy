@@ -11,6 +11,9 @@ class PrinterBase(BaseModel):
     model: str | None = None
     location: str | None = None  # Group/location name
     auto_archive: bool = True
+    external_camera_url: str | None = None
+    external_camera_type: str | None = None  # "mjpeg", "rtsp", "snapshot"
+    external_camera_enabled: bool = False
 
 
 class PrinterCreate(PrinterBase):
@@ -26,6 +29,9 @@ class PrinterUpdate(BaseModel):
     is_active: bool | None = None
     auto_archive: bool | None = None
     print_hours_offset: float | None = None
+    external_camera_url: str | None = None
+    external_camera_type: str | None = None
+    external_camera_enabled: bool | None = None
 
 
 class PrinterResponse(PrinterBase):
@@ -33,6 +39,9 @@ class PrinterResponse(PrinterBase):
     is_active: bool
     nozzle_count: int = 1  # 1 or 2, auto-detected from MQTT
     print_hours_offset: float = 0.0
+    external_camera_url: str | None = None
+    external_camera_type: str | None = None
+    external_camera_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 

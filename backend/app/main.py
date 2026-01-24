@@ -798,6 +798,18 @@ async def on_print_start(printer_id: int, data: dict):
 
                 logger.info(f"Created fallback archive {fallback_archive.id} for {print_name} (no 3MF available)")
 
+                # Start timelapse session if external camera is enabled
+                if printer.external_camera_enabled and printer.external_camera_url:
+                    from backend.app.services.layer_timelapse import start_session
+
+                    start_session(
+                        printer_id,
+                        fallback_archive.id,
+                        printer.external_camera_url,
+                        printer.external_camera_type or "mjpeg",
+                    )
+                    logger.info(f"Started layer timelapse for printer {printer_id}, archive {fallback_archive.id}")
+
                 # Track as active print
                 _active_prints[(printer_id, fallback_archive.filename)] = fallback_archive.id
                 if filename:
@@ -871,6 +883,18 @@ async def on_print_start(printer_id: int, data: dict):
                     _active_prints[(printer_id, f"{subtask_name}.3mf")] = archive.id
 
                 logger.info(f"Created archive {archive.id} for {downloaded_filename}")
+
+                # Start timelapse session if external camera is enabled
+                if printer.external_camera_enabled and printer.external_camera_url:
+                    from backend.app.services.layer_timelapse import start_session
+
+                    start_session(
+                        printer_id,
+                        archive.id,
+                        printer.external_camera_url,
+                        printer.external_camera_type or "mjpeg",
+                    )
+                    logger.info(f"Started layer timelapse for printer {printer_id}, archive {archive.id}")
 
                 # Record starting energy from smart plug if available
                 try:
@@ -1365,35 +1389,52 @@ async def on_print_complete(printer_id: int, data: dict):
                             archive_dir = app_settings.base_dir / Path(archive.file_path).parent
                             photo_filename = None
 
-                            # Check if camera stream is active - use buffered frame to avoid freeze
-                            # Check both RTSP streams (_active_streams) and chamber image streams (_active_chamber_streams)
-                            active_for_printer = [k for k in _active_streams if k.startswith(f"{printer_id}-")]
-                            active_chamber_for_printer = [
-                                k for k in _active_chamber_streams if k.startswith(f"{printer_id}-")
-                            ]
-                            buffered_frame = get_buffered_frame(printer_id)
+                            # Check for external camera first
+                            if printer.external_camera_enabled and printer.external_camera_url:
+                                logger.info("[PHOTO-BG] Using external camera")
+                                from backend.app.services.external_camera import capture_frame
 
-                            if (active_for_printer or active_chamber_for_printer) and buffered_frame:
-                                # Use frame from active stream
-                                logger.info("[PHOTO-BG] Using buffered frame from active stream")
-                                photos_dir = archive_dir / "photos"
-                                photos_dir.mkdir(parents=True, exist_ok=True)
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                photo_filename = f"finish_{timestamp}_{uuid.uuid4().hex[:8]}.jpg"
-                                photo_path = photos_dir / photo_filename
-                                await asyncio.to_thread(photo_path.write_bytes, buffered_frame)
-                                logger.info(f"[PHOTO-BG] Saved buffered frame: {photo_filename}")
-                            else:
-                                # No active stream - capture new frame
-                                from backend.app.services.camera import capture_finish_photo
-
-                                photo_filename = await capture_finish_photo(
-                                    printer_id=printer_id,
-                                    ip_address=printer.ip_address,
-                                    access_code=printer.access_code,
-                                    model=printer.model,
-                                    archive_dir=archive_dir,
+                                frame_data = await capture_frame(
+                                    printer.external_camera_url, printer.external_camera_type or "mjpeg"
                                 )
+                                if frame_data:
+                                    photos_dir = archive_dir / "photos"
+                                    photos_dir.mkdir(parents=True, exist_ok=True)
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    photo_filename = f"finish_{timestamp}_{uuid.uuid4().hex[:8]}.jpg"
+                                    photo_path = photos_dir / photo_filename
+                                    await asyncio.to_thread(photo_path.write_bytes, frame_data)
+                                    logger.info(f"[PHOTO-BG] Saved external camera frame: {photo_filename}")
+                            else:
+                                # Check if camera stream is active - use buffered frame to avoid freeze
+                                # Check both RTSP streams (_active_streams) and chamber image streams (_active_chamber_streams)
+                                active_for_printer = [k for k in _active_streams if k.startswith(f"{printer_id}-")]
+                                active_chamber_for_printer = [
+                                    k for k in _active_chamber_streams if k.startswith(f"{printer_id}-")
+                                ]
+                                buffered_frame = get_buffered_frame(printer_id)
+
+                                if (active_for_printer or active_chamber_for_printer) and buffered_frame:
+                                    # Use frame from active stream
+                                    logger.info("[PHOTO-BG] Using buffered frame from active stream")
+                                    photos_dir = archive_dir / "photos"
+                                    photos_dir.mkdir(parents=True, exist_ok=True)
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    photo_filename = f"finish_{timestamp}_{uuid.uuid4().hex[:8]}.jpg"
+                                    photo_path = photos_dir / photo_filename
+                                    await asyncio.to_thread(photo_path.write_bytes, buffered_frame)
+                                    logger.info(f"[PHOTO-BG] Saved buffered frame: {photo_filename}")
+                                else:
+                                    # No active stream - capture new frame
+                                    from backend.app.services.camera import capture_finish_photo
+
+                                    photo_filename = await capture_finish_photo(
+                                        printer_id=printer_id,
+                                        ip_address=printer.ip_address,
+                                        access_code=printer.access_code,
+                                        model=printer.model,
+                                        archive_dir=archive_dir,
+                                    )
 
                             if photo_filename:
                                 photos = archive.photos or []
@@ -1529,6 +1570,43 @@ async def on_print_complete(printer_id: int, data: dict):
             await _background_notifications(None)
 
     asyncio.create_task(_photo_then_notify())
+
+    # Stitch external camera layer timelapse if session was active
+    print_status = data.get("status", "completed")
+
+    async def _background_layer_timelapse():
+        """Stitch layer timelapse and attach to archive."""
+        from backend.app.services.layer_timelapse import cancel_session, on_print_complete as tl_complete
+
+        try:
+            if print_status == "completed":
+                logger.info(f"[LAYER-TL] Stitching layer timelapse for printer {printer_id}")
+                timelapse_path = await tl_complete(printer_id)
+                if timelapse_path and archive_id:
+                    logger.info(f"[LAYER-TL] Attaching timelapse {timelapse_path} to archive {archive_id}")
+                    async with async_session() as db:
+                        service = ArchiveService(db)
+                        timelapse_data = await asyncio.to_thread(timelapse_path.read_bytes)
+                        await service.attach_timelapse(archive_id, timelapse_data, "layer_timelapse.mp4")
+                        # Clean up the temp file
+                        await asyncio.to_thread(timelapse_path.unlink, missing_ok=True)
+                        logger.info("[LAYER-TL] Layer timelapse attached successfully")
+                elif timelapse_path:
+                    # Timelapse created but no archive - just clean up
+                    await asyncio.to_thread(timelapse_path.unlink, missing_ok=True)
+            else:
+                # Print failed or cancelled - cancel timelapse session
+                cancel_session(printer_id)
+                logger.info(f"[LAYER-TL] Cancelled layer timelapse for printer {printer_id} (status: {print_status})")
+        except Exception as e:
+            logger.warning(f"[LAYER-TL] Failed: {e}")
+            # Try to cancel session on error
+            try:
+                cancel_session(printer_id)
+            except Exception:
+                pass
+
+    asyncio.create_task(_background_layer_timelapse())
     log_timing("All background tasks scheduled")
 
     # Auto-scan for timelapse if recording was active during the print
@@ -1927,6 +2005,15 @@ async def lifespan(app: FastAPI):
     printer_manager.set_print_start_callback(on_print_start)
     printer_manager.set_print_complete_callback(on_print_complete)
     printer_manager.set_ams_change_callback(on_ams_change)
+
+    # Layer change callback for external camera timelapse
+    async def on_layer_change(printer_id: int, layer_num: int):
+        """Capture timelapse frame on layer change."""
+        from backend.app.services.layer_timelapse import on_layer_change as tl_layer_change
+
+        await tl_layer_change(printer_id, layer_num)
+
+    printer_manager.set_layer_change_callback(on_layer_change)
 
     # Initialize MQTT relay from settings
     async with async_session() as db:

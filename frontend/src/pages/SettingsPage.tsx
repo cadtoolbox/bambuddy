@@ -95,6 +95,10 @@ export function SettingsPage() {
   const [haTestResult, setHaTestResult] = useState<{ success: boolean; message: string | null; error: string | null } | null>(null);
   const [haTestLoading, setHaTestLoading] = useState(false);
 
+  // External camera test state
+  const [extCameraTestResults, setExtCameraTestResults] = useState<Record<number, { success: boolean; error?: string; resolution?: string } | null>>({});
+  const [extCameraTestLoading, setExtCameraTestLoading] = useState<Record<number, boolean>>({});
+
   const handleDefaultViewChange = (path: string) => {
     setDefaultViewState(path);
     setDefaultView(path);
@@ -366,6 +370,18 @@ export function SettingsPage() {
     },
   });
 
+  const updatePrinterMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<{ external_camera_url: string | null; external_camera_type: string | null; external_camera_enabled: boolean }> }) =>
+      api.updatePrinter(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['printers'] });
+      showToast('Camera settings saved', 'success');
+    },
+    onError: (error: Error) => {
+      showToast(`Failed to update printer: ${error.message}`, 'error');
+    },
+  });
+
   // Debounced auto-save when localSettings change
   useEffect(() => {
     // Skip if initial load or no settings
@@ -488,6 +504,38 @@ export function SettingsPage() {
   const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setLocalSettings(prev => prev ? { ...prev, [key]: value } : null);
   }, []);
+
+  const handleTestExternalCamera = async (printerId: number, url: string, cameraType: string) => {
+    if (!url) {
+      showToast('Please enter a camera URL', 'error');
+      return;
+    }
+    setExtCameraTestLoading(prev => ({ ...prev, [printerId]: true }));
+    setExtCameraTestResults(prev => ({ ...prev, [printerId]: null }));
+    try {
+      const result = await api.testExternalCamera(printerId, url, cameraType);
+      setExtCameraTestResults(prev => ({ ...prev, [printerId]: result }));
+      if (result.success) {
+        showToast(`Camera connected${result.resolution ? ` (${result.resolution})` : ''}`, 'success');
+      } else {
+        showToast(result.error || 'Connection failed', 'error');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Test failed';
+      setExtCameraTestResults(prev => ({ ...prev, [printerId]: { success: false, error: message } }));
+      showToast(message, 'error');
+    } finally {
+      setExtCameraTestLoading(prev => ({ ...prev, [printerId]: false }));
+    }
+  };
+
+  const handleUpdatePrinterCamera = (printerId: number, updates: { url?: string; type?: string; enabled?: boolean }) => {
+    const data: Partial<{ external_camera_url: string | null; external_camera_type: string | null; external_camera_enabled: boolean }> = {};
+    if (updates.url !== undefined) data.external_camera_url = updates.url || null;
+    if (updates.type !== undefined) data.external_camera_type = updates.type || null;
+    if (updates.enabled !== undefined) data.external_camera_enabled = updates.enabled;
+    updatePrinterMutation.mutate({ id: printerId, data });
+  };
 
   if (isLoading || !localSettings) {
     return (
@@ -951,6 +999,87 @@ export function SettingsPage() {
                     ? 'Camera opens in a resizable overlay on the main screen'
                     : 'Camera opens in a separate browser window'}
                 </p>
+              </div>
+
+              {/* External Cameras Section */}
+              <div className="border-t border-bambu-dark-tertiary pt-4 mt-4">
+                <h3 className="text-sm font-medium text-white mb-2">External Cameras</h3>
+                <p className="text-xs text-bambu-gray mb-3">
+                  Configure network cameras to replace the built-in printer camera. Supports MJPEG streams, RTSP, and HTTP snapshots. When enabled, the external camera is used for live view and finish photos.
+                </p>
+
+                {printers && printers.length > 0 ? (
+                  <div className="space-y-3">
+                    {printers.map(printer => (
+                      <div key={printer.id} className="p-3 bg-bambu-dark rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white font-medium text-sm">{printer.name}</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={printer.external_camera_enabled}
+                              onChange={(e) => handleUpdatePrinterCamera(printer.id, { enabled: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-bambu-green"></div>
+                          </label>
+                        </div>
+
+                        {printer.external_camera_enabled && (
+                          <div className="space-y-2 mt-2">
+                            <input
+                              type="text"
+                              placeholder="Camera URL (rtsp://... or http://...)"
+                              value={printer.external_camera_url || ''}
+                              onChange={(e) => handleUpdatePrinterCamera(printer.id, { url: e.target.value })}
+                              className="w-full px-3 py-2 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded text-white text-sm focus:border-bambu-green focus:outline-none"
+                            />
+                            <div className="flex gap-2">
+                              <select
+                                value={printer.external_camera_type || 'mjpeg'}
+                                onChange={(e) => handleUpdatePrinterCamera(printer.id, { type: e.target.value })}
+                                className="flex-1 px-3 py-2 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded text-white text-sm focus:border-bambu-green focus:outline-none"
+                              >
+                                <option value="mjpeg">MJPEG Stream</option>
+                                <option value="rtsp">RTSP Stream</option>
+                                <option value="snapshot">HTTP Snapshot</option>
+                              </select>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleTestExternalCamera(printer.id, printer.external_camera_url || '', printer.external_camera_type || 'mjpeg')}
+                                disabled={extCameraTestLoading[printer.id] || !printer.external_camera_url}
+                              >
+                                {extCameraTestLoading[printer.id] ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  'Test'
+                                )}
+                              </Button>
+                            </div>
+                            {extCameraTestResults[printer.id] && (
+                              <div className={`text-xs flex items-center gap-1 ${extCameraTestResults[printer.id]?.success ? 'text-green-500' : 'text-red-500'}`}>
+                                {extCameraTestResults[printer.id]?.success ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3" />
+                                    Connected{extCameraTestResults[printer.id]?.resolution && ` (${extCameraTestResults[printer.id]?.resolution})`}
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3 h-3" />
+                                    {extCameraTestResults[printer.id]?.error || 'Connection failed'}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-bambu-gray italic">No printers configured</p>
+                )}
               </div>
             </CardContent>
           </Card>

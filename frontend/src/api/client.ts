@@ -65,6 +65,9 @@ export interface Printer {
   nozzle_count: number;  // 1 or 2, auto-detected from MQTT
   is_active: boolean;
   auto_archive: boolean;
+  external_camera_url: string | null;
+  external_camera_type: string | null;  // "mjpeg", "rtsp", "snapshot"
+  external_camera_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -209,6 +212,9 @@ export interface PrinterCreate {
   model?: string;
   location?: string;
   auto_archive?: boolean;
+  external_camera_url?: string | null;
+  external_camera_type?: string | null;
+  external_camera_enabled?: boolean;
 }
 
 // Archive types
@@ -1548,6 +1554,11 @@ export const api = {
     request<{ connected: boolean }>(`/printers/${id}/disconnect`, {
       method: 'POST',
     }),
+  testExternalCamera: (printerId: number, url: string, cameraType: string) =>
+    request<{ success: boolean; error?: string; resolution?: string }>(
+      `/printers/${printerId}/camera/external/test?url=${encodeURIComponent(url)}&camera_type=${encodeURIComponent(cameraType)}`,
+      { method: 'POST' }
+    ),
 
   // Print Control
   stopPrint: (printerId: number) =>

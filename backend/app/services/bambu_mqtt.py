@@ -253,6 +253,7 @@ class BambuMQTTClient:
         on_print_start: Callable[[dict], None] | None = None,
         on_print_complete: Callable[[dict], None] | None = None,
         on_ams_change: Callable[[list], None] | None = None,
+        on_layer_change: Callable[[int], None] | None = None,
     ):
         self.ip_address = ip_address
         self.serial_number = serial_number
@@ -261,6 +262,7 @@ class BambuMQTTClient:
         self.on_print_start = on_print_start
         self.on_print_complete = on_print_complete
         self.on_ams_change = on_ams_change
+        self.on_layer_change = on_layer_change
 
         self.state = PrinterState()
         self._client: mqtt.Client | None = None
@@ -1030,7 +1032,12 @@ class BambuMQTTClient:
                 )
             self.state.mc_print_sub_stage = new_sub_stage
         if "layer_num" in data:
-            self.state.layer_num = int(data["layer_num"])
+            new_layer = int(data["layer_num"])
+            old_layer = self.state.layer_num
+            self.state.layer_num = new_layer
+            # Trigger layer change callback if layer increased
+            if new_layer > old_layer and self.on_layer_change:
+                self.on_layer_change(new_layer)
         if "total_layer_num" in data:
             self.state.total_layers = int(data["total_layer_num"])
 
@@ -1736,6 +1743,8 @@ class BambuMQTTClient:
         if is_new_print or is_file_change:
             # Clear any old HMS errors when a new print starts
             self.state.hms_errors = []
+            # Reset layer tracking for new print (needed for layer-based timelapse)
+            self.state.layer_num = 0
             # Reset completion tracking for new print
             self._was_running = True
             self._completion_triggered = False

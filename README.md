@@ -57,6 +57,7 @@
 ### 📊 Monitoring & Control
 - Real-time printer status via WebSocket
 - Live camera streaming (MJPEG) & snapshots with multi-viewer support
+- External network camera support (MJPEG, RTSP, HTTP snapshot) with layer-based timelapse
 - Fan status monitoring (part cooling, auxiliary, chamber)
 - Printer control (stop, pause, resume, chamber light)
 - Resizable printer cards (S/M/L/XL)

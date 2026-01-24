@@ -39,6 +39,9 @@ _last_frame_times: dict[int, float] = {}
 # Track stream start times for each printer
 _stream_start_times: dict[int, float] = {}
 
+# Track active external camera streams by printer ID
+_active_external_streams: set[int] = set()
+
 
 def get_buffered_frame(printer_id: int) -> bytes | None:
     """Get the last buffered frame for a printer from an active stream.
@@ -350,7 +353,8 @@ async def camera_stream(
     This endpoint returns a multipart MJPEG stream that can be used directly
     in an <img> tag or video player.
 
-    Uses the appropriate protocol based on printer model:
+    Uses external camera if configured, otherwise uses built-in camera:
+    - External: MJPEG, RTSP, or HTTP snapshot
     - A1/P1: Chamber image protocol (port 6000)
     - X1/H2/P2: RTSP via ffmpeg (port 322)
 
@@ -361,6 +365,50 @@ async def camera_stream(
     import uuid
 
     printer = await get_printer_or_404(printer_id, db)
+
+    # Check for external camera first
+    if printer.external_camera_enabled and printer.external_camera_url:
+        import time
+
+        from backend.app.services.external_camera import generate_mjpeg_stream
+
+        # Limit external camera FPS to reduce browser load
+        fps = min(max(fps, 1), 15)
+        logger.info(f"Using external camera ({printer.external_camera_type}) for printer {printer_id} at {fps} fps")
+
+        # Track stream start
+        _stream_start_times[printer_id] = time.time()
+        _active_external_streams.add(printer_id)
+
+        async def external_stream_wrapper():
+            """Wrap external stream to track start/stop and update frame times."""
+            frame_interval = 1.0 / fps
+            last_yield_time = 0.0
+            try:
+                async for frame in generate_mjpeg_stream(
+                    printer.external_camera_url, printer.external_camera_type, fps
+                ):
+                    # Rate limit to prevent overwhelming browser
+                    current_time = time.time()
+                    elapsed = current_time - last_yield_time
+                    if elapsed < frame_interval:
+                        await asyncio.sleep(frame_interval - elapsed)
+                    last_yield_time = time.time()
+                    _last_frame_times[printer_id] = last_yield_time
+                    yield frame
+            finally:
+                _active_external_streams.discard(printer_id)
+                logger.info(f"External camera stream ended for printer {printer_id}")
+
+        return StreamingResponse(
+            external_stream_wrapper(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 
     # Validate FPS - A1/P1 models max out at ~5 FPS
     if is_chamber_image_model(printer.model):
@@ -554,13 +602,18 @@ async def camera_status(printer_id: int):
     # Check if there's an active stream for this printer
     has_active_stream = False
 
+    # Check external camera streams
+    if printer_id in _active_external_streams:
+        has_active_stream = True
+
     # Check ffmpeg/RTSP streams
-    for stream_id in _active_streams:
-        if stream_id.startswith(f"{printer_id}-"):
-            process = _active_streams[stream_id]
-            if process.returncode is None:
-                has_active_stream = True
-                break
+    if not has_active_stream:
+        for stream_id in _active_streams:
+            if stream_id.startswith(f"{printer_id}-"):
+                process = _active_streams[stream_id]
+                if process.returncode is None:
+                    has_active_stream = True
+                    break
 
     # Check chamber image streams
     if not has_active_stream:
@@ -597,3 +650,28 @@ async def camera_status(printer_id: int):
             and (seconds_since_frame is None or seconds_since_frame > 10)
         ),
     }
+
+
+@router.post("/{printer_id}/camera/external/test")
+async def test_external_camera(
+    printer_id: int,
+    url: str,
+    camera_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Test external camera connection.
+
+    Args:
+        printer_id: Printer ID (for authorization)
+        url: Camera URL to test
+        camera_type: Camera type ("mjpeg", "rtsp", "snapshot")
+
+    Returns:
+        Dict with {success: bool, error?: str, resolution?: str}
+    """
+    # Verify printer exists (for authorization)
+    await get_printer_or_404(printer_id, db)
+
+    from backend.app.services.external_camera import test_connection
+
+    return await test_connection(url, camera_type)

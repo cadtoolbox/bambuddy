@@ -24,6 +24,10 @@ class Printer(Base):
     last_runtime_update: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )  # Last time runtime was updated
+    # External camera configuration
+    external_camera_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    external_camera_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # mjpeg, rtsp, snapshot
+    external_camera_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

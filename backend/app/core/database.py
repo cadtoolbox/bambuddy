@@ -675,6 +675,20 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add external camera columns to printers
+    try:
+        await conn.execute(text("ALTER TABLE printers ADD COLUMN external_camera_url VARCHAR(500)"))
+    except Exception:
+        pass
+    try:
+        await conn.execute(text("ALTER TABLE printers ADD COLUMN external_camera_type VARCHAR(20)"))
+    except Exception:
+        pass
+    try:
+        await conn.execute(text("ALTER TABLE printers ADD COLUMN external_camera_enabled BOOLEAN DEFAULT 0"))
+    except Exception:
+        pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

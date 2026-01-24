@@ -5,6 +5,12 @@ All notable changes to Bambuddy will be documented in this file.
 ## [0.1.6] - 2026-01-24
 
 ### New Features
+- **External Network Camera Support** - Add external cameras (MJPEG, RTSP, HTTP snapshot) to replace built-in printer cameras (Issue #143):
+  - Configure per-printer external camera URL and type in Settings → Camera
+  - Live streaming uses external camera when enabled
+  - Finish photo capture uses external camera
+  - Layer-based timelapse: captures frame on each layer change, stitches to MP4 on print completion
+  - Test connection button to verify camera accessibility
 - **Recalculate Costs Button** - New button on Dashboard to recalculate all archive costs using current filament prices (Issue #120)
 - **Create Folder from ZIP** - New option in File Manager upload to automatically create a folder named after the ZIP file (Issue #121)
 - **Multi-File Selection in Printer Files** - Printer card file browser now supports multiple file selection (Issue #144):

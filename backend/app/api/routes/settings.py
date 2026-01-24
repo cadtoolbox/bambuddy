@@ -404,6 +404,9 @@ async def export_backup(
                 "auto_archive": printer.auto_archive,
                 "print_hours_offset": printer.print_hours_offset,
                 "runtime_seconds": printer.runtime_seconds,
+                "external_camera_url": printer.external_camera_url,
+                "external_camera_type": printer.external_camera_type,
+                "external_camera_enabled": printer.external_camera_enabled,
             }
             if include_access_codes:
                 printer_data["access_code"] = printer.access_code
@@ -984,6 +987,9 @@ async def import_backup(
                     auto_archive=printer_data.get("auto_archive", True),
                     print_hours_offset=printer_data.get("print_hours_offset", 0.0),
                     runtime_seconds=printer_data.get("runtime_seconds", 0),
+                    external_camera_url=printer_data.get("external_camera_url"),
+                    external_camera_type=printer_data.get("external_camera_type"),
+                    external_camera_enabled=printer_data.get("external_camera_enabled", False),
                 )
                 db.add(printer)
                 restored["printers"] += 1
