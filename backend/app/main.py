@@ -112,6 +112,9 @@ _expected_prints: dict[tuple[int, str], int] = {}
 # Track starting energy for prints: {archive_id: starting_kwh}
 _print_energy_start: dict[int, float] = {}
 
+# Track reprints to add costs on completion: {archive_id}
+_reprint_archives: set[int] = set()
+
 
 async def _get_plug_energy(plug, db) -> dict | None:
     """Get energy from plug regardless of type (Tasmota or Home Assistant).
@@ -525,6 +528,10 @@ async def on_print_start(printer_id: int, data: dict):
                 _active_prints[(printer_id, archive.filename)] = archive.id
                 if subtask_name:
                     _active_prints[(printer_id, f"{subtask_name}.3mf")] = archive.id
+
+                # Mark as reprint so we add cost on completion
+                _reprint_archives.add(archive.id)
+                logger.info(f"Marked archive {archive.id} as reprint for cost addition on completion")
 
                 # Set up energy tracking
                 try:
@@ -1234,6 +1241,15 @@ async def on_print_complete(printer_id: int, data: dict):
                 failure_reason=failure_reason,
             )
             logger.info(f"[ARCHIVE] Archive {archive_id} status updated to {status}, failure_reason={failure_reason}")
+
+            # Add cost for reprints (first prints have cost set in archive_print())
+            if status == "completed" and archive_id in _reprint_archives:
+                _reprint_archives.discard(archive_id)
+                try:
+                    await service.add_reprint_cost(archive_id)
+                    logger.info(f"[ARCHIVE] Added reprint cost for archive {archive_id}")
+                except Exception as e:
+                    logger.warning(f"[ARCHIVE] Failed to add reprint cost for archive {archive_id}: {e}")
 
             await ws_manager.send_archive_updated(
                 {

@@ -16,6 +16,7 @@ import {
   Loader2,
   Eye,
   RotateCcw,
+  Calculator,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useToast } from '../contexts/ToastContext';
@@ -508,6 +509,7 @@ export function StatsPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [dashboardKey, setDashboardKey] = useState(0);
   const [hiddenCount, setHiddenCount] = useState(0);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Read hidden count from localStorage
   useEffect(() => {
@@ -533,7 +535,7 @@ export function StatsPage() {
     };
   }, [dashboardKey]);
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, refetch: refetchStats } = useQuery({
     queryKey: ['archiveStats'],
     queryFn: api.getArchiveStats,
   });
@@ -569,6 +571,19 @@ export function StatsPage() {
       showToast('Export failed', 'error');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleRecalculateCosts = async () => {
+    setIsRecalculating(true);
+    try {
+      const result = await api.recalculateCosts();
+      await refetchStats();
+      showToast(`Recalculated costs for ${result.updated} archives`);
+    } catch {
+      showToast('Failed to recalculate costs', 'error');
+    } finally {
+      setIsRecalculating(false);
     }
   };
 
@@ -671,6 +686,20 @@ export function StatsPage() {
           >
             <RotateCcw className="w-4 h-4" />
             Reset Layout
+          </Button>
+          {/* Recalculate Costs */}
+          <Button
+            variant="secondary"
+            onClick={handleRecalculateCosts}
+            disabled={isRecalculating}
+            title="Recalculate all archive costs using current filament prices"
+          >
+            {isRecalculating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Calculator className="w-4 h-4" />
+            )}
+            Recalculate Costs
           </Button>
           {/* Export dropdown */}
           <div className="relative">

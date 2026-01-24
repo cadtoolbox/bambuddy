@@ -919,6 +919,43 @@ class ArchiveService:
         await self.db.commit()
         return True
 
+    async def add_reprint_cost(self, archive_id: int) -> bool:
+        """Add cost for a reprint to the existing archive cost."""
+        archive = await self.get_archive(archive_id)
+        if not archive:
+            return False
+
+        if not archive.filament_used_grams or not archive.filament_type:
+            return False
+
+        # Calculate cost based on filament type or default
+        from backend.app.api.routes.settings import get_setting
+
+        primary_type = archive.filament_type.split(",")[0].strip()
+
+        # Look up filament cost_per_kg from database
+        filament_result = await self.db.execute(select(Filament).where(Filament.type == primary_type).limit(1))
+        filament = filament_result.scalar_one_or_none()
+
+        if filament:
+            cost_per_kg = filament.cost_per_kg
+        else:
+            # Use default filament cost from settings
+            default_cost_setting = await get_setting(self.db, "default_filament_cost")
+            cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
+
+        additional_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
+
+        # Add to existing cost (or set if None)
+        if archive.cost is None:
+            archive.cost = additional_cost
+        else:
+            archive.cost = round(archive.cost + additional_cost, 2)
+
+        await self.db.commit()
+        logger.info(f"Added reprint cost {additional_cost} to archive {archive_id}, new total: {archive.cost}")
+        return True
+
     async def list_archives(
         self,
         printer_id: int | None = None,

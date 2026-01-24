@@ -196,4 +196,14 @@ describe('StatsPage', () => {
       });
     });
   });
+
+  describe('recalculate costs', () => {
+    it('has recalculate costs button', async () => {
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Recalculate Costs')).toBeInTheDocument();
+      });
+    });
+  });
 });

@@ -1680,6 +1680,8 @@ export const api = {
   deleteArchive: (id: number) =>
     request<void>(`/archives/${id}`, { method: 'DELETE' }),
   getArchiveStats: () => request<ArchiveStats>('/archives/stats'),
+  recalculateCosts: () =>
+    request<{ message: string; updated: number }>('/archives/recalculate-costs', { method: 'POST' }),
   getFailureAnalysis: (options?: { days?: number; printerId?: number; projectId?: number }) => {
     const params = new URLSearchParams();
     if (options?.days) params.set('days', String(options.days));

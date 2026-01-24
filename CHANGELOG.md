@@ -2,6 +2,13 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
+## [0.1.6] - 2026-01-24
+
+### New Features
+- **Recalculate Costs Button** - New button on Dashboard to recalculate all archive costs using current filament prices (Issue #120)
+### Fixes
+- **Reprint Cost Tracking** - Reprinting an archive now adds the cost to the existing total, so statistics accurately reflect total filament expenditure across all prints
+
 ## [0.1.6b11] - 2026-01-22
 
 ### New Features
