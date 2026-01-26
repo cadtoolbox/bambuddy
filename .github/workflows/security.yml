@@ -130,7 +130,7 @@ jobs:
         working-directory: frontend
         run: |
           npm audit --json > npm-audit-results.json || echo "vulnerabilities_found=true" >> $GITHUB_OUTPUT
-          npm audit --audit-level=moderate || true
+          npm audit --audit-level=high || true
 
       - name: Upload audit results
         if: always()

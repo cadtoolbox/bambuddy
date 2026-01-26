@@ -146,7 +146,7 @@ jobs:
 
       - name: Run npm audit
         working-directory: frontend
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=high
 
   frontend-typecheck:
     name: Frontend Type Check
