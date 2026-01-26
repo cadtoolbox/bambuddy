@@ -231,7 +231,7 @@ export function FilamentTrends({ archives, currency = '$' }: FilamentTrendsProps
                   borderRadius: '8px',
                 }}
                 labelStyle={{ color: '#fff' }}
-                formatter={(value: number) => [`${value.toFixed(0)}g`, 'Filament']}
+                formatter={(value) => [`${Number(value ?? 0).toFixed(0)}g`, 'Filament']}
               />
               <Area
                 type="monotone"
@@ -278,7 +278,7 @@ export function FilamentTrends({ archives, currency = '$' }: FilamentTrendsProps
                       border: '1px solid #3d3d3d',
                       borderRadius: '8px',
                     }}
-                    formatter={(value: number) => [`${value}g`, 'Usage']}
+                    formatter={(value) => [`${value ?? 0}g`, 'Usage']}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -320,8 +320,8 @@ export function FilamentTrends({ archives, currency = '$' }: FilamentTrendsProps
                   border: '1px solid #3d3d3d',
                   borderRadius: '8px',
                 }}
-                formatter={(value: number, name: string) => [
-                  name === 'filament' ? `${value}g` : name === 'cost' ? `${currency}${value.toFixed(2)}` : value,
+                formatter={(value, name) => [
+                  name === 'filament' ? `${value ?? 0}g` : name === 'cost' ? `${currency}${Number(value ?? 0).toFixed(2)}` : value ?? 0,
                   name === 'filament' ? 'Filament' : name === 'cost' ? 'Cost' : 'Prints'
                 ]}
               />
