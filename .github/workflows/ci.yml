@@ -18,6 +18,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Minimum permissions for all jobs
+permissions:
+  contents: read
+
 jobs:
   # ============================================================================
   # Backend Checks

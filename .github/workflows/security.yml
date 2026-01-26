@@ -11,10 +11,17 @@ env:
   PYTHON_VERSION: '3.11'
   NODE_VERSION: '20'
 
+# Default permissions for all jobs
+permissions:
+  contents: read
+
 jobs:
   backend-audit:
     name: Backend Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -111,6 +118,9 @@ jobs:
   frontend-audit:
     name: Frontend Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
