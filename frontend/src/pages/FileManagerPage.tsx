@@ -704,7 +704,7 @@ function FolderTreeItem({ folder, selectedFolderId, onSelect, onDelete, onLink, 
   return (
     <div>
       <div
-        className={`group flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+        className={`group flex items-start gap-1 px-2 py-1.5 rounded cursor-pointer transition-colors ${
           selectedFolderId === folder.id
             ? 'bg-bambu-green/20 text-bambu-green'
             : 'hover:bg-bambu-dark text-white'
@@ -718,15 +718,15 @@ function FolderTreeItem({ folder, selectedFolderId, onSelect, onDelete, onLink, 
               e.stopPropagation();
               setExpanded(!expanded);
             }}
-            className="p-0.5 hover:bg-bambu-dark-tertiary rounded"
+            className="p-0.5 hover:bg-bambu-dark-tertiary rounded flex-shrink-0"
           >
             <ChevronRight className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
           </button>
         ) : (
-          <div className="w-4.5" />
+          <div className="w-4.5 flex-shrink-0" />
         )}
         <FolderOpen className="w-4 h-4 text-bambu-green flex-shrink-0" />
-        <span className="text-sm truncate flex-1">{folder.name}</span>
+        <span className="text-sm flex-1 break-words" title={folder.name}>{folder.name}</span>
         {/* Link indicator - clickable to change link */}
         {isLinked && (
           <button
