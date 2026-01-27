@@ -734,6 +734,17 @@ async def on_print_start(printer_id: int, data: dict):
                         printer.plate_detection_roi_h,
                     )
 
+                # Auto-turn on chamber light if it's off for better detection
+                light_was_off = False
+                client = printer_manager.get_client(printer_id)
+                if client and client.state:
+                    light_was_off = not client.state.chamber_light
+                    if light_was_off:
+                        logger.info(f"[PLATE CHECK] Turning on chamber light for printer {printer_id}")
+                        client.set_chamber_light(True)
+                        # Wait for light to physically turn on and camera to adjust exposure
+                        await asyncio.sleep(2.5)
+
                 logger.info(f"[PLATE CHECK] Running plate detection for printer {printer_id}")
                 plate_result = await check_plate_empty(
                     printer_id=printer_id,
@@ -746,6 +757,11 @@ async def on_print_start(printer_id: int, data: dict):
                     use_external=printer.external_camera_enabled,
                     roi=roi,
                 )
+
+                # Restore chamber light to original state
+                if light_was_off and client:
+                    logger.info(f"[PLATE CHECK] Restoring chamber light to off for printer {printer_id}")
+                    client.set_chamber_light(False)
 
                 if not plate_result.needs_calibration and not plate_result.is_empty:
                     # Objects detected - pause the print!

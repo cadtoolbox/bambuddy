@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../contexts/ThemeContext';
 import {
@@ -984,6 +984,7 @@ function PrinterCard({
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [editingRoi, setEditingRoi] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [isSavingRoi, setIsSavingRoi] = useState(false);
+  const [plateCheckLightWasOff, setPlateCheckLightWasOff] = useState(false);
 
   const { data: status } = useQuery({
     queryKey: ['printerStatus', printer.id],
@@ -1305,16 +1306,42 @@ function PrinterCard({
   const handleOpenPlateManagement = async () => {
     setIsCheckingPlate(true);
     setPlateCheckResult(null);
+
+    // Auto-turn on light if it's off
+    const lightWasOff = status?.chamber_light === false;
+    setPlateCheckLightWasOff(lightWasOff);
+    if (lightWasOff) {
+      await api.setChamberLight(printer.id, true);
+      // Wait for light to physically turn on and camera to adjust exposure
+      // (MQTT command is async, light takes ~1s to turn on, camera needs time to adjust)
+      await new Promise(resolve => setTimeout(resolve, 2500));
+    }
+
     try {
       const result = await api.checkPlateEmpty(printer.id, { includeDebugImage: true });
       setPlateCheckResult(result);
       fetchPlateReferences();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to check plate', 'error');
+      // Restore light if check failed
+      if (lightWasOff) {
+        await api.setChamberLight(printer.id, false);
+        setPlateCheckLightWasOff(false);
+      }
     } finally {
       setIsCheckingPlate(false);
     }
   };
+
+  // Close plate check modal and restore light state
+  const closePlateCheckModal = useCallback(async () => {
+    setPlateCheckResult(null);
+    // Restore light to original state if we turned it on
+    if (plateCheckLightWasOff) {
+      await api.setChamberLight(printer.id, false);
+      setPlateCheckLightWasOff(false);
+    }
+  }, [plateCheckLightWasOff, printer.id]);
 
   // Calibrate plate detection handler
   const handleCalibratePlate = async (label?: string) => {
@@ -1384,12 +1411,12 @@ function PrinterCard({
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && plateCheckResult) {
-        setPlateCheckResult(null);
+        closePlateCheckModal();
       }
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [plateCheckResult]);
+  }, [plateCheckResult, closePlateCheckModal]);
 
   // Watch ams_status_main to detect when RFID read completes
   // ams_status_main: 0=idle, 2=rfid_identifying
@@ -2766,7 +2793,7 @@ function PrinterCard({
 
       {/* Plate Check Result Modal */}
       {plateCheckResult && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setPlateCheckResult(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => closePlateCheckModal()}>
           <div className="bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-bambu-dark-tertiary">
               <div className="flex items-center gap-2">
@@ -2787,26 +2814,13 @@ function PrinterCard({
                 )}
               </div>
               <button
-                onClick={() => setPlateCheckResult(null)}
+                onClick={() => closePlateCheckModal()}
                 className="p-1 text-bambu-gray hover:text-white rounded transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 space-y-4">
-              {/* Light Warning */}
-              {plateCheckResult.light_warning && (
-                <div className="p-3 rounded-lg bg-yellow-500/20 border border-yellow-500/50">
-                  <p className="font-medium text-yellow-400 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    Chamber light is OFF
-                  </p>
-                  <p className="text-sm text-bambu-gray mt-1">
-                    For reliable detection, please turn ON the chamber light before checking or calibrating.
-                  </p>
-                </div>
-              )}
-
               {plateCheckResult.needs_calibration ? (
                 <>
                   <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/50">
@@ -2814,7 +2828,7 @@ function PrinterCard({
                       Calibration Required
                     </p>
                     <p className="text-sm text-bambu-gray mt-1">
-                      Please ensure the build plate is <strong>completely empty</strong> and chamber light is <strong>ON</strong>, then click Calibrate.
+                      Please ensure the build plate is <strong>completely empty</strong>, then click Calibrate.
                     </p>
                   </div>
                   <div className="text-sm text-bambu-gray space-y-2">
@@ -3013,7 +3027,7 @@ function PrinterCard({
             <div className="flex justify-end gap-2 p-4 border-t border-bambu-dark-tertiary">
               {plateCheckResult.needs_calibration ? (
                 <>
-                  <Button variant="ghost" onClick={() => setPlateCheckResult(null)}>
+                  <Button variant="ghost" onClick={() => closePlateCheckModal()}>
                     Cancel
                   </Button>
                   <Button
@@ -3035,7 +3049,7 @@ function PrinterCard({
                   <Button variant="ghost" onClick={() => handleCalibratePlate()} disabled={isCalibrating}>
                     {isCalibrating ? 'Adding...' : `Add Reference (${plateReferences?.references.length || 0}/${plateReferences?.max_references || 5})`}
                   </Button>
-                  <Button onClick={() => setPlateCheckResult(null)}>
+                  <Button onClick={() => closePlateCheckModal()}>
                     Close
                   </Button>
                 </>
