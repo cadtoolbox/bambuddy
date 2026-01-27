@@ -1,12 +1,16 @@
 """Shared test fixtures for BamBuddy backend tests."""
 
 import asyncio
+import atexit
 import json
 import logging
 import os
+import shutil
 import sys
+import tempfile
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,6 +27,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from backend.app.core.config import settings  # noqa: E402
 
 settings.log_to_file = False
+
+# Use a temp directory for plate calibration to avoid deleting real calibration files
+_test_plate_cal_dir = Path(tempfile.mkdtemp(prefix="bambuddy_test_plate_cal_"))
+settings.plate_calibration_dir = _test_plate_cal_dir
+
+
+# Clean up temp directory when tests finish
+def _cleanup_test_plate_cal_dir():
+    if _test_plate_cal_dir.exists():
+        shutil.rmtree(_test_plate_cal_dir, ignore_errors=True)
+
+
+atexit.register(_cleanup_test_plate_cal_dir)
 
 from backend.app.core.database import Base  # noqa: E402
 
