@@ -3382,21 +3382,6 @@ export interface ZipExtractResponse {
   errors: ZipExtractError[];
 }
 
-// Batch Thumbnail Generation types
-export interface BatchThumbnailResult {
-  file_id: number;
-  filename: string;
-  success: boolean;
-  error: string | null;
-}
-
-export interface BatchThumbnailResponse {
-  processed: number;
-  succeeded: number;
-  failed: number;
-  results: BatchThumbnailResult[];
-}
-
 // Library Queue types
 export interface AddToQueueResult {
   file_id: number;
