@@ -1396,7 +1396,7 @@ export function FileManagerPage() {
 
       {/* Stats bar */}
       {stats && (
-        <div className="flex items-center gap-6 mb-6 p-3 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-6 mb-6 p-3 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
           <div className="flex items-center gap-2 text-sm">
             <File className="w-4 h-4 text-bambu-green" />
             <span className="text-bambu-gray">Files:</span>
@@ -1412,7 +1412,7 @@ export function FileManagerPage() {
             <span className="text-bambu-gray">Size:</span>
             <span className="text-white font-medium">{formatFileSize(stats.total_size_bytes)}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm ml-auto">
+          <div className="flex items-center gap-2 text-sm sm:ml-auto">
             <span className="text-bambu-gray">Free:</span>
             <span className={`font-medium ${isDiskSpaceLow ? 'text-amber-500' : 'text-white'}`}>
               {formatFileSize(stats.disk_free_bytes)}
@@ -1422,11 +1422,40 @@ export function FileManagerPage() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex gap-6 min-h-0">
-        {/* Folder sidebar - resizable */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
+        {/* Mobile folder selector */}
+        <div className="lg:hidden">
+          <select
+            value={selectedFolderId ?? ''}
+            onChange={(e) => setSelectedFolderId(e.target.value ? parseInt(e.target.value, 10) : null)}
+            className="w-full bg-bambu-card border border-bambu-dark-tertiary rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-bambu-green"
+          >
+            <option value="">📁 All Files</option>
+            {folders && (() => {
+              // Flatten folder tree for mobile selector
+              const flattenFolders = (items: LibraryFolderTree[], depth = 0): { id: number; name: string; fileCount: number; depth: number }[] => {
+                const result: { id: number; name: string; fileCount: number; depth: number }[] = [];
+                for (const item of items) {
+                  result.push({ id: item.id, name: item.name, fileCount: item.file_count, depth });
+                  if (item.children.length > 0) {
+                    result.push(...flattenFolders(item.children, depth + 1));
+                  }
+                }
+                return result;
+              };
+              return flattenFolders(folders).map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {'│ '.repeat(folder.depth)}📂 {folder.name} {folder.fileCount > 0 ? `(${folder.fileCount})` : ''}
+                </option>
+              ));
+            })()}
+          </select>
+        </div>
+
+        {/* Folder sidebar - resizable, hidden on mobile */}
         <div
           ref={sidebarRef}
-          className="flex-shrink-0 bg-bambu-card rounded-lg border border-bambu-dark-tertiary overflow-hidden flex flex-col relative"
+          className="hidden lg:flex flex-shrink-0 bg-bambu-card rounded-lg border border-bambu-dark-tertiary overflow-hidden flex-col relative"
           style={{ width: `${sidebarWidth}px` }}
         >
           {/* Resize handle - drag to resize, double-click to reset */}
@@ -1500,12 +1529,12 @@ export function FileManagerPage() {
         </div>
 
         {/* Files area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Search, Filter, Sort toolbar */}
           {files && files.length > 0 && (
-            <div className="flex items-center gap-3 mb-4 p-3 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 p-2 sm:p-3 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
               {/* Search */}
-              <div className="relative flex-1 max-w-xs">
+              <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray" />
                 <input
                   type="text"
@@ -1518,7 +1547,7 @@ export function FileManagerPage() {
 
               {/* Type filter */}
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-bambu-gray" />
+                <Filter className="w-4 h-4 text-bambu-gray hidden sm:block" />
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -1561,7 +1590,7 @@ export function FileManagerPage() {
 
               {/* Results count */}
               {(searchQuery || filterType !== 'all') && (
-                <span className="text-sm text-bambu-gray">
+                <span className="text-sm text-bambu-gray hidden sm:inline">
                   {filteredAndSortedFiles.length} of {files.length} files
                 </span>
               )}
@@ -1570,7 +1599,7 @@ export function FileManagerPage() {
 
           {/* Selection toolbar */}
           {filteredAndSortedFiles.length > 0 && (
-            <div className="flex items-center gap-2 mb-4 p-2 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-bambu-card rounded-lg border border-bambu-dark-tertiary">
               {/* Select all / Deselect all */}
               {selectedFiles.length === filteredAndSortedFiles.length && selectedFiles.length > 0 ? (
                 <Button
@@ -1578,8 +1607,8 @@ export function FileManagerPage() {
                   size="sm"
                   onClick={handleDeselectAll}
                 >
-                  <Square className="w-4 h-4 mr-1" />
-                  Deselect All
+                  <Square className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Deselect All</span>
                 </Button>
               ) : (
                 <Button
@@ -1587,8 +1616,8 @@ export function FileManagerPage() {
                   size="sm"
                   onClick={handleSelectAll}
                 >
-                  <CheckSquare className="w-4 h-4 mr-1" />
-                  Select All
+                  <CheckSquare className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Select All</span>
                 </Button>
               )}
 
@@ -1597,57 +1626,60 @@ export function FileManagerPage() {
                   <span className="text-sm text-bambu-gray ml-2">
                     {selectedFiles.length} selected
                   </span>
-                  <div className="flex-1" />
-                  {selectedSlicedFiles.length === 1 && (
+                  <div className="hidden sm:block flex-1" />
+                  <div className="w-full sm:w-auto flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
+                    {selectedSlicedFiles.length === 1 && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setPrintMultiFile(selectedSlicedFiles[0])}
+                      >
+                        <Play className="w-4 h-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Print</span>
+                      </Button>
+                    )}
+                    {selectedSlicedFiles.length > 0 && (
+                      <Button
+                        variant={selectedSlicedFiles.length === 1 ? 'secondary' : 'primary'}
+                        size="sm"
+                        onClick={() => addToQueueMutation.mutate(selectedSlicedFiles.map(f => f.id))}
+                        disabled={addToQueueMutation.isPending}
+                      >
+                        <Clock className="w-4 h-4 sm:mr-1" />
+                        <span className="hidden sm:inline">{addToQueueMutation.isPending ? 'Adding...' : `Add to Queue${selectedSlicedFiles.length < selectedFiles.length ? ` (${selectedSlicedFiles.length})` : ''}`}</span>
+                      </Button>
+                    )}
                     <Button
-                      variant="primary"
+                      variant="secondary"
                       size="sm"
-                      onClick={() => setPrintMultiFile(selectedSlicedFiles[0])}
+                      onClick={() => setShowMoveModal(true)}
                     >
-                      <Play className="w-4 h-4 mr-1" />
-                      Print
+                      <MoveRight className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Move</span>
                     </Button>
-                  )}
-                  {selectedSlicedFiles.length > 0 && (
                     <Button
-                      variant={selectedSlicedFiles.length === 1 ? 'secondary' : 'primary'}
+                      variant="danger"
                       size="sm"
-                      onClick={() => addToQueueMutation.mutate(selectedSlicedFiles.map(f => f.id))}
-                      disabled={addToQueueMutation.isPending}
+                      onClick={() => {
+                        if (selectedFiles.length === 1) {
+                          setDeleteConfirm({ type: 'file', id: selectedFiles[0] });
+                        } else {
+                          setDeleteConfirm({ type: 'bulk', id: 0, count: selectedFiles.length });
+                        }
+                      }}
                     >
-                      <Clock className="w-4 h-4 mr-1" />
-                      {addToQueueMutation.isPending ? 'Adding...' : `Add to Queue${selectedSlicedFiles.length < selectedFiles.length ? ` (${selectedSlicedFiles.length})` : ''}`}
+                      <Trash2 className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Delete</span>
                     </Button>
-                  )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowMoveModal(true)}
-                  >
-                    <MoveRight className="w-4 h-4 mr-1" />
-                    Move
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => {
-                      if (selectedFiles.length === 1) {
-                        setDeleteConfirm({ type: 'file', id: selectedFiles[0] });
-                      } else {
-                        setDeleteConfirm({ type: 'bulk', id: 0, count: selectedFiles.length });
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleDeselectAll}
-                  >
-                    Clear
-                  </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleDeselectAll}
+                    >
+                      <X className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  </div>
                 </>
               )}
             </div>
