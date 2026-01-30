@@ -100,39 +100,27 @@ async def create_smart_plug(
     if plug.plug_type == "mqtt":
         # Determine effective topics (new fields take priority, fall back to legacy)
         power_topic = plug.mqtt_power_topic or plug.mqtt_topic
-        energy_topic = plug.mqtt_energy_topic or plug.mqtt_topic
-        state_topic = plug.mqtt_state_topic or plug.mqtt_topic
+        energy_topic = plug.mqtt_energy_topic
+        state_topic = plug.mqtt_state_topic
 
-        # Only subscribe if at least one data source is configured
-        if (
-            (power_topic and plug.mqtt_power_path)
-            or (energy_topic and plug.mqtt_energy_path)
-            or (state_topic and plug.mqtt_state_path)
-        ):
+        # Only subscribe if at least one topic is configured
+        if power_topic or energy_topic or state_topic:
             mqtt_relay.smart_plug_service.subscribe(
                 plug_id=plug.id,
-                # Power source
-                power_topic=power_topic if plug.mqtt_power_path else None,
+                # Power source (path is optional)
+                power_topic=power_topic,
                 power_path=plug.mqtt_power_path,
                 power_multiplier=plug.mqtt_power_multiplier or plug.mqtt_multiplier or 1.0,
-                # Energy source
-                energy_topic=energy_topic if plug.mqtt_energy_path else None,
+                # Energy source (path is optional)
+                energy_topic=energy_topic,
                 energy_path=plug.mqtt_energy_path,
                 energy_multiplier=plug.mqtt_energy_multiplier or plug.mqtt_multiplier or 1.0,
-                # State source
-                state_topic=state_topic if plug.mqtt_state_path else None,
+                # State source (path is optional)
+                state_topic=state_topic,
                 state_path=plug.mqtt_state_path,
                 state_on_value=plug.mqtt_state_on_value,
             )
-            topics = [
-                t
-                for t in [
-                    power_topic if plug.mqtt_power_path else None,
-                    energy_topic if plug.mqtt_energy_path else None,
-                    state_topic if plug.mqtt_state_path else None,
-                ]
-                if t
-            ]
+            topics = [t for t in [power_topic, energy_topic, state_topic] if t]
             logger.info(f"Created MQTT plug '{plug.name}' subscribed to {', '.join(set(topics))}")
     elif plug.plug_type == "homeassistant":
         logger.info(f"Created Home Assistant plug '{plug.name}' ({plug.ha_entity_id})")
@@ -412,26 +400,23 @@ async def update_smart_plug(
 
             # Subscribe to new topics
             power_topic = plug.mqtt_power_topic or plug.mqtt_topic
-            energy_topic = plug.mqtt_energy_topic or plug.mqtt_topic
-            state_topic = plug.mqtt_state_topic or plug.mqtt_topic
+            energy_topic = plug.mqtt_energy_topic
+            state_topic = plug.mqtt_state_topic
 
-            if (
-                (power_topic and plug.mqtt_power_path)
-                or (energy_topic and plug.mqtt_energy_path)
-                or (state_topic and plug.mqtt_state_path)
-            ):
+            # Only subscribe if at least one topic is configured
+            if power_topic or energy_topic or state_topic:
                 mqtt_relay.smart_plug_service.subscribe(
                     plug_id=plug.id,
-                    # Power source
-                    power_topic=power_topic if plug.mqtt_power_path else None,
+                    # Power source (path is optional)
+                    power_topic=power_topic,
                     power_path=plug.mqtt_power_path,
                     power_multiplier=plug.mqtt_power_multiplier or plug.mqtt_multiplier or 1.0,
-                    # Energy source
-                    energy_topic=energy_topic if plug.mqtt_energy_path else None,
+                    # Energy source (path is optional)
+                    energy_topic=energy_topic,
                     energy_path=plug.mqtt_energy_path,
                     energy_multiplier=plug.mqtt_energy_multiplier or plug.mqtt_multiplier or 1.0,
-                    # State source
-                    state_topic=state_topic if plug.mqtt_state_path else None,
+                    # State source (path is optional)
+                    state_topic=state_topic,
                     state_path=plug.mqtt_state_path,
                     state_on_value=plug.mqtt_state_on_value,
                 )

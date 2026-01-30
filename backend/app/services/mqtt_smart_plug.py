@@ -235,12 +235,17 @@ class MQTTSmartPlugService:
                 if not config:
                     continue
 
-                # Extract value using path (or use raw payload if no path or not JSON)
+                # Extract value using path (or use raw payload if no path)
                 if is_json and config.path:
                     raw_value = self._extract_json_path(payload, config.path)
                 elif is_json and not config.path:
-                    # JSON but no path - use the whole payload (shouldn't happen normally)
-                    raw_value = payload
+                    # JSON but no path - if it's a simple value use it, otherwise skip
+                    if isinstance(payload, (int, float, str, bool)):
+                        raw_value = payload
+                    else:
+                        # Can't use a dict/list as a value
+                        logger.debug(f"MQTT plug {plug_id}: JSON payload is object/array but no path configured")
+                        continue
                 else:
                     # Raw value (non-JSON)
                     raw_value = payload
@@ -361,31 +366,31 @@ class MQTTSmartPlugService:
             effective_power_mult = power_multiplier if power_multiplier != 1.0 else multiplier
             effective_energy_mult = energy_multiplier if energy_multiplier != 1.0 else multiplier
 
-            # Configure power subscription
-            if effective_power_topic and power_path:
+            # Configure power subscription (path is optional - empty means use raw payload)
+            if effective_power_topic:
                 config = MQTTDataSourceConfig(
                     topic=effective_power_topic,
-                    path=power_path,
+                    path=power_path or "",
                     multiplier=effective_power_mult,
                 )
                 self.plug_configs[plug_id]["power"] = config
                 self._add_subscription(plug_id, effective_power_topic, "power")
 
-            # Configure energy subscription
-            if effective_energy_topic and energy_path:
+            # Configure energy subscription (path is optional - empty means use raw payload)
+            if effective_energy_topic:
                 config = MQTTDataSourceConfig(
                     topic=effective_energy_topic,
-                    path=energy_path,
+                    path=energy_path or "",
                     multiplier=effective_energy_mult,
                 )
                 self.plug_configs[plug_id]["energy"] = config
                 self._add_subscription(plug_id, effective_energy_topic, "energy")
 
-            # Configure state subscription
-            if effective_state_topic and state_path:
+            # Configure state subscription (path is optional - empty means use raw payload)
+            if effective_state_topic:
                 config = MQTTDataSourceConfig(
                     topic=effective_state_topic,
-                    path=state_path,
+                    path=state_path or "",
                     on_value=state_on_value,
                 )
                 self.plug_configs[plug_id]["state"] = config

@@ -296,13 +296,13 @@ export function AddSmartPlugModal({ plug, onClose }: AddSmartPlugModalProps) {
     }
 
     if (plugType === 'mqtt') {
-      // Check that at least one data source is fully configured
-      const hasPower = mqttPowerTopic.trim() && mqttPowerPath.trim();
-      const hasEnergy = mqttEnergyTopic.trim() && mqttEnergyPath.trim();
-      const hasState = mqttStateTopic.trim() && mqttStatePath.trim();
+      // Check that at least one topic is configured (path is optional)
+      const hasPower = mqttPowerTopic.trim();
+      const hasEnergy = mqttEnergyTopic.trim();
+      const hasState = mqttStateTopic.trim();
 
       if (!hasPower && !hasEnergy && !hasState) {
-        setError('At least one data source must be configured: power (topic + path), energy (topic + path), or state (topic + path)');
+        setError('At least one MQTT topic must be configured for power, energy, or state monitoring');
         return;
       }
     }
@@ -971,7 +971,8 @@ export function AddSmartPlugModal({ plug, onClose }: AddSmartPlugModalProps) {
                       </div>
                     </div>
                     <p className="text-xs text-bambu-gray">
-                      Use multiplier 0.001 for mW→W, 1000 for kW→W
+                      JSON path extracts value from JSON payload (e.g., "power_l1"). Leave empty if topic publishes raw numeric values.<br/>
+                      Use multiplier 0.001 for mW→W, 1000 for kW→W.
                     </p>
                   </div>
 
@@ -1011,7 +1012,8 @@ export function AddSmartPlugModal({ plug, onClose }: AddSmartPlugModalProps) {
                       </div>
                     </div>
                     <p className="text-xs text-bambu-gray">
-                      Use multiplier 0.001 for Wh→kWh, 1000 for MWh→kWh
+                      JSON path extracts value from JSON payload. Leave empty for raw values.<br/>
+                      Use multiplier 0.001 for Wh→kWh, 1000 for MWh→kWh.
                     </p>
                   </div>
 
@@ -1051,7 +1053,8 @@ export function AddSmartPlugModal({ plug, onClose }: AddSmartPlugModalProps) {
                       </div>
                     </div>
                     <p className="text-xs text-bambu-gray">
-                      ON value: the exact string that means "ON". Leave empty for auto-detect (ON, true, 1)
+                      JSON path extracts value from JSON payload. Leave empty for raw values.<br/>
+                      ON value: the exact string that means "ON". Leave empty for auto-detect (ON, true, 1).
                     </p>
                   </div>
                 </>

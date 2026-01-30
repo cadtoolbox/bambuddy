@@ -624,13 +624,12 @@ class TestSmartPlugsAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_create_mqtt_plug_missing_paths(self, async_client: AsyncClient):
-        """Verify creating MQTT plug without any JSON paths fails."""
+    async def test_create_mqtt_plug_missing_topic(self, async_client: AsyncClient):
+        """Verify creating MQTT plug without any topic fails."""
         data = {
             "name": "MQTT Plug",
             "plug_type": "mqtt",
-            "mqtt_topic": "test/topic",
-            # Missing both mqtt_power_path and mqtt_state_path
+            # No topic configured at all
             "enabled": True,
         }
 
@@ -781,19 +780,22 @@ class TestSmartPlugsAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_create_mqtt_plug_no_data_source_fails(self, async_client: AsyncClient):
-        """Verify creating MQTT plug without any complete data source fails."""
+    async def test_create_mqtt_plug_topic_only_succeeds(self, async_client: AsyncClient, mock_mqtt_smart_plug_service):
+        """Verify creating MQTT plug with topic only (no path) succeeds for raw values."""
         data = {
-            "name": "Invalid MQTT Plug",
+            "name": "Raw MQTT Plug",
             "plug_type": "mqtt",
-            # Has topic but no path - not a complete data source
+            # Topic only, no path - valid for raw numeric MQTT values
             "mqtt_power_topic": "zigbee/power",
             "enabled": True,
         }
 
         response = await async_client.post("/api/v1/smart-plugs/", json=data)
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 200  # Should succeed
+        result = response.json()
+        assert result["mqtt_power_topic"] == "zigbee/power"
+        assert result["mqtt_power_path"] is None
 
     @pytest.mark.asyncio
     @pytest.mark.integration

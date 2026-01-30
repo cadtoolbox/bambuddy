@@ -71,16 +71,14 @@ class SmartPlugBase(BaseModel):
         if self.plug_type == "mqtt":
             # Determine the effective power topic (new field takes priority, fall back to legacy)
             power_topic = self.mqtt_power_topic or self.mqtt_topic
-            has_power = power_topic and self.mqtt_power_path
-            has_energy = self.mqtt_energy_topic and self.mqtt_energy_path
-            has_state = self.mqtt_state_topic and self.mqtt_state_path
+            # Path is optional - if not set, raw MQTT payload value will be used
+            has_power = bool(power_topic)
+            has_energy = bool(self.mqtt_energy_topic)
+            has_state = bool(self.mqtt_state_topic)
 
-            # At least one data source must be fully configured
+            # At least one data source must be configured (path is optional)
             if not has_power and not has_energy and not has_state:
-                raise ValueError(
-                    "At least one MQTT data source must be configured: "
-                    "power (topic + path), energy (topic + path), or state (topic + path)"
-                )
+                raise ValueError("At least one MQTT topic must be configured for power, energy, or state monitoring")
         return self
 
 
