@@ -797,6 +797,12 @@ function ArchiveCard({
               {archive.object_count} object{archive.object_count > 1 ? 's' : ''}
             </div>
           )}
+          {archive.sliced_for_model && (
+            <div className="flex items-center gap-1.5 text-bambu-gray" title={`Sliced for ${archive.sliced_for_model}`}>
+              <Printer className="w-3 h-3" />
+              {archive.sliced_for_model}
+            </div>
+          )}
           {archive.filament_type && (
             <div className="flex items-center gap-1.5 col-span-2">
               <span className="text-bambu-gray text-xs">{archive.filament_type}</span>
@@ -1612,9 +1618,20 @@ function ArchiveListRow({
               </Link>
             )}
           </div>
-          {archive.filament_type && (
+          {(archive.filament_type || archive.sliced_for_model) && (
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-xs text-bambu-gray">{archive.filament_type}</span>
+              {archive.sliced_for_model && (
+                <span className="text-xs text-bambu-gray flex items-center gap-1" title={`Sliced for ${archive.sliced_for_model}`}>
+                  <Printer className="w-2.5 h-2.5" />
+                  {archive.sliced_for_model}
+                </span>
+              )}
+              {archive.sliced_for_model && archive.filament_type && (
+                <span className="text-bambu-gray/50">·</span>
+              )}
+              {archive.filament_type && (
+                <span className="text-xs text-bambu-gray">{archive.filament_type}</span>
+              )}
               {archive.filament_color && (
                 <div className="flex items-center gap-0.5 flex-wrap">
                   {archive.filament_color.split(',').map((color, i) => (
@@ -2755,7 +2772,7 @@ export function ArchivesPage() {
             <ArchiveCard
               key={archive.id}
               archive={archive}
-              printerName={archive.printer_id ? printerMap.get(archive.printer_id) || 'Unknown' : 'No Printer'}
+              printerName={archive.printer_id ? printerMap.get(archive.printer_id) || 'Unknown' : (archive.sliced_for_model ? `Sliced for ${archive.sliced_for_model}` : 'No Printer')}
               isSelected={selectedIds.has(archive.id)}
               onSelect={toggleSelect}
               selectionMode={selectionMode}
@@ -2782,7 +2799,7 @@ export function ArchivesPage() {
               <ArchiveListRow
                 key={archive.id}
                 archive={archive}
-                printerName={archive.printer_id ? printerMap.get(archive.printer_id) || 'Unknown' : 'No Printer'}
+                printerName={archive.printer_id ? printerMap.get(archive.printer_id) || 'Unknown' : (archive.sliced_for_model ? `Sliced for ${archive.sliced_for_model}` : 'No Printer')}
                 isSelected={selectedIds.has(archive.id)}
                 onSelect={toggleSelect}
                 selectionMode={selectionMode}

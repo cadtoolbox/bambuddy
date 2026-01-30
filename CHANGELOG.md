@@ -90,6 +90,24 @@ All notable changes to Bambuddy will be documented in this file.
   - Bulk edit: printer assignment, print options, queue options
   - Bulk cancel selected items
   - Tri-state toggles: unchanged / on / off for each setting
+- **Model-Based Queue Assignment** - Queue prints to "any printer of matching model" for load balancing (Issue #162):
+  - Extract printer model from sliced 3MF files (e.g., "X1C", "P1S")
+  - Display sliced-for model in archive view
+  - New queue mode: assign to model instead of specific printer
+  - Scheduler auto-assigns to first idle printer of matching model
+  - Filament validation: only assign to printers with required filament types loaded
+  - Waiting reason display: shows why jobs are waiting (e.g., "Waiting for filament: Printer1 (needs PLA)")
+  - "Waiting" status badge (purple) distinguishes from regular "Pending"
+  - Compatibility warnings when file/printer model mismatch
+- **Queue Notifications** - Get notified about print queue events:
+  - Job Added: When a job is added to the queue
+  - Job Assigned: When a model-based job is assigned to a printer
+  - Job Started: When a queue job starts printing
+  - Job Waiting: When a job is waiting for filament (enabled by default)
+  - Job Skipped: When a job is skipped due to previous failure (enabled by default)
+  - Job Failed: When a job fails to start (enabled by default)
+  - Queue Complete: When all queued jobs finish
+  - New "Print Queue" section in notification provider settings
 
 ### Fixes
 - **Multi-Plate Thumbnail in Queue** - Fixed queue items showing wrong thumbnail for multi-plate files (Issue #166):

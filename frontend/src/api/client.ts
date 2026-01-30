@@ -300,6 +300,7 @@ export interface Archive {
   nozzle_diameter: number | null;
   bed_temperature: number | null;
   nozzle_temperature: number | null;
+  sliced_for_model: string | null;  // Printer model this file was sliced for
   status: string;
   started_at: string | null;
   completed_at: string | null;
@@ -1001,6 +1002,9 @@ export interface DiscoveredTasmotaDevice {
 export interface PrintQueueItem {
   id: number;
   printer_id: number | null;  // null = unassigned
+  target_model: string | null;  // Target printer model for model-based assignment
+  required_filament_types: string[] | null;  // Required filament types for model-based assignment
+  waiting_reason: string | null;  // Why a model-based job hasn't started yet
   // Either archive_id OR library_file_id must be set (archive created at print start)
   archive_id: number | null;
   library_file_id: number | null;
@@ -1033,6 +1037,7 @@ export interface PrintQueueItem {
 
 export interface PrintQueueItemCreate {
   printer_id?: number | null;  // null = unassigned
+  target_model?: string | null;  // Target printer model (mutually exclusive with printer_id)
   // Either archive_id OR library_file_id must be provided
   archive_id?: number | null;
   library_file_id?: number | null;
@@ -1053,6 +1058,7 @@ export interface PrintQueueItemCreate {
 
 export interface PrintQueueItemUpdate {
   printer_id?: number | null;  // null = unassign
+  target_model?: string | null;  // Target printer model (mutually exclusive with printer_id)
   position?: number;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
@@ -1212,6 +1218,14 @@ export interface NotificationProvider {
   on_ams_ht_temperature_high: boolean;
   // Build plate detection
   on_plate_not_empty: boolean;
+  // Print queue events
+  on_queue_job_added: boolean;
+  on_queue_job_assigned: boolean;
+  on_queue_job_started: boolean;
+  on_queue_job_waiting: boolean;
+  on_queue_job_skipped: boolean;
+  on_queue_job_failed: boolean;
+  on_queue_completed: boolean;
   // Quiet hours
   quiet_hours_enabled: boolean;
   quiet_hours_start: string | null;
@@ -1254,6 +1268,14 @@ export interface NotificationProviderCreate {
   on_ams_ht_temperature_high?: boolean;
   // Build plate detection
   on_plate_not_empty?: boolean;
+  // Print queue events
+  on_queue_job_added?: boolean;
+  on_queue_job_assigned?: boolean;
+  on_queue_job_started?: boolean;
+  on_queue_job_waiting?: boolean;
+  on_queue_job_skipped?: boolean;
+  on_queue_job_failed?: boolean;
+  on_queue_completed?: boolean;
   // Quiet hours
   quiet_hours_enabled?: boolean;
   quiet_hours_start?: string | null;
@@ -1289,6 +1311,14 @@ export interface NotificationProviderUpdate {
   on_ams_ht_temperature_high?: boolean;
   // Build plate detection
   on_plate_not_empty?: boolean;
+  // Print queue events
+  on_queue_job_added?: boolean;
+  on_queue_job_assigned?: boolean;
+  on_queue_job_started?: boolean;
+  on_queue_job_waiting?: boolean;
+  on_queue_job_skipped?: boolean;
+  on_queue_job_failed?: boolean;
+  on_queue_completed?: boolean;
   // Quiet hours
   quiet_hours_enabled?: boolean;
   quiet_hours_start?: string | null;

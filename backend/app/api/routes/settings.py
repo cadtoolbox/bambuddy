@@ -311,6 +311,13 @@ async def export_backup(
                     "on_ams_ht_humidity_high": getattr(p, "on_ams_ht_humidity_high", False),
                     "on_ams_ht_temperature_high": getattr(p, "on_ams_ht_temperature_high", False),
                     "on_plate_not_empty": getattr(p, "on_plate_not_empty", True),
+                    "on_queue_job_added": getattr(p, "on_queue_job_added", False),
+                    "on_queue_job_assigned": getattr(p, "on_queue_job_assigned", False),
+                    "on_queue_job_started": getattr(p, "on_queue_job_started", False),
+                    "on_queue_job_waiting": getattr(p, "on_queue_job_waiting", True),
+                    "on_queue_job_skipped": getattr(p, "on_queue_job_skipped", True),
+                    "on_queue_job_failed": getattr(p, "on_queue_job_failed", True),
+                    "on_queue_completed": getattr(p, "on_queue_completed", False),
                     "quiet_hours_enabled": p.quiet_hours_enabled,
                     "quiet_hours_start": p.quiet_hours_start,
                     "quiet_hours_end": p.quiet_hours_end,
@@ -1176,6 +1183,13 @@ async def import_backup(
                     existing.on_ams_ht_humidity_high = provider_data.get("on_ams_ht_humidity_high", False)
                     existing.on_ams_ht_temperature_high = provider_data.get("on_ams_ht_temperature_high", False)
                     existing.on_plate_not_empty = provider_data.get("on_plate_not_empty", True)
+                    existing.on_queue_job_added = provider_data.get("on_queue_job_added", False)
+                    existing.on_queue_job_assigned = provider_data.get("on_queue_job_assigned", False)
+                    existing.on_queue_job_started = provider_data.get("on_queue_job_started", False)
+                    existing.on_queue_job_waiting = provider_data.get("on_queue_job_waiting", True)
+                    existing.on_queue_job_skipped = provider_data.get("on_queue_job_skipped", True)
+                    existing.on_queue_job_failed = provider_data.get("on_queue_job_failed", True)
+                    existing.on_queue_completed = provider_data.get("on_queue_completed", False)
                     existing.quiet_hours_enabled = provider_data.get("quiet_hours_enabled", False)
                     existing.quiet_hours_start = provider_data.get("quiet_hours_start")
                     existing.quiet_hours_end = provider_data.get("quiet_hours_end")
@@ -1206,6 +1220,13 @@ async def import_backup(
                     on_ams_ht_humidity_high=provider_data.get("on_ams_ht_humidity_high", False),
                     on_ams_ht_temperature_high=provider_data.get("on_ams_ht_temperature_high", False),
                     on_plate_not_empty=provider_data.get("on_plate_not_empty", True),
+                    on_queue_job_added=provider_data.get("on_queue_job_added", False),
+                    on_queue_job_assigned=provider_data.get("on_queue_job_assigned", False),
+                    on_queue_job_started=provider_data.get("on_queue_job_started", False),
+                    on_queue_job_waiting=provider_data.get("on_queue_job_waiting", True),
+                    on_queue_job_skipped=provider_data.get("on_queue_job_skipped", True),
+                    on_queue_job_failed=provider_data.get("on_queue_job_failed", True),
+                    on_queue_completed=provider_data.get("on_queue_completed", False),
                     quiet_hours_enabled=provider_data.get("quiet_hours_enabled", False),
                     quiet_hours_start=provider_data.get("quiet_hours_start"),
                     quiet_hours_end=provider_data.get("quiet_hours_end"),

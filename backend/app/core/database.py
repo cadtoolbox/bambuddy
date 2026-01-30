@@ -760,6 +760,46 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add sliced_for_model column to print_archives for printer model from 3MF
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN sliced_for_model VARCHAR(50)"))
+    except Exception:
+        pass
+
+    # Migration: Add target_model column to print_queue for model-based assignment
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN target_model VARCHAR(50)"))
+    except Exception:
+        pass
+
+    # Migration: Add required_filament_types column to print_queue for filament validation
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN required_filament_types TEXT"))
+    except Exception:
+        pass
+
+    # Migration: Add waiting_reason column to print_queue for status feedback
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN waiting_reason TEXT"))
+    except Exception:
+        pass
+
+    # Migration: Add queue notification event columns to notification_providers
+    queue_notification_columns = [
+        ("on_queue_job_added", "BOOLEAN DEFAULT 0"),
+        ("on_queue_job_assigned", "BOOLEAN DEFAULT 0"),
+        ("on_queue_job_started", "BOOLEAN DEFAULT 0"),
+        ("on_queue_job_waiting", "BOOLEAN DEFAULT 1"),
+        ("on_queue_job_skipped", "BOOLEAN DEFAULT 1"),
+        ("on_queue_job_failed", "BOOLEAN DEFAULT 1"),
+        ("on_queue_completed", "BOOLEAN DEFAULT 0"),
+    ]
+    for col_name, col_def in queue_notification_columns:
+        try:
+            await conn.execute(text(f"ALTER TABLE notification_providers ADD COLUMN {col_name} {col_def}"))
+        except Exception:
+            pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""
