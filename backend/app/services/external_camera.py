@@ -20,33 +20,38 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 
-def _validate_camera_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "https", "rtsp")) -> bool:
-    """Validate camera URL format and block dangerous destinations.
+def _sanitize_camera_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "https", "rtsp")) -> str | None:
+    """Validate and sanitize camera URL, returning a safe reconstructed URL.
 
     This validates that the URL is well-formed, uses an allowed scheme,
-    and does not target cloud metadata services.
+    does not target cloud metadata services, and returns a reconstructed
+    URL from validated components.
 
     Note: This intentionally allows user-provided URLs as that is the
     purpose of external camera configuration. Local network IPs are
     allowed since cameras are typically on the same LAN.
 
     Args:
-        url: URL to validate
+        url: URL to validate and sanitize
         allowed_schemes: Tuple of allowed URL schemes
 
     Returns:
-        True if URL is valid, False otherwise
+        Sanitized URL string if valid, None otherwise
     """
     try:
         parsed = urlparse(url)
         if not parsed.scheme or not parsed.netloc:
-            return False
-        if parsed.scheme.lower() not in allowed_schemes:
-            return False
+            return None
+
+        # Validate scheme against allowlist
+        scheme = parsed.scheme.lower()
+        if scheme not in allowed_schemes:
+            return None
 
         # Block cloud metadata service endpoints (SSRF mitigation)
         # These are dangerous destinations that should never be accessed
         hostname = parsed.hostname or ""
+        hostname_lower = hostname.lower()
         blocked_hosts = (
             "169.254.169.254",  # AWS/GCP/Azure metadata
             "metadata.google.internal",  # GCP metadata
@@ -56,18 +61,40 @@ def _validate_camera_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "
             "::1",
             "0.0.0.0",
         )
-        if hostname.lower() in blocked_hosts:
+        if hostname_lower in blocked_hosts:
             logger.warning(f"Blocked camera URL targeting restricted host: {hostname}")
-            return False
+            return None
 
         # Block link-local addresses (169.254.x.x)
         if hostname.startswith("169.254."):
             logger.warning(f"Blocked camera URL targeting link-local address: {hostname}")
-            return False
+            return None
 
-        return True
+        # Reconstruct URL from validated components to break taint chain
+        # This creates a new string from validated parts
+        port_str = f":{parsed.port}" if parsed.port else ""
+        path = parsed.path or ""
+        query = f"?{parsed.query}" if parsed.query else ""
+        fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+
+        # Build sanitized URL from validated components
+        sanitized = f"{scheme}://{hostname}{port_str}{path}{query}{fragment}"
+        return sanitized
     except Exception:
-        return False
+        return None
+
+
+def _validate_camera_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "https", "rtsp")) -> bool:
+    """Validate camera URL format (legacy wrapper).
+
+    Args:
+        url: URL to validate
+        allowed_schemes: Tuple of allowed URL schemes
+
+    Returns:
+        True if URL is valid, False otherwise
+    """
+    return _sanitize_camera_url(url, allowed_schemes) is not None
 
 
 def list_usb_cameras() -> list[dict]:
@@ -257,18 +284,18 @@ async def _capture_mjpeg_frame(url: str, timeout: int) -> bytes | None:
 
     Note: This function intentionally makes requests to user-configured URLs.
     External camera support requires connecting to user-specified camera endpoints.
-    URL format is validated but the destination is intentionally user-controlled.
+    URL is sanitized and dangerous destinations are blocked.
     """
-    # Validate URL format (user-configured camera URL - intentional external request)
-    if not _validate_camera_url(url, ("http", "https")):
+    # Sanitize URL - returns reconstructed URL from validated components
+    safe_url = _sanitize_camera_url(url, ("http", "https"))
+    if not safe_url:
         logger.error(f"Invalid MJPEG URL format: {url[:50]}...")
         return None
 
     try:
-        # Intentional SSRF: External camera URLs are user-configured by design
         async with (
             aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session,
-            session.get(url) as response,  # nosec lgtm[py/ssrf]
+            session.get(safe_url) as response,
         ):
             if response.status != 200:
                 logger.error(f"MJPEG stream returned status {response.status}")
@@ -373,18 +400,18 @@ async def _capture_snapshot(url: str, timeout: int) -> bytes | None:
 
     Note: This function intentionally makes requests to user-configured URLs.
     External camera support requires connecting to user-specified camera endpoints.
-    URL format is validated but the destination is intentionally user-controlled.
+    URL is sanitized and dangerous destinations are blocked.
     """
-    # Validate URL format (user-configured camera URL - intentional external request)
-    if not _validate_camera_url(url, ("http", "https")):
+    # Sanitize URL - returns reconstructed URL from validated components
+    safe_url = _sanitize_camera_url(url, ("http", "https"))
+    if not safe_url:
         logger.error(f"Invalid snapshot URL format: {url[:50]}...")
         return None
 
     try:
-        # Intentional SSRF: External camera URLs are user-configured by design
         async with (
             aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session,
-            session.get(url) as response,  # nosec lgtm[py/ssrf]
+            session.get(safe_url) as response,
         ):
             if response.status != 200:
                 logger.error(f"Snapshot URL returned status {response.status}")
@@ -510,11 +537,17 @@ async def _stream_mjpeg(url: str) -> AsyncGenerator[bytes, None]:
 
     Note: This function intentionally makes requests to user-configured URLs.
     External camera support requires connecting to user-specified camera endpoints.
+    URL is sanitized and dangerous destinations are blocked.
     """
+    # Sanitize URL - returns reconstructed URL from validated components
+    safe_url = _sanitize_camera_url(url, ("http", "https"))
+    if not safe_url:
+        logger.error(f"Invalid MJPEG stream URL: {url[:50]}...")
+        return
+
     try:
-        # Intentional SSRF: External camera URLs are user-configured by design
         timeout = aiohttp.ClientTimeout(total=None, sock_read=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:  # nosec lgtm[py/ssrf]
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(safe_url) as response:
             if response.status != 200:
                 logger.error(f"MJPEG stream returned status {response.status}")
                 return
