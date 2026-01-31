@@ -947,6 +947,18 @@ async def run_migrations(conn):
     except Exception:
         pass
 
+    # Migration: Add nozzle_count column to printers (for dual-extruder detection)
+    try:
+        await conn.execute(text("ALTER TABLE printers ADD COLUMN nozzle_count INTEGER DEFAULT 1"))
+    except Exception:
+        pass
+
+    # Migration: Add print_hours_offset column to printers (baseline hours adjustment)
+    try:
+        await conn.execute(text("ALTER TABLE printers ADD COLUMN print_hours_offset REAL DEFAULT 0.0"))
+    except Exception:
+        pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""
