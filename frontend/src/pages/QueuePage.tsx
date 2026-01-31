@@ -47,12 +47,13 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { parseUTCDate, formatDateTime, type TimeFormat } from '../utils/date';
-import type { PrintQueueItem, PrintQueueBulkUpdate } from '../api/client';
+import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { PrintModal } from '../components/PrintModal';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 
 function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return '--';
@@ -277,6 +278,7 @@ function SortableQueueItem({
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
+  hasPermission,
 }: {
   item: PrintQueueItem;
   position?: number;
@@ -289,7 +291,9 @@ function SortableQueueItem({
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  hasPermission: (permission: Permission) => boolean;
 }) {
+  const canReorder = hasPermission('queue:reorder');
   const {
     attributes,
     listeners,
@@ -297,7 +301,7 @@ function SortableQueueItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id, disabled: item.status !== 'pending' });
+  } = useSortable({ id: item.id, disabled: item.status !== 'pending' || !canReorder });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -489,7 +493,8 @@ function SortableQueueItem({
               variant="ghost"
               size="sm"
               onClick={onStop}
-              title="Stop Print"
+              disabled={!hasPermission('printers:control')}
+              title={!hasPermission('printers:control') ? 'You do not have permission to stop prints' : 'Stop Print'}
               className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             >
               <StopCircle className="w-4 h-4" />
@@ -502,7 +507,8 @@ function SortableQueueItem({
                   variant="ghost"
                   size="sm"
                   onClick={onStart}
-                  title="Start Print"
+                  disabled={!hasPermission('printers:control')}
+                  title={!hasPermission('printers:control') ? 'You do not have permission to start prints' : 'Start Print'}
                   className="text-bambu-green hover:text-bambu-green-light hover:bg-bambu-green/10"
                 >
                   <Play className="w-4 h-4" />
@@ -512,7 +518,8 @@ function SortableQueueItem({
                 variant="ghost"
                 size="sm"
                 onClick={onEdit}
-                title="Edit"
+                disabled={!hasPermission('queue:update')}
+                title={!hasPermission('queue:update') ? 'You do not have permission to edit queue items' : 'Edit'}
               >
                 <Pencil className="w-4 h-4" />
               </Button>
@@ -520,7 +527,8 @@ function SortableQueueItem({
                 variant="ghost"
                 size="sm"
                 onClick={onCancel}
-                title="Cancel"
+                disabled={!hasPermission('queue:delete')}
+                title={!hasPermission('queue:delete') ? 'You do not have permission to cancel queue items' : 'Cancel'}
                 className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
               >
                 <X className="w-4 h-4" />
@@ -533,7 +541,8 @@ function SortableQueueItem({
                 variant="ghost"
                 size="sm"
                 onClick={onRequeue}
-                title="Re-queue"
+                disabled={!hasPermission('queue:create')}
+                title={!hasPermission('queue:create') ? 'You do not have permission to re-queue items' : 'Re-queue'}
                 className="text-bambu-green hover:text-bambu-green/80 hover:bg-bambu-green/10"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -542,7 +551,8 @@ function SortableQueueItem({
                 variant="ghost"
                 size="sm"
                 onClick={onRemove}
-                title="Remove"
+                disabled={!hasPermission('queue:delete')}
+                title={!hasPermission('queue:delete') ? 'You do not have permission to remove queue items' : 'Remove'}
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -557,6 +567,7 @@ function SortableQueueItem({
 export function QueuePage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [filterPrinter, setFilterPrinter] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
@@ -910,6 +921,8 @@ export function QueuePage() {
             variant="secondary"
             size="sm"
             onClick={() => setShowClearHistoryConfirm(true)}
+            disabled={!hasPermission('queue:delete')}
+            title={!hasPermission('queue:delete') ? 'You do not have permission to clear history' : undefined}
           >
             <Trash2 className="w-4 h-4" />
             Clear History
@@ -949,6 +962,7 @@ export function QueuePage() {
                     onRequeue={() => {}}
                     onStart={() => {}}
                     timeFormat={timeFormat}
+                    hasPermission={hasPermission}
                   />
                 ))}
               </div>
@@ -1018,6 +1032,8 @@ export function QueuePage() {
                       size="sm"
                       onClick={() => setShowBulkEditModal(true)}
                       className="flex items-center gap-2 text-bambu-green hover:text-bambu-green-light"
+                      disabled={!hasPermission('queue:update')}
+                      title={!hasPermission('queue:update') ? 'You do not have permission to edit queue items' : undefined}
                     >
                       <Pencil className="w-4 h-4" />
                       Edit Selected
@@ -1027,7 +1043,8 @@ export function QueuePage() {
                       size="sm"
                       onClick={() => bulkCancelMutation.mutate(selectedItems)}
                       className="flex items-center gap-2 text-red-400 hover:text-red-300"
-                      disabled={bulkCancelMutation.isPending}
+                      disabled={bulkCancelMutation.isPending || !hasPermission('queue:delete')}
+                      title={!hasPermission('queue:delete') ? 'You do not have permission to cancel queue items' : undefined}
                     >
                       <X className="w-4 h-4" />
                       Cancel Selected
@@ -1060,6 +1077,7 @@ export function QueuePage() {
                         timeFormat={timeFormat}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
+                        hasPermission={hasPermission}
                       />
                     ))}
                   </div>
@@ -1113,6 +1131,7 @@ export function QueuePage() {
                     onRequeue={() => setRequeueItem(item)}
                     onStart={() => {}}
                     timeFormat={timeFormat}
+                    hasPermission={hasPermission}
                   />
                 ))}
               </div>

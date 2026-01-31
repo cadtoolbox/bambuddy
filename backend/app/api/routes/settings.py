@@ -16,6 +16,7 @@ from backend.app.models.archive import PrintArchive
 from backend.app.models.external_link import ExternalLink
 from backend.app.models.filament import Filament
 from backend.app.models.github_backup import GitHubBackupConfig
+from backend.app.models.group import Group
 from backend.app.models.maintenance import MaintenanceHistory, MaintenanceType, PrinterMaintenance
 from backend.app.models.notification import NotificationProvider
 from backend.app.models.notification_template import NotificationTemplate
@@ -259,6 +260,7 @@ async def export_backup(
     include_users: bool = Query(
         False, description="Include users (passwords not exported - users will need new passwords)"
     ),
+    include_groups: bool = Query(False, description="Include groups and user-group assignments"),
     include_github_backup: bool = Query(False, description="Include GitHub backup configuration (token not exported)"),
 ):
     """Export selected data as JSON backup."""
@@ -367,6 +369,21 @@ async def export_backup(
                     "ha_power_entity": plug.ha_power_entity,
                     "ha_energy_today_entity": plug.ha_energy_today_entity,
                     "ha_energy_total_entity": plug.ha_energy_total_entity,
+                    # MQTT plug fields (legacy)
+                    "mqtt_topic": plug.mqtt_topic,
+                    "mqtt_multiplier": plug.mqtt_multiplier,
+                    # MQTT power fields
+                    "mqtt_power_topic": plug.mqtt_power_topic,
+                    "mqtt_power_path": plug.mqtt_power_path,
+                    "mqtt_power_multiplier": plug.mqtt_power_multiplier,
+                    # MQTT energy fields
+                    "mqtt_energy_topic": plug.mqtt_energy_topic,
+                    "mqtt_energy_path": plug.mqtt_energy_path,
+                    "mqtt_energy_multiplier": plug.mqtt_energy_multiplier,
+                    # MQTT state fields
+                    "mqtt_state_topic": plug.mqtt_state_topic,
+                    "mqtt_state_path": plug.mqtt_state_path,
+                    "mqtt_state_on_value": plug.mqtt_state_on_value,
                     "printer_serial": printer_id_to_serial.get(plug.printer_id) if plug.printer_id else None,
                     "enabled": plug.enabled,
                     "auto_on": plug.auto_on,
@@ -383,6 +400,7 @@ async def export_backup(
                     "schedule_on_time": plug.schedule_on_time,
                     "schedule_off_time": plug.schedule_off_time,
                     "show_in_switchbar": plug.show_in_switchbar,
+                    "show_on_printer_card": plug.show_on_printer_card,
                 }
             )
         backup["included"].append("smart_plugs")
@@ -860,10 +878,27 @@ async def export_backup(
                     "username": user.username,
                     "role": user.role,
                     "is_active": user.is_active,
+                    "groups": [g.name for g in user.groups],
                     # password_hash intentionally not exported for security
                 }
             )
         backup["included"].append("users")
+
+    # Groups (permission groups)
+    if include_groups:
+        result = await db.execute(select(Group))
+        groups = result.scalars().all()
+        backup["groups"] = []
+        for group in groups:
+            backup["groups"].append(
+                {
+                    "name": group.name,
+                    "description": group.description,
+                    "permissions": group.permissions,
+                    "is_system": group.is_system,
+                }
+            )
+        backup["included"].append("groups")
 
     # GitHub backup configuration
     if include_github_backup:
@@ -982,6 +1017,7 @@ async def import_backup(
         "projects": 0,
         "pending_uploads": 0,
         "users": 0,
+        "groups": 0,
         "github_backup": 0,
     }
     skipped = {
@@ -997,6 +1033,7 @@ async def import_backup(
         "projects": 0,
         "pending_uploads": 0,
         "users": 0,
+        "groups": 0,
         "github_backup": 0,
     }
     skipped_details = {
@@ -1010,6 +1047,7 @@ async def import_backup(
         "projects": [],
         "pending_uploads": [],
         "users": [],
+        "groups": [],
     }
 
     # Restore settings (always overwrites)
@@ -1278,12 +1316,23 @@ async def import_backup(
             # Determine plug type (default to tasmota for backwards compatibility)
             plug_type = plug_data.get("plug_type", "tasmota")
 
-            # Find existing plug by IP (Tasmota) or entity_id (Home Assistant)
+            # Find existing plug by IP (Tasmota), entity_id (Home Assistant), or mqtt_topic (MQTT)
             existing = None
+            plug_identifier = None
             if plug_type == "homeassistant" and plug_data.get("ha_entity_id"):
                 result = await db.execute(select(SmartPlug).where(SmartPlug.ha_entity_id == plug_data["ha_entity_id"]))
                 existing = result.scalar_one_or_none()
                 plug_identifier = plug_data["ha_entity_id"]
+            elif plug_type == "mqtt" and (plug_data.get("mqtt_power_topic") or plug_data.get("mqtt_topic")):
+                # Check by mqtt_power_topic first (new format), fall back to mqtt_topic (legacy)
+                power_topic = plug_data.get("mqtt_power_topic") or plug_data.get("mqtt_topic")
+                result = await db.execute(
+                    select(SmartPlug).where(
+                        (SmartPlug.mqtt_power_topic == power_topic) | (SmartPlug.mqtt_topic == power_topic)
+                    )
+                )
+                existing = result.scalar_one_or_none()
+                plug_identifier = power_topic
             elif plug_data.get("ip_address"):
                 result = await db.execute(select(SmartPlug).where(SmartPlug.ip_address == plug_data["ip_address"]))
                 existing = result.scalar_one_or_none()
@@ -1300,6 +1349,21 @@ async def import_backup(
                     existing.ha_power_entity = plug_data.get("ha_power_entity")
                     existing.ha_energy_today_entity = plug_data.get("ha_energy_today_entity")
                     existing.ha_energy_total_entity = plug_data.get("ha_energy_total_entity")
+                    # MQTT fields (legacy)
+                    existing.mqtt_topic = plug_data.get("mqtt_topic")
+                    existing.mqtt_multiplier = plug_data.get("mqtt_multiplier", 1.0)
+                    # MQTT power fields
+                    existing.mqtt_power_topic = plug_data.get("mqtt_power_topic")
+                    existing.mqtt_power_path = plug_data.get("mqtt_power_path")
+                    existing.mqtt_power_multiplier = plug_data.get("mqtt_power_multiplier", 1.0)
+                    # MQTT energy fields
+                    existing.mqtt_energy_topic = plug_data.get("mqtt_energy_topic")
+                    existing.mqtt_energy_path = plug_data.get("mqtt_energy_path")
+                    existing.mqtt_energy_multiplier = plug_data.get("mqtt_energy_multiplier", 1.0)
+                    # MQTT state fields
+                    existing.mqtt_state_topic = plug_data.get("mqtt_state_topic")
+                    existing.mqtt_state_path = plug_data.get("mqtt_state_path")
+                    existing.mqtt_state_on_value = plug_data.get("mqtt_state_on_value")
                     existing.printer_id = printer_id
                     existing.enabled = plug_data.get("enabled", True)
                     existing.auto_on = plug_data.get("auto_on", True)
@@ -1316,6 +1380,7 @@ async def import_backup(
                     existing.schedule_on_time = plug_data.get("schedule_on_time")
                     existing.schedule_off_time = plug_data.get("schedule_off_time")
                     existing.show_in_switchbar = plug_data.get("show_in_switchbar", False)
+                    existing.show_on_printer_card = plug_data.get("show_on_printer_card", True)
                     restored["smart_plugs"] += 1
                 else:
                     skipped["smart_plugs"] += 1
@@ -1329,6 +1394,21 @@ async def import_backup(
                     ha_power_entity=plug_data.get("ha_power_entity"),
                     ha_energy_today_entity=plug_data.get("ha_energy_today_entity"),
                     ha_energy_total_entity=plug_data.get("ha_energy_total_entity"),
+                    # MQTT fields (legacy)
+                    mqtt_topic=plug_data.get("mqtt_topic"),
+                    mqtt_multiplier=plug_data.get("mqtt_multiplier", 1.0),
+                    # MQTT power fields
+                    mqtt_power_topic=plug_data.get("mqtt_power_topic"),
+                    mqtt_power_path=plug_data.get("mqtt_power_path"),
+                    mqtt_power_multiplier=plug_data.get("mqtt_power_multiplier", 1.0),
+                    # MQTT energy fields
+                    mqtt_energy_topic=plug_data.get("mqtt_energy_topic"),
+                    mqtt_energy_path=plug_data.get("mqtt_energy_path"),
+                    mqtt_energy_multiplier=plug_data.get("mqtt_energy_multiplier", 1.0),
+                    # MQTT state fields
+                    mqtt_state_topic=plug_data.get("mqtt_state_topic"),
+                    mqtt_state_path=plug_data.get("mqtt_state_path"),
+                    mqtt_state_on_value=plug_data.get("mqtt_state_on_value"),
                     printer_id=printer_id,
                     enabled=plug_data.get("enabled", True),
                     auto_on=plug_data.get("auto_on", True),
@@ -1345,6 +1425,7 @@ async def import_backup(
                     schedule_on_time=plug_data.get("schedule_on_time"),
                     schedule_off_time=plug_data.get("schedule_off_time"),
                     show_in_switchbar=plug_data.get("show_in_switchbar", False),
+                    show_on_printer_card=plug_data.get("show_on_printer_card", True),
                 )
                 db.add(plug)
                 restored["smart_plugs"] += 1
@@ -1977,6 +2058,39 @@ async def import_backup(
                     }
                 )
 
+    # Restore groups (before users, so groups exist for assignment)
+    if "groups" in backup:
+        for group_data in backup["groups"]:
+            result = await db.execute(select(Group).where(Group.name == group_data["name"]))
+            existing = result.scalar_one_or_none()
+            if existing:
+                if overwrite and not existing.is_system:
+                    # Update non-system groups
+                    existing.description = group_data.get("description")
+                    existing.permissions = group_data.get("permissions", [])
+                    restored["groups"] += 1
+                else:
+                    skipped["groups"] += 1
+                    skipped_details["groups"].append(group_data["name"])
+            else:
+                group = Group(
+                    name=group_data["name"],
+                    description=group_data.get("description"),
+                    permissions=group_data.get("permissions", []),
+                    is_system=group_data.get("is_system", False),
+                )
+                db.add(group)
+                restored["groups"] += 1
+
+    # Flush to ensure groups are persisted before user assignment
+    await db.flush()
+
+    # Build group name to object lookup for user assignment
+    group_name_to_obj: dict[str, Group] = {}
+    result = await db.execute(select(Group))
+    for g in result.scalars().all():
+        group_name_to_obj[g.name] = g
+
     # Restore users (note: passwords not included in backup - users will need new passwords)
     # Users are skipped by default since they have no passwords; admin must recreate them
     new_users: list[str] = []
@@ -1990,6 +2104,10 @@ async def import_backup(
                 if overwrite:
                     existing.role = user_data.get("role", "user")
                     existing.is_active = user_data.get("is_active", True)
+                    # Assign groups if provided
+                    group_names = user_data.get("groups", [])
+                    if group_names:
+                        existing.groups = [group_name_to_obj[name] for name in group_names if name in group_name_to_obj]
                     # Don't change password - keep existing
                     restored["users"] += 1
                 else:
@@ -2007,6 +2125,10 @@ async def import_backup(
                     role=user_data.get("role", "user"),
                     is_active=user_data.get("is_active", True),
                 )
+                # Assign groups if provided
+                group_names = user_data.get("groups", [])
+                if group_names:
+                    user.groups = [group_name_to_obj[name] for name in group_names if name in group_name_to_obj]
                 db.add(user)
                 restored["users"] += 1
                 new_users.append(f"{user_data['username']} (temp password: {temp_password})")

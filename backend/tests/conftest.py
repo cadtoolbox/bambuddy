@@ -67,6 +67,7 @@ async def test_engine():
         archive,
         external_link,
         filament,
+        group,
         kprofile_note,
         maintenance,
         notification,
@@ -122,6 +123,11 @@ async def async_client(test_engine, db_session) -> AsyncGenerator[AsyncClient, N
         patch("backend.app.core.auth.async_session", test_async_session),
         patch("backend.app.main.init_printer_connections", mock_init_printer_connections),
     ):
+        # Seed default groups for tests that need them
+        from backend.app.core.database import seed_default_groups
+
+        await seed_default_groups()
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
 
@@ -217,6 +223,24 @@ def mock_mqtt_client():
 
 
 @pytest.fixture
+def mock_mqtt_smart_plug_service():
+    """Mock the MQTT smart plug service for MQTT plug tests."""
+    with patch("backend.app.api.routes.smart_plugs.mqtt_relay") as mock:
+        # Create a mock smart_plug_service
+        mock_service = MagicMock()
+        mock_service.is_configured = MagicMock(return_value=True)
+        mock_service.has_broker_settings = MagicMock(return_value=True)
+        mock_service.configure = AsyncMock(return_value=True)
+        mock_service.subscribe = MagicMock()
+        mock_service.unsubscribe = MagicMock()
+        mock_service.get_plug_data = MagicMock(return_value=None)
+        mock_service.is_reachable = MagicMock(return_value=False)
+
+        mock.smart_plug_service = mock_service
+        yield mock
+
+
+@pytest.fixture
 def mock_ftp_client():
     """Mock the FTP client for file transfer tests."""
     with (
@@ -296,6 +320,22 @@ def smart_plug_factory(db_session):
         if plug_type == "homeassistant":
             defaults["ha_entity_id"] = "switch.test"
             defaults["ip_address"] = None
+        elif plug_type == "mqtt":
+            # Legacy fields (for backward compatibility tests)
+            defaults["mqtt_topic"] = kwargs.get("mqtt_topic", "test/topic")
+            defaults["mqtt_multiplier"] = kwargs.get("mqtt_multiplier", 1.0)
+            # New separate topic/path/multiplier fields
+            defaults["mqtt_power_topic"] = kwargs.get("mqtt_power_topic")
+            defaults["mqtt_power_path"] = kwargs.get("mqtt_power_path", "power")
+            defaults["mqtt_power_multiplier"] = kwargs.get("mqtt_power_multiplier", 1.0)
+            defaults["mqtt_energy_topic"] = kwargs.get("mqtt_energy_topic")
+            defaults["mqtt_energy_path"] = kwargs.get("mqtt_energy_path")
+            defaults["mqtt_energy_multiplier"] = kwargs.get("mqtt_energy_multiplier", 1.0)
+            defaults["mqtt_state_topic"] = kwargs.get("mqtt_state_topic")
+            defaults["mqtt_state_path"] = kwargs.get("mqtt_state_path")
+            defaults["mqtt_state_on_value"] = kwargs.get("mqtt_state_on_value")
+            defaults["ip_address"] = None
+            defaults["ha_entity_id"] = None
         else:
             defaults["ip_address"] = "192.168.1.100"
             defaults["ha_entity_id"] = None

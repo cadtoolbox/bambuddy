@@ -36,6 +36,7 @@ import type { Archive, ProjectUpdate, BOMItem, BOMItemCreate, BOMItemUpdate } fr
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -198,6 +199,7 @@ export function ProjectDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesContent, setNotesContent] = useState('');
@@ -494,11 +496,20 @@ export function ProjectDetailPage() {
           <StatusBadge status={project.status} />
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleExportProject} title="Export project">
+          <Button
+            variant="secondary"
+            onClick={handleExportProject}
+            disabled={!hasPermission('projects:read')}
+            title={!hasPermission('projects:read') ? 'You do not have permission to export projects' : 'Export project'}
+          >
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => setShowEditModal(true)}>
+          <Button
+            onClick={() => setShowEditModal(true)}
+            disabled={!hasPermission('projects:update')}
+            title={!hasPermission('projects:update') ? 'You do not have permission to edit projects' : undefined}
+          >
             <Edit3 className="w-4 h-4 mr-2" />
             Edit
           </Button>
@@ -761,7 +772,13 @@ export function ProjectDetailPage() {
               Notes
             </h2>
             {!editingNotes ? (
-              <Button variant="secondary" size="sm" onClick={handleStartEditNotes}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleStartEditNotes}
+                disabled={!hasPermission('projects:update')}
+                title={!hasPermission('projects:update') ? 'You do not have permission to edit notes' : undefined}
+              >
                 <Edit3 className="w-4 h-4 mr-1" />
                 Edit
               </Button>
@@ -886,7 +903,13 @@ export function ProjectDetailPage() {
                 </button>
               )}
               {!showBomForm && (
-                <Button variant="secondary" size="sm" onClick={() => setShowBomForm(true)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowBomForm(true)}
+                  disabled={!hasPermission('projects:update')}
+                  title={!hasPermission('projects:update') ? 'You do not have permission to add parts' : undefined}
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   Add Part
                 </Button>
@@ -1031,12 +1054,15 @@ export function ProjectDetailPage() {
                     // Display mode
                     <div className="flex items-start gap-3">
                       <button
-                        onClick={() => handleToggleAcquired(item)}
-                        disabled={updateBomMutation.isPending}
+                        onClick={() => hasPermission('projects:update') && handleToggleAcquired(item)}
+                        disabled={updateBomMutation.isPending || !hasPermission('projects:update')}
+                        title={!hasPermission('projects:update') ? 'You do not have permission to update parts' : undefined}
                         className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
                           item.is_complete
                             ? 'bg-status-ok border-status-ok text-white'
-                            : 'border-bambu-gray hover:border-bambu-green'
+                            : hasPermission('projects:update')
+                              ? 'border-bambu-gray hover:border-bambu-green'
+                              : 'border-bambu-gray/50 cursor-not-allowed'
                         }`}
                       >
                         {item.is_complete && <CheckCircle className="w-3 h-3" />}
@@ -1058,16 +1084,26 @@ export function ProjectDetailPage() {
                           </div>
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => handleEditBomItem(item)}
-                              className="p-1 rounded hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-white transition-colors flex-shrink-0"
-                              title="Edit"
+                              onClick={() => hasPermission('projects:update') && handleEditBomItem(item)}
+                              disabled={!hasPermission('projects:update')}
+                              className={`p-1 rounded transition-colors flex-shrink-0 ${
+                                hasPermission('projects:update')
+                                  ? 'hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-white'
+                                  : 'text-bambu-gray/50 cursor-not-allowed'
+                              }`}
+                              title={!hasPermission('projects:update') ? 'You do not have permission to edit parts' : 'Edit'}
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteBomItem(item.id, item.name)}
-                              className="p-1 rounded hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-red-400 transition-colors flex-shrink-0"
-                              title="Delete"
+                              onClick={() => hasPermission('projects:update') && handleDeleteBomItem(item.id, item.name)}
+                              disabled={!hasPermission('projects:update')}
+                              className={`p-1 rounded transition-colors flex-shrink-0 ${
+                                hasPermission('projects:update')
+                                  ? 'hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-red-400'
+                                  : 'text-bambu-gray/50 cursor-not-allowed'
+                              }`}
+                              title={!hasPermission('projects:update') ? 'You do not have permission to delete parts' : 'Delete'}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1178,7 +1214,8 @@ export function ProjectDetailPage() {
             variant="secondary"
             size="sm"
             onClick={() => createTemplateMutation.mutate()}
-            disabled={createTemplateMutation.isPending}
+            disabled={createTemplateMutation.isPending || !hasPermission('projects:create')}
+            title={!hasPermission('projects:create') ? 'You do not have permission to create templates' : undefined}
           >
             {createTemplateMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

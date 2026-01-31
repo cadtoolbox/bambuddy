@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plug, Power, PowerOff, Loader2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Plug, Power, PowerOff, Loader2, Wifi, WifiOff, Zap, Radio, Eye } from 'lucide-react';
 import { api } from '../api/client';
 import type { SmartPlug } from '../api/client';
 import { ConfirmModal } from './ConfirmModal';
@@ -29,8 +29,11 @@ function SwitchItem({ plug }: { plug: SmartPlug }) {
   });
 
   const isOn = status?.state === 'ON';
-  const isReachable = status?.reachable ?? false;
+  // For MQTT plugs, consider reachable if we have power data
+  const hasMqttData = plug.plug_type === 'mqtt' && (status?.energy?.power !== null && status?.energy?.power !== undefined);
+  const isReachable = (status?.reachable ?? false) || hasMqttData;
   const isPending = controlMutation.isPending;
+  const isMqtt = plug.plug_type === 'mqtt';
 
   const handleConfirm = () => {
     if (confirmAction) {
@@ -43,14 +46,38 @@ function SwitchItem({ plug }: { plug: SmartPlug }) {
     <>
       <div className="flex items-center justify-between py-2 px-3 hover:bg-bambu-dark-tertiary rounded-lg transition-colors">
         <div className="flex items-center gap-2">
-          <div className={`p-1.5 rounded ${isReachable ? (isOn ? 'bg-bambu-green/20' : 'bg-bambu-dark') : 'bg-red-500/20'}`}>
-            <Plug className={`w-4 h-4 ${isReachable ? (isOn ? 'text-bambu-green' : 'text-bambu-gray') : 'text-red-400'}`} />
+          <div className={`p-1.5 rounded ${
+            isMqtt
+              ? (isReachable ? 'bg-teal-500/20' : 'bg-red-500/20')
+              : (isReachable ? (isOn ? 'bg-bambu-green/20' : 'bg-bambu-dark') : 'bg-red-500/20')
+          }`}>
+            {isMqtt ? (
+              <Radio className={`w-4 h-4 ${isReachable ? 'text-teal-400' : 'text-red-400'}`} />
+            ) : (
+              <Plug className={`w-4 h-4 ${isReachable ? (isOn ? 'text-bambu-green' : 'text-bambu-gray') : 'text-red-400'}`} />
+            )}
           </div>
           <div>
             <p className="text-sm text-white font-medium">{plug.name}</p>
             <div className="flex items-center gap-1 text-xs">
               {statusLoading ? (
                 <Loader2 className="w-3 h-3 text-bambu-gray animate-spin" />
+              ) : isMqtt ? (
+                /* MQTT plugs show power and monitor-only indicator */
+                isReachable ? (
+                  <>
+                    <Zap className="w-3 h-3 text-teal-400" />
+                    <span className="text-teal-400">{Math.round(status?.energy?.power ?? 0)}W</span>
+                    <span className="text-bambu-gray mx-1">|</span>
+                    <Eye className="w-3 h-3 text-bambu-gray" />
+                    <span className="text-bambu-gray">Monitor</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-3 h-3 text-status-error" />
+                    <span className="text-status-error">Waiting</span>
+                  </>
+                )
               ) : isReachable ? (
                 <>
                   <Wifi className="w-3 h-3 text-status-ok" />
@@ -73,32 +100,35 @@ function SwitchItem({ plug }: { plug: SmartPlug }) {
           </div>
         </div>
 
-        <div className="flex gap-1">
-          <button
-            onClick={() => setConfirmAction('on')}
-            disabled={!isReachable || isPending}
-            className={`p-1.5 rounded transition-colors ${
-              isOn
-                ? 'bg-bambu-green text-white'
-                : 'bg-bambu-dark text-bambu-gray hover:text-white'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title="Turn On"
-          >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => setConfirmAction('off')}
-            disabled={!isReachable || isPending}
-            className={`p-1.5 rounded transition-colors ${
-              !isOn && isReachable
-                ? 'bg-bambu-dark-tertiary text-white'
-                : 'bg-bambu-dark text-bambu-gray hover:text-white'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title="Turn Off"
-          >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PowerOff className="w-4 h-4" />}
-          </button>
-        </div>
+        {/* Hide on/off buttons for MQTT plugs (monitor-only) */}
+        {!isMqtt && (
+          <div className="flex gap-1">
+            <button
+              onClick={() => setConfirmAction('on')}
+              disabled={!isReachable || isPending}
+              className={`p-1.5 rounded transition-colors ${
+                isOn
+                  ? 'bg-bambu-green text-white'
+                  : 'bg-bambu-dark text-bambu-gray hover:text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title="Turn On"
+            >
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setConfirmAction('off')}
+              disabled={!isReachable || isPending}
+              className={`p-1.5 rounded transition-colors ${
+                !isOn && isReachable
+                  ? 'bg-bambu-dark-tertiary text-white'
+                  : 'bg-bambu-dark text-bambu-gray hover:text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title="Turn Off"
+            >
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PowerOff className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
       </div>
 
       {confirmAction && (

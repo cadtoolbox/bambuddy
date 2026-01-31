@@ -50,6 +50,12 @@ async function request<T>(
     throw new Error(message);
   }
 
+  // Handle empty responses (204 No Content, etc.)
+  const contentLength = response.headers.get('content-length');
+  if (response.status === 204 || contentLength === '0') {
+    return undefined as T;
+  }
+
   return await response.json();
 }
 
@@ -333,6 +339,11 @@ export interface ArchiveStats {
   time_accuracy_by_printer: Record<string, number> | null;
   total_energy_kwh: number;
   total_energy_cost: number;
+}
+
+export interface TagInfo {
+  name: string;
+  count: number;
 }
 
 export interface FailureAnalysis {
@@ -841,13 +852,29 @@ export interface CloudDevice {
 export interface SmartPlug {
   id: number;
   name: string;
-  plug_type: 'tasmota' | 'homeassistant';
+  plug_type: 'tasmota' | 'homeassistant' | 'mqtt';
   ip_address: string | null;  // Required for Tasmota
-  ha_entity_id: string | null;  // Required for Home Assistant (e.g., "switch.printer_plug")
+  ha_entity_id: string | null;  // Required for Home Assistant (e.g., "switch.printer_plug", "script.turn_on_printer")
   // Home Assistant energy sensor entities (optional)
   ha_power_entity: string | null;
   ha_energy_today_entity: string | null;
   ha_energy_total_entity: string | null;
+  // MQTT fields (required when plug_type="mqtt")
+  // Legacy field - kept for backward compatibility
+  mqtt_topic: string | null;  // Deprecated, use mqtt_power_topic
+  mqtt_multiplier: number;  // Deprecated, use mqtt_power_multiplier
+  // Power monitoring
+  mqtt_power_topic: string | null;  // Topic for power data
+  mqtt_power_path: string | null;  // e.g., "power_l1" or "data.power"
+  mqtt_power_multiplier: number;  // Unit conversion for power
+  // Energy monitoring
+  mqtt_energy_topic: string | null;  // Topic for energy data
+  mqtt_energy_path: string | null;  // e.g., "energy_l1"
+  mqtt_energy_multiplier: number;  // Unit conversion for energy
+  // State monitoring
+  mqtt_state_topic: string | null;  // Topic for state data
+  mqtt_state_path: string | null;  // e.g., "state_l1" for ON/OFF
+  mqtt_state_on_value: string | null;  // What value means "ON" (e.g., "ON", "true", "1")
   printer_id: number | null;
   enabled: boolean;
   auto_on: boolean;
@@ -866,8 +893,9 @@ export interface SmartPlug {
   schedule_enabled: boolean;
   schedule_on_time: string | null;
   schedule_off_time: string | null;
-  // Switchbar visibility
+  // Visibility options
   show_in_switchbar: boolean;
+  show_on_printer_card: boolean;  // For scripts: show on printer card
   // Status
   last_state: string | null;
   last_checked: string | null;
@@ -878,13 +906,29 @@ export interface SmartPlug {
 
 export interface SmartPlugCreate {
   name: string;
-  plug_type?: 'tasmota' | 'homeassistant';
+  plug_type?: 'tasmota' | 'homeassistant' | 'mqtt';
   ip_address?: string | null;  // Required for Tasmota
   ha_entity_id?: string | null;  // Required for Home Assistant
   // Home Assistant energy sensor entities (optional)
   ha_power_entity?: string | null;
   ha_energy_today_entity?: string | null;
   ha_energy_total_entity?: string | null;
+  // MQTT fields (required when plug_type="mqtt")
+  // Legacy fields - kept for backward compatibility
+  mqtt_topic?: string | null;
+  mqtt_multiplier?: number;
+  // Power monitoring
+  mqtt_power_topic?: string | null;
+  mqtt_power_path?: string | null;
+  mqtt_power_multiplier?: number;
+  // Energy monitoring
+  mqtt_energy_topic?: string | null;
+  mqtt_energy_path?: string | null;
+  mqtt_energy_multiplier?: number;
+  // State monitoring
+  mqtt_state_topic?: string | null;
+  mqtt_state_path?: string | null;
+  mqtt_state_on_value?: string | null;
   printer_id?: number | null;
   enabled?: boolean;
   auto_on?: boolean;
@@ -902,19 +946,35 @@ export interface SmartPlugCreate {
   schedule_enabled?: boolean;
   schedule_on_time?: string | null;
   schedule_off_time?: string | null;
-  // Switchbar visibility
+  // Visibility options
   show_in_switchbar?: boolean;
+  show_on_printer_card?: boolean;
 }
 
 export interface SmartPlugUpdate {
   name?: string;
-  plug_type?: 'tasmota' | 'homeassistant';
+  plug_type?: 'tasmota' | 'homeassistant' | 'mqtt';
   ip_address?: string | null;
   ha_entity_id?: string | null;
   // Home Assistant energy sensor entities (optional)
   ha_power_entity?: string | null;
   ha_energy_today_entity?: string | null;
   ha_energy_total_entity?: string | null;
+  // MQTT fields (legacy)
+  mqtt_topic?: string | null;
+  mqtt_multiplier?: number;
+  // MQTT power fields
+  mqtt_power_topic?: string | null;
+  mqtt_power_path?: string | null;
+  mqtt_power_multiplier?: number;
+  // MQTT energy fields
+  mqtt_energy_topic?: string | null;
+  mqtt_energy_path?: string | null;
+  mqtt_energy_multiplier?: number;
+  // MQTT state fields
+  mqtt_state_topic?: string | null;
+  mqtt_state_path?: string | null;
+  mqtt_state_on_value?: string | null;
   printer_id?: number | null;
   enabled?: boolean;
   auto_on?: boolean;
@@ -932,8 +992,9 @@ export interface SmartPlugUpdate {
   schedule_enabled?: boolean;
   schedule_on_time?: string | null;
   schedule_off_time?: string | null;
-  // Switchbar visibility
+  // Visibility options
   show_in_switchbar?: boolean;
+  show_on_printer_card?: boolean;
 }
 
 // Home Assistant entity for smart plug selection
@@ -941,7 +1002,7 @@ export interface HAEntity {
   entity_id: string;
   friendly_name: string;
   state: string | null;
-  domain: string;  // "switch", "light", "input_boolean"
+  domain: string;  // "switch", "light", "input_boolean", "script"
 }
 
 // Home Assistant sensor entity for energy monitoring
@@ -1658,6 +1719,82 @@ export interface ExternalLinkUpdate {
   icon?: string;
 }
 
+// Permission type - all available permissions
+export type Permission =
+  | 'printers:read' | 'printers:create' | 'printers:update' | 'printers:delete' | 'printers:control' | 'printers:files'
+  | 'archives:read' | 'archives:create' | 'archives:update' | 'archives:delete' | 'archives:reprint'
+  | 'queue:read' | 'queue:create' | 'queue:update' | 'queue:delete' | 'queue:reorder'
+  | 'library:read' | 'library:upload' | 'library:update' | 'library:delete'
+  | 'projects:read' | 'projects:create' | 'projects:update' | 'projects:delete'
+  | 'filaments:read' | 'filaments:create' | 'filaments:update' | 'filaments:delete'
+  | 'smart_plugs:read' | 'smart_plugs:create' | 'smart_plugs:update' | 'smart_plugs:delete' | 'smart_plugs:control'
+  | 'camera:view'
+  | 'maintenance:read' | 'maintenance:create' | 'maintenance:update' | 'maintenance:delete'
+  | 'kprofiles:read' | 'kprofiles:create' | 'kprofiles:update' | 'kprofiles:delete'
+  | 'notifications:read' | 'notifications:create' | 'notifications:update' | 'notifications:delete'
+  | 'notification_templates:read' | 'notification_templates:update'
+  | 'external_links:read' | 'external_links:create' | 'external_links:update' | 'external_links:delete'
+  | 'discovery:scan'
+  | 'firmware:read' | 'firmware:update'
+  | 'ams_history:read'
+  | 'stats:read'
+  | 'system:read'
+  | 'settings:read' | 'settings:update' | 'settings:backup' | 'settings:restore'
+  | 'github:backup' | 'github:restore'
+  | 'cloud:auth'
+  | 'api_keys:read' | 'api_keys:create' | 'api_keys:update' | 'api_keys:delete'
+  | 'users:read' | 'users:create' | 'users:update' | 'users:delete'
+  | 'groups:read' | 'groups:create' | 'groups:update' | 'groups:delete'
+  | 'websocket:connect';
+
+// Group types
+export interface GroupBrief {
+  id: number;
+  name: string;
+}
+
+export interface Group {
+  id: number;
+  name: string;
+  description: string | null;
+  permissions: Permission[];
+  is_system: boolean;
+  user_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupDetail extends Group {
+  users: Array<{ id: number; username: string; is_active: boolean }>;
+}
+
+export interface GroupCreate {
+  name: string;
+  description?: string;
+  permissions: Permission[];
+}
+
+export interface GroupUpdate {
+  name?: string;
+  description?: string;
+  permissions?: Permission[];
+}
+
+export interface PermissionInfo {
+  value: Permission;
+  label: string;
+}
+
+export interface PermissionCategory {
+  name: string;
+  permissions: PermissionInfo[];
+}
+
+export interface PermissionsListResponse {
+  categories: PermissionCategory[];
+  all_permissions: Permission[];
+}
+
 // Auth types
 export interface LoginRequest {
   username: string;
@@ -1673,8 +1810,11 @@ export interface LoginResponse {
 export interface UserResponse {
   id: number;
   username: string;
-  role: string;
+  role: string;  // Deprecated, kept for backward compatibility
   is_active: boolean;
+  is_admin: boolean;  // Computed from role and group membership
+  groups: GroupBrief[];
+  permissions: Permission[];  // All permissions from groups
   created_at: string;
 }
 
@@ -1682,6 +1822,7 @@ export interface UserCreate {
   username: string;
   password: string;
   role: string;
+  group_ids?: number[];
 }
 
 export interface UserUpdate {
@@ -1689,6 +1830,7 @@ export interface UserUpdate {
   password?: string;
   role?: string;
   is_active?: boolean;
+  group_ids?: number[];
 }
 
 export interface SetupRequest {
@@ -1731,7 +1873,7 @@ export const api = {
       method: 'POST',
     }),
 
-  // Users (admin only)
+  // Users
   getUsers: () => request<UserResponse[]>('/users/'),
   getUser: (id: number) => request<UserResponse>(`/users/${id}`),
   createUser: (data: UserCreate) =>
@@ -1746,6 +1888,38 @@ export const api = {
     }),
   deleteUser: (id: number) =>
     request<void>(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>('/users/me/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
+  // Groups
+  getPermissions: () => request<PermissionsListResponse>('/groups/permissions'),
+  getGroups: () => request<Group[]>('/groups/'),
+  getGroup: (id: number) => request<GroupDetail>(`/groups/${id}`),
+  createGroup: (data: GroupCreate) =>
+    request<Group>('/groups/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateGroup: (id: number, data: GroupUpdate) =>
+    request<Group>(`/groups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteGroup: (id: number) =>
+    request<void>(`/groups/${id}`, {
+      method: 'DELETE',
+    }),
+  addUserToGroup: (groupId: number, userId: number) =>
+    request<void>(`/groups/${groupId}/users/${userId}`, {
+      method: 'POST',
+    }),
+  removeUserFromGroup: (groupId: number, userId: number) =>
+    request<void>(`/groups/${groupId}/users/${userId}`, {
       method: 'DELETE',
     }),
 
@@ -1931,6 +2105,17 @@ export const api = {
   deleteArchive: (id: number) =>
     request<void>(`/archives/${id}`, { method: 'DELETE' }),
   getArchiveStats: () => request<ArchiveStats>('/archives/stats'),
+  // Tag management
+  getTags: () => request<TagInfo[]>('/archives/tags'),
+  renameTag: (oldName: string, newName: string) =>
+    request<{ affected: number }>(`/archives/tags/${encodeURIComponent(oldName)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ new_name: newName }),
+    }),
+  deleteTag: (name: string) =>
+    request<{ affected: number }>(`/archives/tags/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }),
   recalculateCosts: () =>
     request<{ message: string; updated: number }>('/archives/recalculate-costs', { method: 'POST' }),
   getFailureAnalysis: (options?: { days?: number; printerId?: number; projectId?: number }) => {
@@ -2424,6 +2609,7 @@ export const api = {
   getSmartPlugs: () => request<SmartPlug[]>('/smart-plugs/'),
   getSmartPlug: (id: number) => request<SmartPlug>(`/smart-plugs/${id}`),
   getSmartPlugByPrinter: (printerId: number) => request<SmartPlug | null>(`/smart-plugs/by-printer/${printerId}`),
+  getScriptPlugsByPrinter: (printerId: number) => request<SmartPlug[]>(`/smart-plugs/by-printer/${printerId}/scripts`),
   createSmartPlug: (data: SmartPlugCreate) =>
     request<SmartPlug>('/smart-plugs/', {
       method: 'POST',
@@ -3029,11 +3215,17 @@ export const api = {
     return request<LibraryFileListItem[]>(`/library/files?${params}`);
   },
   getLibraryFile: (id: number) => request<LibraryFile>(`/library/files/${id}`),
-  uploadLibraryFile: async (file: File, folderId?: number | null): Promise<LibraryFileUploadResponse> => {
+  uploadLibraryFile: async (
+    file: File,
+    folderId?: number | null,
+    generateStlThumbnails: boolean = true
+  ): Promise<LibraryFileUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
-    const params = folderId ? `?folder_id=${folderId}` : '';
-    const response = await fetch(`${API_BASE}/library/files${params}`, {
+    const params = new URLSearchParams();
+    if (folderId) params.set('folder_id', String(folderId));
+    params.set('generate_stl_thumbnails', String(generateStlThumbnails));
+    const response = await fetch(`${API_BASE}/library/files?${params}`, {
       method: 'POST',
       body: formData,
     });
@@ -3047,7 +3239,8 @@ export const api = {
     file: File,
     folderId?: number | null,
     preserveStructure: boolean = true,
-    createFolderFromZip: boolean = false
+    createFolderFromZip: boolean = false,
+    generateStlThumbnails: boolean = true
   ): Promise<ZipExtractResponse> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -3055,6 +3248,7 @@ export const api = {
     if (folderId) params.set('folder_id', String(folderId));
     params.set('preserve_structure', String(preserveStructure));
     params.set('create_folder_from_zip', String(createFolderFromZip));
+    params.set('generate_stl_thumbnails', String(generateStlThumbnails));
     const response = await fetch(`${API_BASE}/library/files/extract-zip?${params}`, {
       method: 'POST',
       body: formData,
@@ -3088,6 +3282,15 @@ export const api = {
       body: JSON.stringify({ file_ids: fileIds, folder_ids: folderIds }),
     }),
   getLibraryStats: () => request<LibraryStats>('/library/stats'),
+  batchGenerateStlThumbnails: (options: {
+    file_ids?: number[];
+    folder_id?: number;
+    all_missing?: boolean;
+  }) =>
+    request<BatchThumbnailResponse>('/library/generate-stl-thumbnails', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    }),
   addLibraryFilesToQueue: (fileIds: number[]) =>
     request<AddToQueueResponse>('/library/files/add-to-queue', {
       method: 'POST',
@@ -3410,6 +3613,21 @@ export interface ZipExtractResponse {
   folders_created: number;
   files: ZipExtractResult[];
   errors: ZipExtractError[];
+}
+
+// STL Thumbnail Generation types
+export interface BatchThumbnailResult {
+  file_id: number;
+  filename: string;
+  success: boolean;
+  error?: string | null;
+}
+
+export interface BatchThumbnailResponse {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  results: BatchThumbnailResult[];
 }
 
 // Library Queue types

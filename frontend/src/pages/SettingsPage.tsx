@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown, ChevronRight, Check, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDateOnly } from '../utils/date';
-import type { AppSettings, AppSettingsUpdate, SmartPlug, SmartPlugStatus, NotificationProvider, NotificationTemplate, UpdateStatus, GitHubBackupStatus, CloudAuthStatus } from '../api/client';
+import type { AppSettings, AppSettingsUpdate, SmartPlug, SmartPlugStatus, NotificationProvider, NotificationTemplate, UpdateStatus, GitHubBackupStatus, CloudAuthStatus, UserCreate, UserUpdate, UserResponse, Group, GroupCreate, GroupUpdate, Permission, PermissionCategory } from '../api/client';
 import { Card, CardContent, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { SmartPlugCard } from '../components/SmartPlugCard';
@@ -86,6 +86,43 @@ export function SettingsPage() {
   const [showBulkPlugConfirm, setShowBulkPlugConfirm] = useState<'on' | 'off' | null>(null);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showDisableAuthConfirm, setShowDisableAuthConfirm] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [changePasswordData, setChangePasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+
+  // User management state
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [deleteUserId, setDeleteUserId] = useState<number | null>(null);
+  const [userFormData, setUserFormData] = useState<{
+    username: string;
+    password: string;
+    confirmPassword: string;
+    role: string;
+    group_ids: number[];
+  }>({
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role: 'user',
+    group_ids: [],
+  });
+
+  // Group management state
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [deleteGroupId, setDeleteGroupId] = useState<number | null>(null);
+  const [groupFormData, setGroupFormData] = useState<{
+    name: string;
+    description: string;
+    permissions: Permission[];
+  }>({
+    name: '',
+    description: '',
+    permissions: [],
+  });
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Home Assistant test connection state
   const [haTestResult, setHaTestResult] = useState<{ success: boolean; message: string | null; error: string | null } | null>(null);
@@ -138,13 +175,17 @@ export function SettingsPage() {
       let totalLifetime = 0;
       let reachableCount = 0;
 
-      for (const { status } of statuses) {
-        if (status?.reachable && status.energy) {
+      for (const { plug, status } of statuses) {
+        // For MQTT plugs, consider reachable if we have power data
+        const hasMqttData = plug.plug_type === 'mqtt' && (status?.energy?.power != null);
+        const isReachable = (status?.reachable || hasMqttData) && status?.energy;
+
+        if (isReachable) {
           reachableCount++;
-          if (status.energy.power != null) totalPower += status.energy.power;
-          if (status.energy.today != null) totalToday += status.energy.today;
-          if (status.energy.yesterday != null) totalYesterday += status.energy.yesterday;
-          if (status.energy.total != null) totalLifetime += status.energy.total;
+          if (status.energy?.power != null) totalPower += status.energy.power;
+          if (status.energy?.today != null) totalToday += status.energy.today;
+          if (status.energy?.yesterday != null) totalYesterday += status.energy.yesterday;
+          if (status.energy?.total != null) totalLifetime += status.energy.total;
         }
       }
 
@@ -262,6 +303,259 @@ export function SettingsPage() {
     queryKey: ['cloud-status'],
     queryFn: api.getCloudStatus,
   });
+
+  // User management queries and mutations
+  const { hasPermission } = useAuth();
+
+  const { data: usersData = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.getUsers(),
+    enabled: authEnabled && hasPermission('users:read'),
+  });
+
+  const { data: groupsData = [], isLoading: groupsLoading } = useQuery({
+    queryKey: ['groups'],
+    queryFn: () => api.getGroups(),
+    enabled: authEnabled && hasPermission('groups:read'),
+  });
+
+  const { data: permissionsData } = useQuery({
+    queryKey: ['permissions'],
+    queryFn: () => api.getPermissions(),
+    enabled: authEnabled && hasPermission('groups:read'),
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (data: UserCreate) => api.createUser(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      setShowCreateUserModal(false);
+      setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      showToast('User created successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UserUpdate }) => api.updateUser(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      setShowEditUserModal(false);
+      setEditingUserId(null);
+      setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      showToast('User updated successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: number) => api.deleteUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      showToast('User deleted successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const createGroupMutation = useMutation({
+    mutationFn: (data: GroupCreate) => api.createGroup(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      setShowCreateGroupModal(false);
+      resetGroupForm();
+      showToast('Group created successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: GroupUpdate }) => api.updateGroup(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      setEditingGroup(null);
+      resetGroupForm();
+      showToast('Group updated successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: (id: number) => api.deleteGroup(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      showToast('Group deleted successfully');
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  // User management handlers
+  const handleCreateUser = () => {
+    if (!userFormData.username || !userFormData.password) {
+      showToast('Please fill in all required fields', 'error');
+      return;
+    }
+    if (userFormData.password !== userFormData.confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+    if (userFormData.password.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    createUserMutation.mutate({
+      username: userFormData.username,
+      password: userFormData.password,
+      role: userFormData.role,
+      group_ids: userFormData.group_ids.length > 0 ? userFormData.group_ids : undefined,
+    });
+  };
+
+  const handleUpdateUser = (id: number) => {
+    if (userFormData.password) {
+      if (userFormData.password !== userFormData.confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+      }
+      if (userFormData.password.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+      }
+    }
+    const updateData: UserUpdate = {
+      username: userFormData.username || undefined,
+      password: userFormData.password || undefined,
+      role: userFormData.role,
+      group_ids: userFormData.group_ids,
+    };
+    if (!updateData.password) {
+      delete updateData.password;
+    }
+    updateUserMutation.mutate({ id, data: updateData });
+  };
+
+  const startEditUser = (userToEdit: UserResponse) => {
+    setEditingUserId(userToEdit.id);
+    setUserFormData({
+      username: userToEdit.username,
+      password: '',
+      confirmPassword: '',
+      role: userToEdit.role,
+      group_ids: userToEdit.groups?.map(g => g.id) || [],
+    });
+    setShowEditUserModal(true);
+  };
+
+  const toggleUserGroup = (groupId: number) => {
+    setUserFormData(prev => ({
+      ...prev,
+      group_ids: prev.group_ids.includes(groupId)
+        ? prev.group_ids.filter(id => id !== groupId)
+        : [...prev.group_ids, groupId],
+    }));
+  };
+
+  // Group management handlers
+  const resetGroupForm = () => {
+    setGroupFormData({ name: '', description: '', permissions: [] });
+    setExpandedCategories(new Set());
+  };
+
+  const handleCreateGroup = () => {
+    if (!groupFormData.name.trim()) {
+      showToast('Please enter a group name', 'error');
+      return;
+    }
+    createGroupMutation.mutate({
+      name: groupFormData.name,
+      description: groupFormData.description || undefined,
+      permissions: groupFormData.permissions,
+    });
+  };
+
+  const handleUpdateGroup = () => {
+    if (!editingGroup) return;
+    if (!groupFormData.name.trim()) {
+      showToast('Please enter a group name', 'error');
+      return;
+    }
+    updateGroupMutation.mutate({
+      id: editingGroup.id,
+      data: {
+        name: groupFormData.name !== editingGroup.name ? groupFormData.name : undefined,
+        description: groupFormData.description,
+        permissions: groupFormData.permissions,
+      },
+    });
+  };
+
+  const startEditGroup = (group: Group) => {
+    setEditingGroup(group);
+    setGroupFormData({
+      name: group.name,
+      description: group.description || '',
+      permissions: group.permissions,
+    });
+    const cats = new Set<string>();
+    permissionsData?.categories.forEach((cat) => {
+      if (cat.permissions.some((p) => group.permissions.includes(p.value))) {
+        cats.add(cat.name);
+      }
+    });
+    setExpandedCategories(cats);
+  };
+
+  const toggleCategory = (categoryName: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryName)) {
+        next.delete(categoryName);
+      } else {
+        next.add(categoryName);
+      }
+      return next;
+    });
+  };
+
+  const togglePermission = (permission: Permission) => {
+    setGroupFormData((prev) => {
+      const permissions = prev.permissions.includes(permission)
+        ? prev.permissions.filter((p) => p !== permission)
+        : [...prev.permissions, permission];
+      return { ...prev, permissions };
+    });
+  };
+
+  const toggleCategoryPermissions = (category: PermissionCategory, checked: boolean) => {
+    setGroupFormData((prev) => {
+      const categoryPerms = category.permissions.map((p) => p.value);
+      const otherPerms = prev.permissions.filter((p) => !categoryPerms.includes(p));
+      const permissions = checked ? [...otherPerms, ...categoryPerms] : otherPerms;
+      return { ...prev, permissions };
+    });
+  };
+
+  const isCategoryFullySelected = (category: PermissionCategory) => {
+    return category.permissions.every((p) => groupFormData.permissions.includes(p.value));
+  };
+
+  const isCategoryPartiallySelected = (category: PermissionCategory) => {
+    const selected = category.permissions.filter((p) => groupFormData.permissions.includes(p.value));
+    return selected.length > 0 && selected.length < category.permissions.length;
+  };
 
   const applyUpdateMutation = useMutation({
     mutationFn: api.applyUpdate,
@@ -1660,7 +1954,7 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-bambu-gray">
-                Connect to Home Assistant to control smart plugs via HA's REST API. Supports switch, light, and input_boolean entities.
+                Connect to Home Assistant to control smart plugs via HA's REST API. Supports switch, light, input_boolean, and script entities.
               </p>
 
               <div className="flex items-center justify-between">
@@ -3039,202 +3333,750 @@ export function SettingsPage() {
 
       {/* Users Tab */}
       {activeTab === 'users' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-bambu-green" />
-                User Authentication
-              </h2>
-              <p className="text-sm text-bambu-gray mt-1">
-                Enable authentication to secure your Bambuddy instance and manage user access.
-              </p>
-            </div>
-
-            <Card>
-              <CardContent className="py-6">
-                {!authEnabled ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${authEnabled ? 'bg-green-500/20' : 'bg-gray-500/20'}`}>
-                        {authEnabled ? (
-                          <Lock className="w-6 h-6 text-green-400" />
-                        ) : (
-                          <Unlock className="w-6 h-6 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-white font-medium">Authentication Disabled</h3>
-                        <p className="text-sm text-bambu-gray">
-                          Your Bambuddy instance is currently accessible without authentication.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-bambu-dark-tertiary">
-                      <p className="text-sm text-bambu-gray mb-4">
-                        Enable authentication to:
-                      </p>
-                      <ul className="space-y-2 text-sm text-bambu-gray mb-4">
-                        <li className="flex items-start gap-2">
-                          <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                          <span>Require login to access the system</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                          <span>Manage multiple users with different roles</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                          <span>Control access to printer settings and user management</span>
-                        </li>
-                      </ul>
-
-                      <Button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigate('/setup');
-                        }}
-                        className="w-full"
-                      >
-                        <Lock className="w-4 h-4" />
-                        Activate Authentication
-                      </Button>
-                    </div>
+        <div className="space-y-6">
+          {/* Auth Toggle Header */}
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${authEnabled ? 'bg-green-500/20' : 'bg-gray-500/20'}`}>
+                    {authEnabled ? (
+                      <Lock className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <Unlock className="w-5 h-5 text-gray-400" />
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-green-500/20">
-                        <Lock className="w-6 h-6 text-green-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-white font-medium">Authentication Enabled</h3>
-                        <p className="text-sm text-bambu-gray">
-                          Your Bambuddy instance is secured with authentication.
-                        </p>
-                      </div>
-                    </div>
+                  <div>
+                    <h3 className="text-white font-medium">Authentication</h3>
+                    <p className="text-sm text-bambu-gray">
+                      {authEnabled
+                        ? 'Your instance is secured with user authentication'
+                        : 'Enable to require login and manage user access'}
+                    </p>
+                  </div>
+                </div>
+                {!authEnabled ? (
+                  <Button onClick={() => navigate('/setup')}>
+                    <Lock className="w-4 h-4" />
+                    Enable
+                  </Button>
+                ) : user?.is_admin && (
+                  <Button variant="secondary" onClick={() => setShowDisableAuthConfirm(true)}>
+                    <Unlock className="w-4 h-4" />
+                    Disable
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-                    {user && (
-                      <div className="pt-4 border-t border-bambu-dark-tertiary">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <p className="text-sm text-bambu-gray">Current User</p>
-                            <p className="text-white font-medium">{user.username}</p>
-                            <p className="text-xs text-bambu-gray mt-1">
-                              Role: <span className="capitalize">{user.role}</span>
-                            </p>
-                          </div>
-                          <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            user.role === 'admin'
-                              ? 'bg-purple-500/20 text-purple-300'
-                              : 'bg-blue-500/20 text-blue-300'
-                          }`}>
-                            {user.role === 'admin' ? 'Admin' : 'User'}
+          {authEnabled && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* Left Column: Current User + User List */}
+              <div className="space-y-6">
+                {/* Current User Card */}
+                {user && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                          <Users className="w-5 h-5 text-bambu-green" />
+                          Current User
+                        </h3>
+                        <Button size="sm" variant="ghost" onClick={() => setShowChangePasswordModal(true)}>
+                          <Key className="w-4 h-4" />
+                          Change Password
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-medium text-lg">{user.username}</p>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {user.is_admin && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300">
+                                Admin
+                              </span>
+                            )}
+                            {user.groups?.map(group => (
+                              <span
+                                key={group.id}
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  group.name === 'Administrators'
+                                    ? 'bg-purple-500/20 text-purple-300'
+                                    : group.name === 'Operators'
+                                    ? 'bg-blue-500/20 text-blue-300'
+                                    : group.name === 'Viewers'
+                                    ? 'bg-green-500/20 text-green-300'
+                                    : 'bg-gray-500/20 text-gray-300'
+                                }`}
+                              >
+                                {group.name}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </div>
-                    )}
+                    </CardContent>
+                  </Card>
+                )}
 
-                    <div className="pt-4 border-t border-bambu-dark-tertiary space-y-3">
-                      <Button
-                        onClick={() => navigate('/users')}
-                        className="w-full"
-                        variant="secondary"
-                      >
-                        <Users className="w-4 h-4" />
-                        Manage Users
-                      </Button>
-
-                      {user?.role === 'admin' && (
+                {/* User List */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <Users className="w-5 h-5 text-bambu-green" />
+                        Users
+                      </h3>
+                      {hasPermission('users:create') && (
                         <Button
-                          onClick={() => setShowDisableAuthConfirm(true)}
-                          className="w-full"
-                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setShowCreateUserModal(true);
+                            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                          }}
                         >
-                          <Unlock className="w-4 h-4" />
-                          Disable Authentication
+                          <Plus className="w-4 h-4" />
+                          Add User
                         </Button>
                       )}
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {authEnabled && (
-            <div>
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-bambu-green" />
-                  Role Permissions
-                </h2>
-                <p className="text-sm text-bambu-gray mt-1">
-                  Overview of what each role can do.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                        <Shield className="w-4 h-4 text-purple-300" />
-                      </div>
-                      <h3 className="text-white font-medium">Admin</h3>
-                    </div>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-2 text-sm text-bambu-gray">
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Manage printer settings</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Create, edit, and delete users</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Access all system features</span>
-                      </li>
-                    </ul>
+                    {usersLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-bambu-green animate-spin" />
+                      </div>
+                    ) : usersData.length === 0 ? (
+                      <p className="text-center text-bambu-gray py-8">No users found</p>
+                    ) : (
+                      <div className="divide-y divide-bambu-dark-tertiary">
+                        {usersData.map((userItem) => (
+                          <div key={userItem.id} className="py-3 flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-medium truncate">{userItem.username}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {userItem.is_admin && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300">
+                                    Admin
+                                  </span>
+                                )}
+                                {userItem.groups?.map(group => (
+                                  <span
+                                    key={group.id}
+                                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      group.name === 'Administrators'
+                                        ? 'bg-purple-500/20 text-purple-300'
+                                        : group.name === 'Operators'
+                                        ? 'bg-blue-500/20 text-blue-300'
+                                        : group.name === 'Viewers'
+                                        ? 'bg-green-500/20 text-green-300'
+                                        : 'bg-gray-500/20 text-gray-300'
+                                    }`}
+                                  >
+                                    {group.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 ml-4">
+                              {hasPermission('users:update') && (
+                                <Button size="sm" variant="ghost" onClick={() => startEditUser(userItem)}>
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {hasPermission('users:delete') && userItem.id !== user?.id && (
+                                <Button size="sm" variant="ghost" onClick={() => setDeleteUserId(userItem.id)}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+              </div>
 
+              {/* Right Column: Groups */}
+              <div>
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                        <Users className="w-4 h-4 text-blue-300" />
-                      </div>
-                      <h3 className="text-white font-medium">User</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-bambu-green" />
+                        Groups
+                      </h3>
+                      {hasPermission('groups:create') && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setShowCreateGroupModal(true);
+                            resetGroupForm();
+                          }}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Group
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-2 text-sm text-bambu-gray">
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Send print jobs</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Manage files and archives</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
-                        <span>Manage filament</span>
-                      </li>
-                    </ul>
+                    {groupsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-bambu-green animate-spin" />
+                      </div>
+                    ) : groupsData.length === 0 ? (
+                      <p className="text-center text-bambu-gray py-8">No groups found</p>
+                    ) : (
+                      <div className="divide-y divide-bambu-dark-tertiary">
+                        {groupsData.map((group) => (
+                          <div key={group.id} className="py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Shield
+                                  className={`w-4 h-4 ${
+                                    group.name === 'Administrators'
+                                      ? 'text-purple-400'
+                                      : group.name === 'Operators'
+                                      ? 'text-blue-400'
+                                      : group.name === 'Viewers'
+                                      ? 'text-green-400'
+                                      : 'text-bambu-gray'
+                                  }`}
+                                />
+                                <span className="text-white font-medium">{group.name}</span>
+                                {group.is_system && (
+                                  <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
+                                    System
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {hasPermission('groups:update') && (
+                                  <Button size="sm" variant="ghost" onClick={() => startEditGroup(group)}>
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {hasPermission('groups:delete') && !group.is_system && (
+                                  <Button size="sm" variant="ghost" onClick={() => setDeleteGroupId(group.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-bambu-gray mt-1 ml-6">
+                              {group.description || 'No description'}
+                            </p>
+                            <div className="flex items-center gap-4 mt-2 ml-6 text-xs text-bambu-gray">
+                              <span>{group.user_count} users</span>
+                              <span>{group.permissions.length} permissions</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
             </div>
           )}
+
+          {/* Auth Disabled Info */}
+          {!authEnabled && (
+            <Card>
+              <CardContent className="py-6">
+                <div className="text-center">
+                  <Unlock className="w-12 h-12 text-bambu-gray mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-white mb-2">Authentication is Disabled</h3>
+                  <p className="text-sm text-bambu-gray mb-4 max-w-md mx-auto">
+                    Enable authentication to create user accounts, manage permissions, and secure your Bambuddy instance.
+                  </p>
+                  <ul className="space-y-2 text-sm text-bambu-gray mb-6 text-left max-w-xs mx-auto">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
+                      <span>Require login to access the system</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
+                      <span>Create multiple users with group-based permissions</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-bambu-green mt-0.5 flex-shrink-0" />
+                      <span>Control access with 50+ granular permissions</span>
+                    </li>
+                  </ul>
+                  <Button onClick={() => navigate('/setup')}>
+                    <Lock className="w-4 h-4" />
+                    Enable Authentication
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
+      )}
+
+      {/* Create User Modal */}
+      {showCreateUserModal && (
+        <div
+          className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowCreateUserModal(false);
+            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+          }}
+        >
+          <Card
+            className="w-full max-w-md"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-bambu-green" />
+                  <h2 className="text-lg font-semibold text-white">Create User</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowCreateUserModal(false);
+                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Username</label>
+                  <input
+                    type="text"
+                    value={userFormData.username}
+                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter username"
+                    autoComplete="username"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={userFormData.password}
+                    onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter password (min 6 characters)"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={userFormData.confirmPassword}
+                    onChange={(e) => setUserFormData({ ...userFormData, confirmPassword: e.target.value })}
+                    className={`w-full px-4 py-3 bg-bambu-dark-secondary border rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors ${
+                      userFormData.confirmPassword && userFormData.password !== userFormData.confirmPassword
+                        ? 'border-red-500'
+                        : 'border-bambu-dark-tertiary'
+                    }`}
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                  {userFormData.confirmPassword && userFormData.password !== userFormData.confirmPassword && (
+                    <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Groups</label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto p-2 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg">
+                    {groupsData.map(group => (
+                      <label
+                        key={group.id}
+                        className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-bambu-dark-tertiary cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={userFormData.group_ids.includes(group.id)}
+                          onChange={() => toggleUserGroup(group.id)}
+                          className="w-4 h-4 rounded border-bambu-gray text-bambu-green focus:ring-bambu-green focus:ring-offset-0 bg-bambu-dark"
+                        />
+                        <span className="text-sm text-white">{group.name}</span>
+                        {group.is_system && (
+                          <span className="text-xs text-yellow-400">(System)</span>
+                        )}
+                      </label>
+                    ))}
+                    {groupsData.length === 0 && (
+                      <p className="text-sm text-bambu-gray">No groups available</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCreateUserModal(false);
+                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateUser}
+                  disabled={createUserMutation.isPending || !userFormData.username || !userFormData.password || userFormData.password !== userFormData.confirmPassword || userFormData.password.length < 6}
+                >
+                  {createUserMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Create User
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && editingUserId !== null && (
+        <div
+          className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowEditUserModal(false);
+            setEditingUserId(null);
+            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+          }}
+        >
+          <Card
+            className="w-full max-w-md"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Edit2 className="w-5 h-5 text-bambu-green" />
+                  <h2 className="text-lg font-semibold text-white">Edit User</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowEditUserModal(false);
+                    setEditingUserId(null);
+                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Username</label>
+                  <input
+                    type="text"
+                    value={userFormData.username}
+                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter username"
+                    autoComplete="username"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Password <span className="text-bambu-gray font-normal">(leave blank to keep current)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={userFormData.password}
+                    onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value, confirmPassword: '' })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter new password"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+                {userFormData.password && (
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">Confirm Password</label>
+                    <input
+                      type="password"
+                      value={userFormData.confirmPassword}
+                      onChange={(e) => setUserFormData({ ...userFormData, confirmPassword: e.target.value })}
+                      className={`w-full px-4 py-3 bg-bambu-dark-secondary border rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors ${
+                        userFormData.confirmPassword && userFormData.password !== userFormData.confirmPassword
+                          ? 'border-red-500'
+                          : 'border-bambu-dark-tertiary'
+                      }`}
+                      placeholder="Confirm new password"
+                      autoComplete="new-password"
+                      minLength={6}
+                    />
+                    {userFormData.confirmPassword && userFormData.password !== userFormData.confirmPassword && (
+                      <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Groups</label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto p-2 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg">
+                    {groupsData.map(group => (
+                      <label
+                        key={group.id}
+                        className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-bambu-dark-tertiary cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={userFormData.group_ids.includes(group.id)}
+                          onChange={() => toggleUserGroup(group.id)}
+                          className="w-4 h-4 rounded border-bambu-gray text-bambu-green focus:ring-bambu-green focus:ring-offset-0 bg-bambu-dark"
+                        />
+                        <span className="text-sm text-white">{group.name}</span>
+                        {group.is_system && (
+                          <span className="text-xs text-yellow-400">(System)</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowEditUserModal(false);
+                    setEditingUserId(null);
+                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleUpdateUser(editingUserId)}
+                  disabled={updateUserMutation.isPending || !userFormData.username || !!(userFormData.password && (userFormData.password !== userFormData.confirmPassword || userFormData.password.length < 6))}
+                >
+                  {updateUserMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {deleteUserId !== null && (
+        <ConfirmModal
+          title="Delete User"
+          message="Are you sure you want to delete this user? This action cannot be undone."
+          confirmText="Delete User"
+          variant="danger"
+          onConfirm={() => {
+            deleteUserMutation.mutate(deleteUserId);
+            setDeleteUserId(null);
+          }}
+          onCancel={() => setDeleteUserId(null)}
+        />
+      )}
+
+      {/* Create/Edit Group Modal */}
+      {(showCreateGroupModal || editingGroup) && (
+        <div
+          className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowCreateGroupModal(false);
+            setEditingGroup(null);
+            resetGroupForm();
+          }}
+        >
+          <Card
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-bambu-green" />
+                  <h2 className="text-lg font-semibold text-white">
+                    {editingGroup ? 'Edit Group' : 'Create Group'}
+                  </h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowCreateGroupModal(false);
+                    setEditingGroup(null);
+                    resetGroupForm();
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Group Name</label>
+                  <input
+                    type="text"
+                    value={groupFormData.name}
+                    onChange={(e) => setGroupFormData({ ...groupFormData, name: e.target.value })}
+                    disabled={editingGroup?.is_system}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors disabled:opacity-50"
+                    placeholder="Enter group name"
+                  />
+                  {editingGroup?.is_system && (
+                    <p className="text-xs text-yellow-400 mt-1">System group names cannot be changed</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">Description</label>
+                  <textarea
+                    value={groupFormData.description}
+                    onChange={(e) => setGroupFormData({ ...groupFormData, description: e.target.value })}
+                    rows={2}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors resize-none"
+                    placeholder="Enter description (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Permissions ({groupFormData.permissions.length} selected)
+                  </label>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {permissionsData?.categories.map((category) => (
+                      <div key={category.name} className="border border-bambu-dark-tertiary rounded-lg overflow-hidden">
+                        <div
+                          className="flex items-center justify-between px-4 py-2 bg-bambu-dark-secondary cursor-pointer hover:bg-bambu-dark-tertiary transition-colors"
+                          onClick={() => toggleCategory(category.name)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCategoryPermissions(category, !isCategoryFullySelected(category));
+                              }}
+                              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                                isCategoryFullySelected(category)
+                                  ? 'bg-bambu-green border-bambu-green'
+                                  : isCategoryPartiallySelected(category)
+                                  ? 'bg-bambu-green/50 border-bambu-green'
+                                  : 'border-bambu-gray hover:border-white'
+                              }`}
+                            >
+                              {(isCategoryFullySelected(category) || isCategoryPartiallySelected(category)) && (
+                                <Check className="w-3 h-3 text-white" />
+                              )}
+                            </button>
+                            <span className="text-white font-medium">{category.name}</span>
+                            <span className="text-xs text-bambu-gray">
+                              ({category.permissions.filter((p) => groupFormData.permissions.includes(p.value)).length}/
+                              {category.permissions.length})
+                            </span>
+                          </div>
+                          {expandedCategories.has(category.name) ? (
+                            <ChevronDown className="w-4 h-4 text-bambu-gray" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-bambu-gray" />
+                          )}
+                        </div>
+                        {expandedCategories.has(category.name) && (
+                          <div className="p-3 bg-bambu-dark space-y-2">
+                            {category.permissions.map((perm) => (
+                              <label
+                                key={perm.value}
+                                className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-bambu-dark-secondary cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={groupFormData.permissions.includes(perm.value)}
+                                  onChange={() => togglePermission(perm.value)}
+                                  className="w-4 h-4 rounded border-bambu-gray text-bambu-green focus:ring-bambu-green focus:ring-offset-0 bg-bambu-dark-secondary"
+                                />
+                                <span className="text-sm text-bambu-gray">{perm.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCreateGroupModal(false);
+                    setEditingGroup(null);
+                    resetGroupForm();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={editingGroup ? handleUpdateGroup : handleCreateGroup}
+                  disabled={createGroupMutation.isPending || updateGroupMutation.isPending || !groupFormData.name.trim()}
+                >
+                  {(createGroupMutation.isPending || updateGroupMutation.isPending) ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {editingGroup ? 'Saving...' : 'Creating...'}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {editingGroup ? 'Save Changes' : 'Create Group'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Group Confirmation Modal */}
+      {deleteGroupId !== null && (
+        <ConfirmModal
+          title="Delete Group"
+          message="Are you sure you want to delete this group? Users in this group will lose these permissions."
+          confirmText="Delete Group"
+          variant="danger"
+          onConfirm={() => {
+            deleteGroupMutation.mutate(deleteGroupId);
+            setDeleteGroupId(null);
+          }}
+          onCancel={() => setDeleteGroupId(null)}
+        />
       )}
 
       {/* Backup Tab */}
@@ -3264,6 +4106,141 @@ export function SettingsPage() {
           }}
           onCancel={() => setShowDisableAuthConfirm(false)}
         />
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowChangePasswordModal(false);
+            setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+          }}
+        >
+          <Card
+            className="w-full max-w-md"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Key className="w-5 h-5 text-bambu-green" />
+                  <h2 className="text-lg font-semibold text-white">Change Password</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.currentPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, currentPassword: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.newPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, newPassword: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter new password (min 6 characters)"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.confirmPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, confirmPassword: e.target.value })}
+                    className={`w-full px-4 py-3 bg-bambu-dark-secondary border rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors ${
+                      changePasswordData.confirmPassword && changePasswordData.newPassword !== changePasswordData.confirmPassword
+                        ? 'border-red-500'
+                        : 'border-bambu-dark-tertiary'
+                    }`}
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                  {changePasswordData.confirmPassword && changePasswordData.newPassword !== changePasswordData.confirmPassword && (
+                    <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (changePasswordData.newPassword !== changePasswordData.confirmPassword) {
+                      showToast('Passwords do not match', 'error');
+                      return;
+                    }
+                    if (changePasswordData.newPassword.length < 6) {
+                      showToast('Password must be at least 6 characters', 'error');
+                      return;
+                    }
+                    setChangePasswordLoading(true);
+                    try {
+                      await api.changePassword(changePasswordData.currentPassword, changePasswordData.newPassword);
+                      showToast('Password changed successfully', 'success');
+                      setShowChangePasswordModal(false);
+                      setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                    } catch (error: unknown) {
+                      const message = error instanceof Error ? error.message : 'Failed to change password';
+                      showToast(message, 'error');
+                    } finally {
+                      setChangePasswordLoading(false);
+                    }
+                  }}
+                  disabled={changePasswordLoading || !changePasswordData.currentPassword || !changePasswordData.newPassword || changePasswordData.newPassword !== changePasswordData.confirmPassword || changePasswordData.newPassword.length < 6}
+                >
+                  {changePasswordLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Changing...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-4 h-4" />
+                      Change Password
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

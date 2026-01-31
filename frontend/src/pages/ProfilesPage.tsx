@@ -42,10 +42,11 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { parseUTCDate } from '../utils/date';
-import type { SlicerSetting, SlicerSettingsResponse, SlicerSettingDetail, SlicerSettingCreate, Printer, FieldDefinition } from '../api/client';
+import type { SlicerSetting, SlicerSettingsResponse, SlicerSettingDetail, SlicerSettingCreate, Printer, FieldDefinition, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { KProfilesView } from '../components/KProfilesView';
 
 type ProfileTab = 'cloud' | 'kprofiles';
@@ -506,12 +507,14 @@ function PresetDetailModal({
   onDeleted,
   onDuplicate,
   onEdit,
+  hasPermission,
 }: {
   setting: SlicerSetting;
   onClose: () => void;
   onDeleted: () => void;
   onDuplicate: () => void;
   onEdit: () => void;
+  hasPermission: (permission: Permission) => boolean;
 }) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -599,17 +602,32 @@ function PresetDetailModal({
             <div className="flex-shrink-0 p-4 border-t border-bambu-dark-tertiary">
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={onClose} className="flex-1">Close</Button>
-                <Button variant="secondary" onClick={onDuplicate}>
+                <Button
+                  variant="secondary"
+                  onClick={onDuplicate}
+                  disabled={!hasPermission('cloud:auth')}
+                  title={!hasPermission('cloud:auth') ? 'You do not have permission to duplicate presets' : undefined}
+                >
                   <Copy className="w-4 h-4" />
                   Duplicate
                 </Button>
                 {isEditable && (
                   <>
-                    <Button variant="secondary" onClick={onEdit} disabled={isLoading || !detail}>
+                    <Button
+                      variant="secondary"
+                      onClick={onEdit}
+                      disabled={isLoading || !detail || !hasPermission('cloud:auth')}
+                      title={!hasPermission('cloud:auth') ? 'You do not have permission to edit presets' : undefined}
+                    >
                       <Pencil className="w-4 h-4" />
                       Edit
                     </Button>
-                    <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+                    <Button
+                      variant="danger"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={!hasPermission('cloud:auth')}
+                      title={!hasPermission('cloud:auth') ? 'You do not have permission to delete presets' : undefined}
+                    >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </>
@@ -2206,12 +2224,14 @@ function CloudProfilesView({
   onRefresh,
   isRefreshing,
   printers,
+  hasPermission,
 }: {
   settings: SlicerSettingsResponse;
   lastSyncTime?: Date;
   onRefresh: () => void;
   isRefreshing: boolean;
   printers: Printer[];
+  hasPermission: (permission: Permission) => boolean;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<PresetType>('all');
@@ -2424,15 +2444,29 @@ function CloudProfilesView({
               <GitCompare className="w-4 h-4" />
               {compareMode ? 'Cancel' : 'Compare'}
             </Button>
-            <Button variant="secondary" onClick={() => setShowTemplatesModal(true)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowTemplatesModal(true)}
+              disabled={!hasPermission('cloud:auth')}
+              title={!hasPermission('cloud:auth') ? 'You do not have permission to manage templates' : undefined}
+            >
               <Sparkles className="w-4 h-4" />
               Templates
             </Button>
-            <Button variant="secondary" onClick={onRefresh} disabled={isRefreshing}>
+            <Button
+              variant="secondary"
+              onClick={onRefresh}
+              disabled={isRefreshing || !hasPermission('cloud:auth')}
+              title={!hasPermission('cloud:auth') ? 'You do not have permission to refresh profiles' : undefined}
+            >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button onClick={() => setShowCreateModal(true)}>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              disabled={!hasPermission('cloud:auth')}
+              title={!hasPermission('cloud:auth') ? 'You do not have permission to create presets' : undefined}
+            >
               <Plus className="w-4 h-4" />
               New Preset
             </Button>
@@ -2704,6 +2738,7 @@ function CloudProfilesView({
           onDeleted={() => setSelectedSetting(null)}
           onDuplicate={() => handleDuplicate(selectedSetting)}
           onEdit={() => handleEdit(selectedSetting)}
+          hasPermission={hasPermission}
         />
       )}
 
@@ -2748,6 +2783,7 @@ function CloudProfilesView({
 export function ProfilesPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<ProfileTab>('cloud');
   const [lastSyncTime, setLastSyncTime] = useState<Date>();
 
@@ -2846,7 +2882,8 @@ export function ProfilesPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
+                disabled={logoutMutation.isPending || !hasPermission('cloud:auth')}
+                title={!hasPermission('cloud:auth') ? 'You do not have permission to logout' : undefined}
               >
                 <LogOut className="w-4 h-4" />
                 Logout
@@ -2867,6 +2904,7 @@ export function ProfilesPage() {
               onRefresh={() => refetchSettings()}
               isRefreshing={settingsLoading}
               printers={printers}
+              hasPermission={hasPermission}
             />
           ) : (
             <div className="text-center py-16">

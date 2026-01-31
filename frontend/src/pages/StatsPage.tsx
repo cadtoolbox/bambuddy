@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 import { PrintCalendar } from '../components/PrintCalendar';
 import { FilamentTrends } from '../components/FilamentTrends';
@@ -505,6 +506,7 @@ function FailureAnalysisWidget({ size = 1 }: { size?: 1 | 2 | 4 }) {
 
 export function StatsPage() {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [dashboardKey, setDashboardKey] = useState(0);
@@ -683,6 +685,8 @@ export function StatsPage() {
               setDashboardKey(prev => prev + 1);
               showToast('Layout reset');
             }}
+            disabled={!hasPermission('settings:update')}
+            title={!hasPermission('settings:update') ? 'You do not have permission to reset layout' : undefined}
           >
             <RotateCcw className="w-4 h-4" />
             Reset Layout
@@ -691,8 +695,8 @@ export function StatsPage() {
           <Button
             variant="secondary"
             onClick={handleRecalculateCosts}
-            disabled={isRecalculating}
-            title="Recalculate all archive costs using current filament prices"
+            disabled={isRecalculating || !hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to recalculate costs' : 'Recalculate all archive costs using current filament prices'}
           >
             {isRecalculating ? (
               <Loader2 className="w-4 h-4 animate-spin" />

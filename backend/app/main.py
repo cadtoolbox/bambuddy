@@ -183,6 +183,7 @@ from backend.app.api.routes import (
     filaments,
     firmware,
     github_backup,
+    groups,
     kprofiles,
     library,
     maintenance,
@@ -248,9 +249,10 @@ _notified_hms_errors: dict[int, set[str]] = {}
 
 
 async def _get_plug_energy(plug, db) -> dict | None:
-    """Get energy from plug regardless of type (Tasmota or Home Assistant).
+    """Get energy from plug regardless of type (Tasmota, Home Assistant, or MQTT).
 
     For HA plugs, configures the service with current settings from DB.
+    For MQTT plugs, returns data from the subscription service.
     """
     if plug.plug_type == "homeassistant":
         from backend.app.api.routes.settings import get_setting
@@ -259,6 +261,17 @@ async def _get_plug_energy(plug, db) -> dict | None:
         ha_token = await get_setting(db, "ha_token") or ""
         homeassistant_service.configure(ha_url, ha_token)
         return await homeassistant_service.get_energy(plug)
+    elif plug.plug_type == "mqtt":
+        # MQTT plugs report "today" energy, not lifetime total
+        # For per-print tracking, we use "today" as the counter (resets at midnight)
+        mqtt_data = mqtt_relay.smart_plug_service.get_plug_data(plug.id)
+        if mqtt_data:
+            return {
+                "power": mqtt_data.power,
+                "today": mqtt_data.energy,
+                "total": mqtt_data.energy,  # Use today as total for per-print calculations
+            }
+        return None
     else:
         return await tasmota_service.get_energy(plug)
 
@@ -2395,6 +2408,27 @@ async def lifespan(app: FastAPI):
         }
         await mqtt_relay.configure(mqtt_settings)
 
+        # Restore MQTT smart plug subscriptions
+        if mqtt_settings.get("mqtt_enabled"):
+            from sqlalchemy import select
+
+            from backend.app.models.smart_plug import SmartPlug
+
+            result = await db.execute(select(SmartPlug).where(SmartPlug.plug_type == "mqtt"))
+            mqtt_plugs = result.scalars().all()
+            for plug in mqtt_plugs:
+                if plug.mqtt_topic:
+                    mqtt_relay.smart_plug_service.subscribe(
+                        plug_id=plug.id,
+                        topic=plug.mqtt_topic,
+                        power_path=plug.mqtt_power_path,
+                        energy_path=plug.mqtt_energy_path,
+                        state_path=plug.mqtt_state_path,
+                        multiplier=plug.mqtt_multiplier or 1.0,
+                    )
+            if mqtt_plugs:
+                logging.info(f"Restored {len(mqtt_plugs)} MQTT smart plug subscriptions")
+
     # Connect to all active printers
     async with async_session() as db:
         await init_printer_connections(db)
@@ -2493,6 +2527,7 @@ app = FastAPI(
 # API routes
 app.include_router(auth.router, prefix=app_settings.api_prefix)
 app.include_router(users.router, prefix=app_settings.api_prefix)
+app.include_router(groups.router, prefix=app_settings.api_prefix)
 app.include_router(printers.router, prefix=app_settings.api_prefix)
 app.include_router(archives.router, prefix=app_settings.api_prefix)
 app.include_router(filaments.router, prefix=app_settings.api_prefix)

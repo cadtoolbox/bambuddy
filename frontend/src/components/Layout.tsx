@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, FolderOpen, X, Menu, Info, Plug, Bug, LogOut, type LucideIcon } from 'lucide-react';
+import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, FolderOpen, X, Menu, Info, Plug, Bug, LogOut, Key, Loader2, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
@@ -10,6 +10,9 @@ import { api, supportApi, pendingUploadsApi } from '../api/client';
 import { getIconByName } from './IconPicker';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { Card, CardHeader, CardContent } from './Card';
+import { Button } from './Button';
 
 interface NavItem {
   id: string;
@@ -69,7 +72,11 @@ export function Layout() {
   const { mode, toggleMode } = useTheme();
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const { user, authEnabled, logout } = useAuth();
+  const { user, authEnabled, logout, hasPermission } = useAuth();
+  const { showToast } = useToast();
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [changePasswordData, setChangePasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(() => {
     const stored = localStorage.getItem('sidebarExpanded');
     return stored !== 'false';
@@ -564,17 +571,26 @@ export function Layout() {
                     )}
                   </div>
                 )}
-                <NavLink
-                  to="/system"
-                  className={({ isActive }) =>
-                    `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
-                      isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
-                    }`
-                  }
-                  title={t('nav.system')}
-                >
-                  <Info className="w-5 h-5" />
-                </NavLink>
+                {hasPermission('system:read') ? (
+                  <NavLink
+                    to="/system"
+                    className={({ isActive }) =>
+                      `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
+                        isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
+                      }`
+                    }
+                    title={t('nav.system')}
+                  >
+                    <Info className="w-5 h-5" />
+                  </NavLink>
+                ) : (
+                  <span
+                    className="p-2 rounded-lg text-bambu-gray/50 cursor-not-allowed"
+                    title="You do not have permission to view system information"
+                  >
+                    <Info className="w-5 h-5" />
+                  </span>
+                )}
                 <a
                   href="https://github.com/maziggy/bambuddy"
                   target="_blank"
@@ -599,13 +615,22 @@ export function Layout() {
                   {mode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                 </button>
                 {authEnabled && user && (
-                  <button
-                    onClick={logout}
-                    className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
-                    title={t('nav.logout', { defaultValue: 'Logout' })}
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setShowChangePasswordModal(true)}
+                      className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
+                      title="Change Password"
+                    >
+                      <Key className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={logout}
+                      className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
+                      title={t('nav.logout', { defaultValue: 'Logout' })}
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </>
                 )}
               </div>
               {/* Bottom row: version */}
@@ -650,17 +675,26 @@ export function Layout() {
                   )}
                 </div>
               )}
-              <NavLink
-                to="/system"
-                className={({ isActive }) =>
-                  `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
-                    isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
-                  }`
-                }
-                title={t('nav.system')}
-              >
-                <Info className="w-5 h-5" />
-              </NavLink>
+              {hasPermission('system:read') ? (
+                <NavLink
+                  to="/system"
+                  className={({ isActive }) =>
+                    `p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors ${
+                      isActive ? 'text-bambu-green' : 'text-bambu-gray-light hover:text-white'
+                    }`
+                  }
+                  title={t('nav.system')}
+                >
+                  <Info className="w-5 h-5" />
+                </NavLink>
+              ) : (
+                <span
+                  className="p-2 rounded-lg text-bambu-gray/50 cursor-not-allowed"
+                  title="You do not have permission to view system information"
+                >
+                  <Info className="w-5 h-5" />
+                </span>
+              )}
               <a
                 href="https://github.com/maziggy/bambuddy"
                 target="_blank"
@@ -685,13 +719,22 @@ export function Layout() {
                 {mode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
               {authEnabled && user && (
-                <button
-                  onClick={logout}
-                  className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
-                  title={t('nav.logout', { defaultValue: 'Logout' })}
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowChangePasswordModal(true)}
+                    className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
+                    title="Change Password"
+                  >
+                    <Key className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={logout}
+                    className="p-2 rounded-lg hover:bg-bambu-dark-tertiary transition-colors text-bambu-gray-light hover:text-white"
+                    title={t('nav.logout', { defaultValue: 'Logout' })}
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -798,6 +841,141 @@ export function Layout() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowChangePasswordModal(false);
+            setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+          }}
+        >
+          <Card
+            className="w-full max-w-md"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Key className="w-5 h-5 text-bambu-green" />
+                  <h2 className="text-lg font-semibold text-white">Change Password</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.currentPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, currentPassword: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.newPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, newPassword: e.target.value })}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                    placeholder="Enter new password (min 6 characters)"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordData.confirmPassword}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, confirmPassword: e.target.value })}
+                    className={`w-full px-4 py-3 bg-bambu-dark-secondary border rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors ${
+                      changePasswordData.confirmPassword && changePasswordData.newPassword !== changePasswordData.confirmPassword
+                        ? 'border-red-500'
+                        : 'border-bambu-dark-tertiary'
+                    }`}
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                  {changePasswordData.confirmPassword && changePasswordData.newPassword !== changePasswordData.confirmPassword && (
+                    <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (changePasswordData.newPassword !== changePasswordData.confirmPassword) {
+                      showToast('Passwords do not match', 'error');
+                      return;
+                    }
+                    if (changePasswordData.newPassword.length < 6) {
+                      showToast('Password must be at least 6 characters', 'error');
+                      return;
+                    }
+                    setChangePasswordLoading(true);
+                    try {
+                      await api.changePassword(changePasswordData.currentPassword, changePasswordData.newPassword);
+                      showToast('Password changed successfully', 'success');
+                      setShowChangePasswordModal(false);
+                      setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                    } catch (error: unknown) {
+                      const message = error instanceof Error ? error.message : 'Failed to change password';
+                      showToast(message, 'error');
+                    } finally {
+                      setChangePasswordLoading(false);
+                    }
+                  }}
+                  disabled={changePasswordLoading || !changePasswordData.currentPassword || !changePasswordData.newPassword || changePasswordData.newPassword !== changePasswordData.confirmPassword || changePasswordData.newPassword.length < 6}
+                >
+                  {changePasswordLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Changing...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-4 h-4" />
+                      Change Password
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Plus,
   Link,
@@ -938,6 +939,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1093,6 +1095,12 @@ function PrinterCard({
     queryFn: () => api.getSmartPlugByPrinter(printer.id),
   });
 
+  // Fetch script plugs for this printer (for multi-device control)
+  const { data: scriptPlugs } = useQuery({
+    queryKey: ['scriptPlugsByPrinter', printer.id],
+    queryFn: () => api.getScriptPlugsByPrinter(printer.id),
+  });
+
   // Fetch smart plug status if plug exists (faster refresh for energy monitoring)
   const { data: plugStatus } = useQuery({
     queryKey: ['smartPlugStatus', smartPlug?.id],
@@ -1127,6 +1135,7 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['archives'] });
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
     },
+    onError: (error: Error) => showToast(error.message || 'Failed to delete printer', 'error'),
   });
 
   const connectMutation = useMutation({
@@ -1153,6 +1162,15 @@ function PrinterCard({
       // Also invalidate the smart-plugs list to keep Settings page in sync
       queryClient.invalidateQueries({ queryKey: ['smart-plugs'] });
     },
+  });
+
+  // Run script mutation
+  const runScriptMutation = useMutation({
+    mutationFn: (scriptId: number) => api.controlSmartPlug(scriptId, 'on'),
+    onSuccess: () => {
+      showToast('Script triggered');
+    },
+    onError: (error: Error) => showToast(error.message || 'Failed to run script', 'error'),
   });
 
   // Print control mutations
@@ -1560,11 +1578,17 @@ function PrinterCard({
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-lg z-10">
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-bambu-dark-tertiary flex items-center gap-2"
+                    className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                      hasPermission('printers:update')
+                        ? 'hover:bg-bambu-dark-tertiary'
+                        : 'opacity-50 cursor-not-allowed'
+                    }`}
                     onClick={() => {
+                      if (!hasPermission('printers:update')) return;
                       setShowEditModal(true);
                       setShowMenu(false);
                     }}
+                    title={!hasPermission('printers:update') ? 'You do not have permission to edit printers' : undefined}
                   >
                     <Pencil className="w-4 h-4" />
                     Edit
@@ -1590,11 +1614,17 @@ function PrinterCard({
                     MQTT Debug
                   </button>
                   <button
-                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-bambu-dark-tertiary flex items-center gap-2"
+                    className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                      hasPermission('printers:delete')
+                        ? 'text-red-400 hover:bg-bambu-dark-tertiary'
+                        : 'text-red-400/50 cursor-not-allowed'
+                    }`}
                     onClick={() => {
+                      if (!hasPermission('printers:delete')) return;
                       setShowDeleteConfirm(true);
                       setShowMenu(false);
                     }}
+                    title={!hasPermission('printers:delete') ? 'You do not have permission to delete printers' : undefined}
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
@@ -1801,18 +1831,20 @@ function PrinterCard({
                   {/* Skip Objects button - top right corner, always visible */}
                   <button
                     onClick={() => setShowSkipObjectsModal(true)}
-                    disabled={!(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') || (status.printable_objects_count ?? 0) < 2}
+                    disabled={!(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') || (status.printable_objects_count ?? 0) < 2 || !hasPermission('printers:control')}
                     className={`absolute top-2 right-2 p-1.5 rounded transition-colors z-10 ${
-                      (status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') && (status.printable_objects_count ?? 0) >= 2
+                      (status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') && (status.printable_objects_count ?? 0) >= 2 && hasPermission('printers:control')
                         ? 'text-bambu-gray hover:text-white hover:bg-white/10'
                         : 'text-bambu-gray/30 cursor-not-allowed'
                     }`}
                     title={
-                      !(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED')
-                        ? "Skip objects (only while printing)"
-                        : (status.printable_objects_count ?? 0) >= 2
-                          ? "Skip objects"
-                          : "Skip objects (requires 2+ objects)"
+                      !hasPermission('printers:control')
+                        ? "You do not have permission to control printers"
+                        : !(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED')
+                          ? "Skip objects (only while printing)"
+                          : (status.printable_objects_count ?? 0) >= 2
+                            ? "Skip objects"
+                            : "Skip objects (requires 2+ objects)"
                     }
                   >
                     <SkipObjectsIcon className="w-4 h-4" />
@@ -2027,16 +2059,16 @@ function PrinterCard({
                       {/* Stop button */}
                       <button
                         onClick={() => setShowStopConfirm(true)}
-                        disabled={!isPrinting || isControlBusy}
+                        disabled={!isPrinting || isControlBusy || !hasPermission('printers:control')}
                         className={`
                           flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
                           transition-colors
-                          ${isPrinting
+                          ${isPrinting && hasPermission('printers:control')
                             ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                             : 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
                           }
                         `}
-                        title="Stop print"
+                        title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : 'Stop print'}
                       >
                         <Square className="w-3 h-3" />
                         Stop
@@ -2045,18 +2077,18 @@ function PrinterCard({
                       {/* Pause/Resume button */}
                       <button
                         onClick={() => isPaused ? setShowResumeConfirm(true) : setShowPauseConfirm(true)}
-                        disabled={!isPrinting || isControlBusy}
+                        disabled={!isPrinting || isControlBusy || !hasPermission('printers:control')}
                         className={`
                           flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
                           transition-colors
-                          ${isPrinting
+                          ${isPrinting && hasPermission('printers:control')
                             ? isPaused
                               ? 'bg-bambu-green/20 text-bambu-green hover:bg-bambu-green/30'
                               : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
                             : 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
                           }
                         `}
-                        title={isPaused ? 'Resume print' : 'Pause print'}
+                        title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : (isPaused ? 'Resume print' : 'Pause print')}
                       >
                         {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                         {isPaused ? 'Resume' : 'Pause'}
@@ -2234,13 +2266,19 @@ function PrinterCard({
                                     {status?.state !== 'RUNNING' && amsSlotMenu?.amsId === ams.id && amsSlotMenu?.slotId === slotIdx && (
                                       <div className="absolute top-full left-0 mt-1 z-50 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-xl py-1 min-w-[120px]">
                                         <button
-                                          className="w-full px-3 py-1.5 text-left text-xs text-white hover:bg-bambu-dark-tertiary flex items-center gap-2"
+                                          className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                                            hasPermission('printers:control')
+                                              ? 'text-white hover:bg-bambu-dark-tertiary'
+                                              : 'text-bambu-gray/50 cursor-not-allowed'
+                                          }`}
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            if (!hasPermission('printers:control')) return;
                                             refreshAmsSlotMutation.mutate({ amsId: ams.id, slotId: slotIdx });
                                             setAmsSlotMenu(null);
                                           }}
-                                          disabled={isRefreshing}
+                                          disabled={isRefreshing || !hasPermission('printers:control')}
+                                          title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : undefined}
                                         >
                                           <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
                                           Re-read RFID
@@ -2266,7 +2304,7 @@ function PrinterCard({
                                           } : undefined,
                                         }}
                                         configureSlot={{
-                                          enabled: true,
+                                          enabled: hasPermission('printers:control'),
                                           onConfigure: () => setConfigureSlotModal({
                                             amsId: ams.id,
                                             trayId: slotIdx,
@@ -2283,7 +2321,7 @@ function PrinterCard({
                                     ) : (
                                       <EmptySlotHoverCard
                                         configureSlot={{
-                                          enabled: true,
+                                          enabled: hasPermission('printers:control'),
                                           onConfigure: () => setConfigureSlotModal({
                                             amsId: ams.id,
                                             trayId: slotIdx,
@@ -2417,13 +2455,19 @@ function PrinterCard({
                                 {status?.state !== 'RUNNING' && amsSlotMenu?.amsId === ams.id && amsSlotMenu?.slotId === htSlotId && (
                                   <div className="absolute top-full left-0 mt-1 z-50 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-xl py-1 min-w-[120px]">
                                     <button
-                                      className="w-full px-3 py-1.5 text-left text-xs text-white hover:bg-bambu-dark-tertiary flex items-center gap-2"
+                                      className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                                        hasPermission('printers:control')
+                                          ? 'text-white hover:bg-bambu-dark-tertiary'
+                                          : 'text-bambu-gray/50 cursor-not-allowed'
+                                      }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        if (!hasPermission('printers:control')) return;
                                         refreshAmsSlotMutation.mutate({ amsId: ams.id, slotId: htSlotId });
                                         setAmsSlotMenu(null);
                                       }}
-                                      disabled={isHtRefreshing}
+                                      disabled={isHtRefreshing || !hasPermission('printers:control')}
+                                      title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : undefined}
                                     >
                                       <RefreshCw className={`w-3 h-3 ${isHtRefreshing ? 'animate-spin' : ''}`} />
                                       Re-read RFID
@@ -2449,7 +2493,7 @@ function PrinterCard({
                                       } : undefined,
                                     }}
                                     configureSlot={{
-                                      enabled: true,
+                                      enabled: hasPermission('printers:control'),
                                       onConfigure: () => setConfigureSlotModal({
                                         amsId: ams.id,
                                         trayId: htSlotId,
@@ -2466,7 +2510,7 @@ function PrinterCard({
                                 ) : (
                                   <EmptySlotHoverCard
                                     configureSlot={{
-                                      enabled: true,
+                                      enabled: hasPermission('printers:control'),
                                       onConfigure: () => setConfigureSlotModal({
                                         amsId: ams.id,
                                         trayId: htSlotId,
@@ -2577,7 +2621,7 @@ function PrinterCard({
                                 } : undefined,
                               }}
                               configureSlot={{
-                                enabled: true,
+                                enabled: hasPermission('printers:control'),
                                 onConfigure: () => setConfigureSlotModal({
                                   amsId: 255, // External spool indicator
                                   trayId: 0,
@@ -2636,24 +2680,30 @@ function PrinterCard({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setShowPowerOnConfirm(true)}
-                  disabled={powerControlMutation.isPending || plugStatus?.state === 'ON'}
+                  disabled={powerControlMutation.isPending || plugStatus?.state === 'ON' || !hasPermission('smart_plugs:control')}
                   className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                    plugStatus?.state === 'ON'
-                      ? 'bg-bambu-green text-white'
-                      : 'bg-bambu-dark text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
+                    !hasPermission('smart_plugs:control')
+                      ? 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
+                      : plugStatus?.state === 'ON'
+                        ? 'bg-bambu-green text-white'
+                        : 'bg-bambu-dark text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
                   }`}
+                  title={!hasPermission('smart_plugs:control') ? 'You do not have permission to control smart plugs' : undefined}
                 >
                   <Power className="w-3 h-3" />
                   On
                 </button>
                 <button
                   onClick={() => setShowPowerOffConfirm(true)}
-                  disabled={powerControlMutation.isPending || plugStatus?.state === 'OFF'}
+                  disabled={powerControlMutation.isPending || plugStatus?.state === 'OFF' || !hasPermission('smart_plugs:control')}
                   className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                    plugStatus?.state === 'OFF'
-                      ? 'bg-red-500/30 text-red-400'
-                      : 'bg-bambu-dark text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
+                    !hasPermission('smart_plugs:control')
+                      ? 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
+                      : plugStatus?.state === 'OFF'
+                        ? 'bg-red-500/30 text-red-400'
+                        : 'bg-bambu-dark text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
                   }`}
+                  title={!hasPermission('smart_plugs:control') ? 'You do not have permission to control smart plugs' : undefined}
                 >
                   <PowerOff className="w-3 h-3" />
                   Off
@@ -2667,12 +2717,14 @@ function PrinterCard({
                 </span>
                 <button
                   onClick={() => toggleAutoOffMutation.mutate(!smartPlug.auto_off)}
-                  disabled={toggleAutoOffMutation.isPending || smartPlug.auto_off_executed}
-                  title={smartPlug.auto_off_executed ? 'Auto-off was executed - turn printer on to reset' : 'Auto power-off after print'}
+                  disabled={toggleAutoOffMutation.isPending || smartPlug.auto_off_executed || !hasPermission('smart_plugs:control')}
+                  title={!hasPermission('smart_plugs:control') ? 'You do not have permission to control smart plugs' : (smartPlug.auto_off_executed ? 'Auto-off was executed - turn printer on to reset' : 'Auto power-off after print')}
                   className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                    smartPlug.auto_off_executed
-                      ? 'bg-bambu-green/50 cursor-not-allowed'
-                      : smartPlug.auto_off ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
+                    !hasPermission('smart_plugs:control')
+                      ? 'bg-bambu-dark-tertiary/50 cursor-not-allowed'
+                      : smartPlug.auto_off_executed
+                        ? 'bg-bambu-green/50 cursor-not-allowed'
+                        : smartPlug.auto_off ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
                   }`}
                 >
                   <span
@@ -2683,6 +2735,28 @@ function PrinterCard({
                 </button>
               </div>
             </div>
+
+            {/* Script buttons row */}
+            {scriptPlugs && scriptPlugs.length > 0 && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-bambu-dark-tertiary/50">
+                <Play className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                <span className="text-xs text-bambu-gray">Scripts:</span>
+                <div className="flex flex-wrap gap-1">
+                  {scriptPlugs.map(script => (
+                    <button
+                      key={script.id}
+                      onClick={() => runScriptMutation.mutate(script.id)}
+                      disabled={runScriptMutation.isPending}
+                      title={`Run ${script.ha_entity_id}`}
+                      className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded transition-colors flex items-center gap-1"
+                    >
+                      <Play className="w-2.5 h-2.5" />
+                      {script.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2699,8 +2773,8 @@ function PrinterCard({
                 variant="secondary"
                 size="sm"
                 onClick={() => chamberLightMutation.mutate(!status?.chamber_light)}
-                disabled={!status?.connected || chamberLightMutation.isPending}
-                title={status?.chamber_light ? 'Turn off chamber light' : 'Turn on chamber light'}
+                disabled={!status?.connected || chamberLightMutation.isPending || !hasPermission('printers:control')}
+                title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : (status?.chamber_light ? 'Turn off chamber light' : 'Turn on chamber light')}
                 className={status?.chamber_light ? 'bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-500/30' : ''}
               >
                 <ChamberLight on={status?.chamber_light ?? false} className="w-4 h-4" />
@@ -2737,8 +2811,8 @@ function PrinterCard({
                   variant="secondary"
                   size="sm"
                   onClick={handleTogglePlateDetection}
-                  disabled={!status?.connected || plateDetectionMutation.isPending}
-                  title={printer.plate_detection_enabled ? "Plate check enabled - Click to disable" : "Plate check disabled - Click to enable"}
+                  disabled={!status?.connected || plateDetectionMutation.isPending || !hasPermission('printers:update')}
+                  title={!hasPermission('printers:update') ? "You do not have permission to update printers" : (printer.plate_detection_enabled ? "Plate check enabled - Click to disable" : "Plate check disabled - Click to enable")}
                   className={`!rounded-r-none !border-r-0 ${printer.plate_detection_enabled ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
                 >
                   {plateDetectionMutation.isPending ? (
@@ -2751,8 +2825,8 @@ function PrinterCard({
                   variant="secondary"
                   size="sm"
                   onClick={handleOpenPlateManagement}
-                  disabled={!status?.connected || isCheckingPlate}
-                  title="Manage plate detection calibration"
+                  disabled={!status?.connected || isCheckingPlate || !hasPermission('printers:update')}
+                  title={!hasPermission('printers:update') ? "You do not have permission to update printers" : "Manage plate detection calibration"}
                   className={`!rounded-l-none !px-1.5 ${printer.plate_detection_enabled ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
                 >
                   {isCheckingPlate ? (
@@ -2766,7 +2840,8 @@ function PrinterCard({
                 variant="secondary"
                 size="sm"
                 onClick={() => setShowFileManager(true)}
-                title="Browse printer files"
+                disabled={!hasPermission('printers:files')}
+                title={!hasPermission('printers:files') ? 'You do not have permission to access printer files' : 'Browse printer files'}
               >
                 <HardDrive className="w-4 h-4" />
                 Files
@@ -3332,13 +3407,13 @@ function PrinterCard({
                       {!obj.skipped ? (
                         <button
                           onClick={() => skipObjectsMutation.mutate([obj.id])}
-                          disabled={skipObjectsMutation.isPending || (status?.layer_num ?? 0) <= 1}
+                          disabled={skipObjectsMutation.isPending || (status?.layer_num ?? 0) <= 1 || !hasPermission('printers:control')}
                           className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                            (status?.layer_num ?? 0) <= 1
+                            (status?.layer_num ?? 0) <= 1 || !hasPermission('printers:control')
                               ? 'bg-gray-100 dark:bg-bambu-dark text-gray-400 dark:text-bambu-gray/50 cursor-not-allowed'
                               : 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30 border border-red-300 dark:border-red-500/30'
                           }`}
-                          title={(status?.layer_num ?? 0) <= 1 ? 'Wait for layer 2+' : 'Skip this object'}
+                          title={!hasPermission('printers:control') ? 'You do not have permission to control printers' : ((status?.layer_num ?? 0) <= 1 ? 'Wait for layer 2+' : 'Skip this object')}
                         >
                           Skip
                         </button>
@@ -4030,6 +4105,7 @@ function EditPrinterModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [form, setForm] = useState({
     name: printer.name,
     ip_address: printer.ip_address,
@@ -4046,6 +4122,7 @@ function EditPrinterModal({
       queryClient.invalidateQueries({ queryKey: ['printerStatus', printer.id] });
       onClose();
     },
+    onError: (error: Error) => showToast(error.message || 'Failed to update printer', 'error'),
   });
 
   // Close on Escape key
@@ -4282,6 +4359,8 @@ export function PrintersPage() {
   // Derive viewMode from cardSize: S=compact, M/L/XL=expanded
   const viewMode: ViewMode = cardSize === 1 ? 'compact' : 'expanded';
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   // Embedded camera viewer state - supports multiple simultaneous viewers
   // Persisted to localStorage so cameras reopen after navigation
   const [embeddedCameraPrinters, setEmbeddedCameraPrinters] = useState<Map<number, { id: number; name: string }>>(() => {
@@ -4387,6 +4466,7 @@ export function PrintersPage() {
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
       setShowAddModal(false);
     },
+    onError: (error: Error) => showToast(error.message || 'Failed to add printer', 'error'),
   });
 
   const powerOnMutation = useMutation({
@@ -4607,7 +4687,11 @@ export function PrintersPage() {
               )}
             </div>
           )}
-          <Button onClick={() => setShowAddModal(true)}>
+          <Button
+            onClick={() => setShowAddModal(true)}
+            disabled={!hasPermission('printers:create')}
+            title={!hasPermission('printers:create') ? 'You do not have permission to add printers' : undefined}
+          >
             <Plus className="w-4 h-4" />
             Add Printer
           </Button>
@@ -4620,7 +4704,11 @@ export function PrintersPage() {
         <Card>
           <CardContent className="text-center py-12">
             <p className="text-bambu-gray mb-4">No printers configured yet</p>
-            <Button onClick={() => setShowAddModal(true)}>
+            <Button
+              onClick={() => setShowAddModal(true)}
+              disabled={!hasPermission('printers:create')}
+              title={!hasPermission('printers:create') ? 'You do not have permission to add printers' : undefined}
+            >
               <Plus className="w-4 h-4" />
               Add Your First Printer
             </Button>

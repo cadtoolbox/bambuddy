@@ -43,6 +43,7 @@ import {
   FolderKanban,
   ChevronLeft,
   ChevronRight,
+  Settings,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { openInSlicer } from '../utils/slicer';
@@ -66,7 +67,9 @@ import { ProjectPageModal } from '../components/ProjectPageModal';
 import { TimelapseViewer } from '../components/TimelapseViewer';
 import { CompareArchivesModal } from '../components/CompareArchivesModal';
 import { PendingUploadsPanel } from '../components/PendingUploadsPanel';
+import { TagManagementModal } from '../components/TagManagementModal';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -120,6 +123,7 @@ function ArchiveCard({
 
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const isMobile = useIsMobile();
   const [showViewer, setShowViewer] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -282,11 +286,15 @@ function ArchiveCard({
         label: 'Print',
         icon: <Printer className="w-4 h-4" />,
         onClick: () => setShowReprint(true),
+        disabled: !hasPermission('archives:reprint'),
+        title: !hasPermission('archives:reprint') ? 'You do not have permission to reprint' : undefined,
       },
       {
         label: 'Schedule',
         icon: <Calendar className="w-4 h-4" />,
         onClick: () => setShowSchedule(true),
+        disabled: !hasPermission('queue:create'),
+        title: !hasPermission('queue:create') ? 'You do not have permission to add to queue' : undefined,
       },
       {
         label: 'Open in Bambu Studio',
@@ -333,7 +341,8 @@ function ArchiveCard({
       label: 'Scan for Timelapse',
       icon: <ScanSearch className="w-4 h-4" />,
       onClick: () => timelapseScanMutation.mutate(),
-      disabled: !archive.printer_id || !!archive.timelapse_path || timelapseScanMutation.isPending,
+      disabled: !archive.printer_id || !!archive.timelapse_path || timelapseScanMutation.isPending || !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     { label: '', divider: true, onClick: () => {} },
     {
@@ -349,22 +358,30 @@ function ArchiveCard({
           source3mfInputRef.current?.click();
         }
       },
+      disabled: !archive.source_3mf_path && !hasPermission('archives:update'),
+      title: !archive.source_3mf_path && !hasPermission('archives:update') ? 'You do not have permission to upload files' : undefined,
     },
     ...(archive.source_3mf_path ? [{
       label: 'Replace Source 3MF',
       icon: <Upload className="w-4 h-4" />,
       onClick: () => source3mfInputRef.current?.click(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     {
       label: 'Remove Source 3MF',
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteSource3mfConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     }] : []),
     {
       label: archive.f3d_path ? 'Replace F3D' : 'Upload F3D',
       icon: <Box className="w-4 h-4" />,
       onClick: () => f3dInputRef.current?.click(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     ...(archive.f3d_path ? [{
       label: 'Download F3D',
@@ -381,6 +398,8 @@ function ArchiveCard({
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteF3dConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     }] : []),
     { label: '', divider: true, onClick: () => {} },
     {
@@ -392,6 +411,8 @@ function ArchiveCard({
         link.download = `${archive.print_name || archive.filename}.3mf`;
         link.click();
       },
+      disabled: !hasPermission('archives:read'),
+      title: !hasPermission('archives:read') ? 'You do not have permission to download archives' : undefined,
     },
     {
       label: 'Copy Download Link',
@@ -404,6 +425,8 @@ function ArchiveCard({
           showToast('Failed to copy link', 'error');
         });
       },
+      disabled: !hasPermission('archives:read'),
+      title: !hasPermission('archives:read') ? 'You do not have permission to copy download links' : undefined,
     },
     {
       label: 'QR Code',
@@ -426,11 +449,15 @@ function ArchiveCard({
       label: archive.is_favorite ? 'Remove from Favorites' : 'Add to Favorites',
       icon: <Star className={`w-4 h-4 ${archive.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />,
       onClick: () => favoriteMutation.mutate(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     {
       label: 'Edit',
       icon: <Pencil className="w-4 h-4" />,
       onClick: () => setShowEdit(true),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     ...(archive.project_id && archive.project_name ? [{
       label: `Go to Project: ${archive.project_name}`,
@@ -441,6 +468,8 @@ function ArchiveCard({
       label: 'Add to Project',
       icon: <FolderKanban className="w-4 h-4" />,
       onClick: () => {},
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
       submenu: (() => {
         const items: ContextMenuItem[] = [];
 
@@ -450,6 +479,7 @@ function ArchiveCard({
             label: 'Remove from Project',
             icon: <X className="w-4 h-4" />,
             onClick: () => assignProjectMutation.mutate(null),
+            disabled: !hasPermission('archives:update'),
           });
         }
 
@@ -476,7 +506,7 @@ function ArchiveCard({
                 label: p.name,
                 icon: <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: p.color || '#888' }} />,
                 onClick: () => assignProjectMutation.mutate(p.id),
-                disabled: archive.project_id === p.id,
+                disabled: archive.project_id === p.id || !hasPermission('archives:update'),
               });
             });
           }
@@ -496,6 +526,8 @@ function ArchiveCard({
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:delete'),
+      title: !hasPermission('archives:delete') ? 'You do not have permission to delete archives' : undefined,
     },
   ];
 
@@ -615,15 +647,22 @@ function ArchiveCard({
         </button>
         {/* Favorite star */}
         <button
-          className="absolute top-2 right-2 p-1 rounded bg-black/50 hover:bg-black/70 transition-colors"
+          className={`absolute top-2 right-2 p-1 rounded transition-colors ${
+            hasPermission('archives:update')
+              ? 'bg-black/50 hover:bg-black/70'
+              : 'bg-black/30 cursor-not-allowed'
+          }`}
           onClick={(e) => {
             e.stopPropagation();
-            favoriteMutation.mutate();
+            if (hasPermission('archives:update')) {
+              favoriteMutation.mutate();
+            }
           }}
-          title={archive.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+          disabled={!hasPermission('archives:update')}
+          title={!hasPermission('archives:update') ? 'You do not have permission to update archives' : (archive.is_favorite ? 'Remove from favorites' : 'Add to favorites')}
         >
           <Star
-            className={`w-5 h-5 ${archive.is_favorite ? 'text-yellow-400 fill-yellow-400' : 'text-white'}`}
+            className={`w-5 h-5 ${archive.is_favorite ? 'text-yellow-400 fill-yellow-400' : 'text-white'} ${!hasPermission('archives:update') ? 'opacity-50' : ''}`}
           />
         </button>
         {(archive.status === 'failed' || archive.status === 'aborted') && (
@@ -863,6 +902,8 @@ function ArchiveCard({
                 size="sm"
                 className="flex-1 min-w-0"
                 onClick={() => setShowReprint(true)}
+                disabled={!hasPermission('archives:reprint')}
+                title={!hasPermission('archives:reprint') ? 'You do not have permission to reprint' : undefined}
               >
                 <Printer className="w-3 h-3 flex-shrink-0" />
                 <span className="hidden sm:inline">Reprint</span>
@@ -945,7 +986,8 @@ function ArchiveCard({
             size="sm"
             className="min-w-0 p-1 sm:p-1.5"
             onClick={() => setShowEdit(true)}
-            title="Edit"
+            disabled={!hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to edit archives' : 'Edit'}
           >
             <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
           </Button>
@@ -954,7 +996,8 @@ function ArchiveCard({
             size="sm"
             className="min-w-0 p-1 sm:p-1.5"
             onClick={() => setShowDeleteConfirm(true)}
-            title="Delete"
+            disabled={!hasPermission('archives:delete')}
+            title={!hasPermission('archives:delete') ? 'You do not have permission to delete archives' : 'Delete'}
           >
             <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />
           </Button>
@@ -1211,6 +1254,7 @@ function ArchiveListRow({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -1355,11 +1399,15 @@ function ArchiveListRow({
         label: 'Print',
         icon: <Printer className="w-4 h-4" />,
         onClick: () => setShowReprint(true),
+        disabled: !hasPermission('archives:reprint'),
+        title: !hasPermission('archives:reprint') ? 'You do not have permission to reprint' : undefined,
       },
       {
         label: 'Schedule',
         icon: <Calendar className="w-4 h-4" />,
         onClick: () => setShowSchedule(true),
+        disabled: !hasPermission('queue:create'),
+        title: !hasPermission('queue:create') ? 'You do not have permission to add to queue' : undefined,
       },
       {
         label: 'Open in Bambu Studio',
@@ -1406,7 +1454,8 @@ function ArchiveListRow({
       label: 'Scan for Timelapse',
       icon: <ScanSearch className="w-4 h-4" />,
       onClick: () => timelapseScanMutation.mutate(),
-      disabled: !archive.printer_id || !!archive.timelapse_path || timelapseScanMutation.isPending,
+      disabled: !archive.printer_id || !!archive.timelapse_path || timelapseScanMutation.isPending || !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     { label: '', divider: true, onClick: () => {} },
     {
@@ -1422,22 +1471,30 @@ function ArchiveListRow({
           source3mfInputRef.current?.click();
         }
       },
+      disabled: !archive.source_3mf_path && !hasPermission('archives:update'),
+      title: !archive.source_3mf_path && !hasPermission('archives:update') ? 'You do not have permission to upload files' : undefined,
     },
     ...(archive.source_3mf_path ? [{
       label: 'Replace Source 3MF',
       icon: <Upload className="w-4 h-4" />,
       onClick: () => source3mfInputRef.current?.click(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     {
       label: 'Remove Source 3MF',
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteSource3mfConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     }] : []),
     {
       label: archive.f3d_path ? 'Replace F3D' : 'Upload F3D',
       icon: <Box className="w-4 h-4" />,
       onClick: () => f3dInputRef.current?.click(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     ...(archive.f3d_path ? [{
       label: 'Download F3D',
@@ -1454,6 +1511,8 @@ function ArchiveListRow({
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteF3dConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     }] : []),
     { label: '', divider: true, onClick: () => {} },
     {
@@ -1465,6 +1524,8 @@ function ArchiveListRow({
         link.download = `${archive.print_name || archive.filename}.3mf`;
         link.click();
       },
+      disabled: !hasPermission('archives:read'),
+      title: !hasPermission('archives:read') ? 'You do not have permission to download archives' : undefined,
     },
     {
       label: 'Copy Download Link',
@@ -1477,6 +1538,8 @@ function ArchiveListRow({
           showToast('Failed to copy link', 'error');
         });
       },
+      disabled: !hasPermission('archives:read'),
+      title: !hasPermission('archives:read') ? 'You do not have permission to copy download links' : undefined,
     },
     {
       label: 'QR Code',
@@ -1499,11 +1562,15 @@ function ArchiveListRow({
       label: archive.is_favorite ? 'Remove from Favorites' : 'Add to Favorites',
       icon: <Star className={`w-4 h-4 ${archive.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />,
       onClick: () => favoriteMutation.mutate(),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     {
       label: 'Edit',
       icon: <Pencil className="w-4 h-4" />,
       onClick: () => setShowEdit(true),
+      disabled: !hasPermission('archives:update'),
+      title: !hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined,
     },
     ...(archive.project_id && archive.project_name ? [{
       label: `Go to Project: ${archive.project_name}`,
@@ -1564,6 +1631,8 @@ function ArchiveListRow({
       icon: <Trash2 className="w-4 h-4" />,
       onClick: () => setShowDeleteConfirm(true),
       danger: true,
+      disabled: !hasPermission('archives:delete'),
+      title: !hasPermission('archives:delete') ? 'You do not have permission to delete archives' : undefined,
     },
   ];
 
@@ -1696,7 +1765,8 @@ function ArchiveListRow({
             variant="ghost"
             size="sm"
             onClick={() => setShowEdit(true)}
-            title="Edit"
+            disabled={!hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to edit archives' : 'Edit'}
           >
             <Pencil className="w-4 h-4" />
           </Button>
@@ -1704,7 +1774,8 @@ function ArchiveListRow({
             variant="ghost"
             size="sm"
             onClick={() => setShowDeleteConfirm(true)}
-            title="Delete"
+            disabled={!hasPermission('archives:delete')}
+            title={!hasPermission('archives:delete') ? 'You do not have permission to delete archives' : 'Delete'}
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </Button>
@@ -1958,6 +2029,7 @@ const collections: { id: Collection; label: string; icon: React.ReactNode }[] = 
 export function ArchivesPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [filterPrinter, setFilterPrinter] = useState<number | null>(() => {
@@ -2006,6 +2078,7 @@ export function ArchivesPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [showTagManagement, setShowTagManagement] = useState(false);
   const [highlightedArchiveId, setHighlightedArchiveId] = useState<number | null>(null);
 
   // Clear highlight after 5 seconds and scroll to highlighted element
@@ -2372,6 +2445,8 @@ export function ArchivesPage() {
             variant="secondary"
             size="sm"
             onClick={() => setShowBatchTag(true)}
+            disabled={!hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined}
           >
             <Tag className="w-4 h-4" />
             Tags
@@ -2380,6 +2455,8 @@ export function ArchivesPage() {
             variant="secondary"
             size="sm"
             onClick={() => setShowBatchProject(true)}
+            disabled={!hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined}
           >
             <FolderKanban className="w-4 h-4" />
             Project
@@ -2387,6 +2464,8 @@ export function ArchivesPage() {
           <Button
             variant="secondary"
             size="sm"
+            disabled={!hasPermission('archives:update')}
+            title={!hasPermission('archives:update') ? 'You do not have permission to update archives' : undefined}
             onClick={() => {
               const ids = Array.from(selectedIds);
               Promise.all(ids.map(id => api.toggleFavorite(id)))
@@ -2406,6 +2485,8 @@ export function ArchivesPage() {
             size="sm"
             className="bg-red-500 hover:bg-red-600"
             onClick={() => setShowBulkDeleteConfirm(true)}
+            disabled={!hasPermission('archives:delete')}
+            title={!hasPermission('archives:delete') ? 'You do not have permission to delete archives' : undefined}
           >
             <Trash2 className="w-4 h-4" />
             Delete
@@ -2527,7 +2608,11 @@ export function ArchivesPage() {
               Select
             </Button>
           )}
-          <Button onClick={() => setShowUpload(true)}>
+          <Button
+            onClick={() => setShowUpload(true)}
+            disabled={!hasPermission('archives:create')}
+            title={!hasPermission('archives:create') ? 'You do not have permission to create archives' : undefined}
+          >
             <Upload className="w-4 h-4" />
             Upload 3MF
           </Button>
@@ -2637,6 +2722,13 @@ export function ArchivesPage() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={() => setShowTagManagement(true)}
+                  className="p-2 rounded-lg bg-bambu-dark border border-bambu-dark-tertiary text-bambu-gray hover:text-white hover:border-bambu-green transition-colors"
+                  title="Manage Tags"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
               </div>
             )}
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -2864,6 +2956,11 @@ export function ArchivesPage() {
             setIsSelectionMode(false);
           }}
         />
+      )}
+
+      {/* Tag Management Modal */}
+      {showTagManagement && (
+        <TagManagementModal onClose={() => setShowTagManagement(false)} />
       )}
     </div>
   );

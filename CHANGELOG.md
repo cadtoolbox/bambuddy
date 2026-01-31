@@ -5,6 +5,41 @@ All notable changes to Bambuddy will be documented in this file.
 ## [0.1.6-final] - Not released
 
 ### New Features
+- **Group-Based Permissions** - Granular access control with user groups:
+  - Create custom groups with specific permissions (50+ granular permissions)
+  - Default system groups: Administrators (full access), Operators (control printers), Viewers (read-only)
+  - Users can belong to multiple groups with additive permissions
+  - Permission-based UI: buttons/features disabled when user lacks permission
+  - Groups management page in Settings → Users → Groups tab
+  - Change password: users can change their own password from sidebar
+  - Included in backup/restore
+- **STL Thumbnail Generation** - Auto-generate preview thumbnails for STL files (Issue #156):
+  - Checkbox option when uploading STL files to generate thumbnails automatically
+  - Batch generate thumbnails for existing STL files via "Generate Thumbnails" button
+  - Individual file thumbnail generation via context menu (three-dot menu)
+  - Works with ZIP extraction (generates thumbnails for all STL files in archive)
+  - Uses trimesh and matplotlib for 3D rendering with Bambu green color theme
+  - Thumbnails auto-refresh in UI after generation
+  - Graceful handling of complex/invalid STL files
+- **Streaming Overlay for OBS** - Embeddable overlay page for live streaming with camera and print status (Issue #164):
+  - All-in-one page at `/overlay/:printerId` combining camera feed with status overlay
+  - Real-time print progress, ETA, layer count, and filename display
+  - Bambuddy logo branding (links to GitHub)
+  - Customizable via query parameters: `?size=small|medium|large` and `?show=progress,layers,eta,filename,status,printer`
+  - No authentication required - designed for OBS browser source embedding
+  - Gradient overlay at bottom for readable text over camera feed
+  - Auto-reconnect on camera stream errors
+- **MQTT Smart Plug Support** - Add smart plugs that subscribe to MQTT topics for energy monitoring (Issue #173):
+  - New "MQTT" plug type alongside Tasmota and Home Assistant
+  - Subscribe to any MQTT topic (Zigbee2MQTT, Shelly, Tasmota discovery, etc.)
+  - **Separate topics per data type**: Configure different MQTT topics for power, energy, and state
+  - Configurable JSON paths for data extraction (e.g., `power_l1`, `data.power`)
+  - **Separate multipliers**: Individual multiplier for power and energy (e.g., mW→W, Wh→kWh)
+  - **Custom ON value**: Configure what value means "ON" for state (e.g., "ON", "true", "1")
+  - Monitor-only: displays power/energy data without control capabilities
+  - Reuses existing MQTT broker settings from Settings → Network
+  - Energy data included in statistics and per-print tracking
+  - Full backup/restore support for MQTT plug configurations
 - **Disable Printer Firmware Checks** - New toggle in Settings → General → Updates to disable printer firmware update checks:
   - Prevents Bambuddy from checking Bambu Lab servers for firmware updates
   - Useful for users who prefer to manage firmware manually or have network restrictions
@@ -90,24 +125,6 @@ All notable changes to Bambuddy will be documented in this file.
   - Bulk edit: printer assignment, print options, queue options
   - Bulk cancel selected items
   - Tri-state toggles: unchanged / on / off for each setting
-- **Model-Based Queue Assignment** - Queue prints to "any printer of matching model" for load balancing (Issue #162):
-  - Extract printer model from sliced 3MF files (e.g., "X1C", "P1S")
-  - Display sliced-for model in archive view
-  - New queue mode: assign to model instead of specific printer
-  - Scheduler auto-assigns to first idle printer of matching model
-  - Filament validation: only assign to printers with required filament types loaded
-  - Waiting reason display: shows why jobs are waiting (e.g., "Waiting for filament: Printer1 (needs PLA)")
-  - "Waiting" status badge (purple) distinguishes from regular "Pending"
-  - Compatibility warnings when file/printer model mismatch
-- **Queue Notifications** - Get notified about print queue events:
-  - Job Added: When a job is added to the queue
-  - Job Assigned: When a model-based job is assigned to a printer
-  - Job Started: When a queue job starts printing
-  - Job Waiting: When a job is waiting for filament (enabled by default)
-  - Job Skipped: When a job is skipped due to previous failure (enabled by default)
-  - Job Failed: When a job fails to start (enabled by default)
-  - Queue Complete: When all queued jobs finish
-  - New "Print Queue" section in notification provider settings
 
 ### Fixes
 - **Multi-Plate Thumbnail in Queue** - Fixed queue items showing wrong thumbnail for multi-plate files (Issue #166):

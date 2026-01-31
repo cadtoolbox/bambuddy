@@ -54,10 +54,12 @@
 - Re-print to any connected printer with AMS mapping (auto-match or manual slot selection, multi-plate support)
 - Plate thumbnail browsing for multi-plate archives (hover to navigate between plates)
 - Archive comparison (side-by-side diff)
+- Tag management (rename/delete across all archives)
 
 ### 📊 Monitoring & Control
 - Real-time printer status via WebSocket
 - Live camera streaming (MJPEG) & snapshots with multi-viewer support
+- **Streaming overlay for OBS** - Embeddable page with camera + status for live streaming (`/overlay/:printerId`)
 - External camera support (MJPEG, RTSP, HTTP snapshot, USB/V4L2) with layer-based timelapse
 - **Build plate empty detection** - Auto-pause print if objects detected on plate (multi-reference calibration, ROI adjustment)
 - Fan status monitoring (part cooling, auxiliary, chamber)
@@ -80,14 +82,16 @@
 - Per-printer AMS mapping (individual slot configuration for print farms)
 - Scheduled prints (date/time)
 - Queue Only mode (stage without auto-start)
-- Smart plug integration (Tasmota, Home Assistant)
+- Smart plug integration (Tasmota, Home Assistant, MQTT)
+- MQTT smart plugs: Subscribe to Zigbee2MQTT, Shelly, or any MQTT topic for energy monitoring
 - Energy consumption tracking (per-print kWh and cost)
 - HA energy sensor support (for plugs with separate power/energy sensors)
 - Auto power-on before print
 - Auto power-off after cooldown
 
 ### 📁 File Manager (Library)
-- Upload and organize sliced files (3MF, gcode)
+- Upload and organize sliced files (3MF, gcode, STL)
+- **STL thumbnail generation** - Auto-generate previews for STL files on upload or batch generate for existing files
 - ZIP file extraction with folder structure preservation
 - Option to create folder from ZIP filename
 - Folder structure with drag-and-drop
@@ -151,9 +155,10 @@
 
 ### 🔒 Optional Authentication
 - Enable/disable authentication any time
-- Role-based access (Admin/User)
+- Group-based permissions (50+ granular permissions)
+- Default groups: Administrators, Operators, Viewers
 - JWT tokens with secure password hashing
-- User management (create, edit, delete)
+- User management (create, edit, delete, groups)
 
 </td>
 </tr>
