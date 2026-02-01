@@ -1689,7 +1689,7 @@ async def refresh_ams_slot(
     printer_id: int,
     ams_id: int,
     slot_id: int,
-    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_AMS_RFID),
     db: AsyncSession = Depends(get_db),
 ):
     """Re-read RFID for an AMS slot (triggers filament info refresh)."""

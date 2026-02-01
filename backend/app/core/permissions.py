@@ -21,6 +21,7 @@ class Permission(str, Enum):
     PRINTERS_DELETE = "printers:delete"
     PRINTERS_CONTROL = "printers:control"  # Start/stop/pause/resume prints
     PRINTERS_FILES = "printers:files"  # Send files to printer
+    PRINTERS_AMS_RFID = "printers:ams_rfid"  # Re-read AMS RFID tags
 
     # Archives
     ARCHIVES_READ = "archives:read"
@@ -159,6 +160,7 @@ PERMISSION_CATEGORIES = {
         Permission.PRINTERS_DELETE,
         Permission.PRINTERS_CONTROL,
         Permission.PRINTERS_FILES,
+        Permission.PRINTERS_AMS_RFID,
     ],
     "Archives": [
         Permission.ARCHIVES_READ,
@@ -305,6 +307,7 @@ DEFAULT_GROUPS = {
             Permission.PRINTERS_DELETE.value,
             Permission.PRINTERS_CONTROL.value,
             Permission.PRINTERS_FILES.value,
+            Permission.PRINTERS_AMS_RFID.value,
             # Archives - own items only
             Permission.ARCHIVES_READ.value,
             Permission.ARCHIVES_CREATE.value,

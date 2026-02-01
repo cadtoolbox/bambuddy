@@ -29,6 +29,11 @@ All notable changes to Bambuddy will be documented in this file.
   - Shows username on archive cards, library files, queue items, and printer cards (while printing)
   - Works when authentication is enabled; gracefully hidden when auth is disabled
   - Database migration adds `created_by_id` columns to `print_archives`, `library_files`, and `print_queue` tables
+- **Separate AMS RFID Permission** (Issue #204):
+  - Added new `printers:ams_rfid` permission for re-reading AMS RFID tags
+  - Allows granting RFID re-read access without full printer control permissions
+  - Operators group includes this permission by default
+  - Available in Settings > Users > Group Editor as a toggleable permission
 - **Schedule Button on Archive Cards** (Issue #208):
   - Added "Schedule" button next to "Reprint" on archive cards for quick access to print scheduling
   - Previously only available in the context menu (right-click)
