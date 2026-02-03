@@ -688,7 +688,12 @@ export function PrintModal({
 
             {/* Schedule options - only for queue modes */}
             {mode !== 'reprint' && (
-              <ScheduleOptionsPanel options={scheduleOptions} onChange={setScheduleOptions} />
+              <ScheduleOptionsPanel
+                options={scheduleOptions}
+                onChange={setScheduleOptions}
+                dateFormat={settings?.date_format || 'system'}
+                timeFormat={settings?.time_format || 'system'}
+              />
             )}
 
             {/* Error message */}

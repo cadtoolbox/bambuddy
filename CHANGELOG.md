@@ -39,6 +39,14 @@ All notable changes to Bambuddy will be documented in this file.
   - Fixed statistics export failing with authentication enabled
   - Fixed printer file ZIP download failing with authentication enabled
   - Root cause: These endpoints used raw `fetch()` without Authorization header
+- **Queue Schedule Date Picker Ignores User Format Settings** (Issue #233):
+  - Replaced native datetime picker with custom date/time inputs respecting user settings
+  - Date input shows in user's format (DD/MM/YYYY for EU, MM/DD/YYYY for US, YYYY-MM-DD for ISO)
+  - Time input shows in user's format (24H or 12H with AM/PM)
+  - Calendar button opens native picker for convenience; selection is formatted to user's preference
+  - Placeholder text shows expected format (e.g., "DD/MM/YYYY" or "HH:MM AM/PM")
+  - Added date utilities: `formatDateInput`, `parseDateInput`, `getDatePlaceholder`
+  - Added time utilities: `formatTimeInput`, `parseTimeInput`, `getTimePlaceholder`
 
 ## [0.1.6.2] - 2026-02-02
 
