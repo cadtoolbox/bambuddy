@@ -1885,6 +1885,7 @@ export default {
     linkTo: 'リンク先...',
     printedCount: '{{count}}回印刷済み',
     addToQueue: 'キューに追加',
+    schedulePrint: '印刷をスケジュール',
     adding: '追加中...',
     folderCreated: 'フォルダを作成しました',
     folderDeleted: 'フォルダを削除しました',

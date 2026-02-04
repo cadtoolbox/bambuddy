@@ -459,8 +459,8 @@ describe('FileManagerPage', () => {
     });
   });
 
-  describe('add to queue', () => {
-    it('shows add to queue button for sliced files', async () => {
+  describe('schedule print', () => {
+    it('shows schedule print button for sliced files', async () => {
       const user = userEvent.setup();
       render(<FileManagerPage />);
 
@@ -472,7 +472,7 @@ describe('FileManagerPage', () => {
       await user.click(screen.getByText('Select All'));
 
       await waitFor(() => {
-        expect(screen.getByText(/Add to Queue/)).toBeInTheDocument();
+        expect(screen.getByText(/Schedule Print/)).toBeInTheDocument();
       });
     });
   });

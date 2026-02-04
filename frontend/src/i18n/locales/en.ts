@@ -1848,6 +1848,7 @@ export default {
     linkTo: 'Link to...',
     linkToProjectOrArchive: 'Link to project or archive',
     addToQueue: 'Add to Queue',
+    schedulePrint: 'Schedule Print',
     generateThumbnail: 'Generate Thumbnail',
     generateThumbnails: 'Generate Thumbnails',
     generateThumbnailsForMissing: 'Generate thumbnails for STL files missing them',

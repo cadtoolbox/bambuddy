@@ -1848,6 +1848,7 @@ export default {
     linkTo: 'Verknüpfen mit...',
     linkToProjectOrArchive: 'Mit Projekt oder Archiv verknüpfen',
     addToQueue: 'Zur Warteschlange',
+    schedulePrint: 'Druck planen',
     generateThumbnail: 'Vorschaubild generieren',
     generateThumbnails: 'Vorschaubilder generieren',
     generateThumbnailsForMissing: 'Vorschaubilder für STL-Dateien ohne Vorschau generieren',
