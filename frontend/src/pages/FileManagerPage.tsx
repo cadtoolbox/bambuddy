@@ -431,7 +431,6 @@ interface UploadFile {
   isZip?: boolean;
   is3mf?: boolean;
   extractedCount?: number;
-  archiveId?: number;
 }
 
 function UploadModal({ folderId, onClose, onUploadComplete, t }: UploadModalProps) {
@@ -489,49 +488,9 @@ function UploadModal({ folderId, onClose, onUploadComplete, t }: UploadModalProp
 
     setIsUploading(true);
 
-    // Handle .3mf files with bulk upload API (advanced extraction)
-    const threemfFiles = files.filter((f) => f.is3mf && f.status === 'pending');
-    if (threemfFiles.length > 0) {
-      try {
-        // Mark files as uploading
-        setFiles((prev) =>
-          prev.map((f) => (f.is3mf && f.status === 'pending' ? { ...f, status: 'uploading' } : f))
-        );
-
-        // Use the archives bulk upload API for .3mf files (extracts printer model)
-        const result = await api.uploadArchivesBulk(threemfFiles.map((f) => f.file));
-
-        // Update file statuses based on result
-        setFiles((prev) =>
-          prev.map((f) => {
-            if (!f.is3mf || f.status !== 'uploading') return f;
-            
-            const success = result.results.find((r) => r.filename === f.file.name);
-            const error = result.errors.find((e) => e.filename === f.file.name);
-            
-            if (success) {
-              return { ...f, status: 'success', archiveId: success.id };
-            }
-            if (error) {
-              return { ...f, status: 'error', error: error.error };
-            }
-            return f;
-          })
-        );
-      } catch (err) {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.is3mf && f.status === 'uploading'
-              ? { ...f, status: 'error', error: err instanceof Error ? err.message : 'Upload failed' }
-              : f
-          )
-        );
-      }
-    }
-
-    // Handle other files (ZIP and regular files) with library upload
+    // Handle all files with library upload (ZIP and regular files including .3mf)
     for (let i = 0; i < files.length; i++) {
-      if (files[i].status !== 'pending' || files[i].is3mf) continue;
+      if (files[i].status !== 'pending') continue;
 
       setFiles((prev) =>
         prev.map((f, idx) => (idx === i ? { ...f, status: 'uploading' } : f))
@@ -554,7 +513,7 @@ function UploadModal({ folderId, onClose, onUploadComplete, t }: UploadModalProp
             )
           );
         } else {
-          // Regular file upload (STL, etc.)
+          // Regular file upload (STL, .3mf, etc.) - .3mf files automatically get metadata extracted
           await api.uploadLibraryFile(files[i].file, folderId, generateStlThumbnails);
           setFiles((prev) =>
             prev.map((f, idx) => (idx === i ? { ...f, status: 'success' } : f))
