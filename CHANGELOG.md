@@ -18,6 +18,10 @@ All notable changes to Bambuddy will be documented in this file.
 - **Queue Scheduled Time Displayed in Wrong Timezone** (Issue #233):
   - Fixed scheduled time being displayed in UTC instead of local timezone when editing queue items
   - The datetime picker now correctly shows and saves times in the user's local timezone
+- **Mobile Layout Issues on Archives and Statistics Pages** (Issue #255):
+  - Fixed header buttons overflowing outside the screen on iPhone/mobile devices
+  - Headers now stack vertically on small screens with proper wrapping
+  - Applied consistent responsive pattern from PrintersPage
 
 ### Added
 - **Windows Portable Launcher** (contributed by nmori):
