@@ -14,6 +14,15 @@ All notable changes to Bambuddy will be documented in this file.
   - Updated translations for proxy mode steps in English, German, and Japanese
 
 ### Fixed
+- **Authentication Required Error After Initial Setup** (Issue #257):
+  - Fixed "Authentication required" error when using printer controls after fresh install with auth enabled
+  - Token clearing on 401 responses is now more selective - only clears on invalid token messages
+  - Generic "Authentication required" errors (which may be timing issues) no longer clear the token
+  - Also fixed smart plug discovery scan endpoints missing auth headers
+- **Filament Hover Card Overlapping Navigation Bar** (Issue #259):
+  - Fixed filament info popup being partially covered by the navigation bar
+  - Hover card positioning now accounts for the fixed 56px header
+  - Cards near the top of the page now correctly flip to show below the slot
 - **Filament Statistics Incorrectly Multiplied by Quantity** (Issue #229):
   - Fixed filament totals being inflated by incorrectly multiplying by quantity
   - The `filament_used_grams` field already contains the total for the entire print job
@@ -30,11 +39,13 @@ All notable changes to Bambuddy will be documented in this file.
   - Fixed header buttons overflowing outside the screen on iPhone/mobile devices
   - Headers now stack vertically on small screens with proper wrapping
   - Applied consistent responsive pattern from PrintersPage
-- **AMS Auto-Matching Ignores Sliced Spool Selection** (Issue #245):
-  - Fixed AMS slot mapping to use `tray_info_idx` from 3MF files for exact spool matching
-  - When multiple trays have the same filament type/color, the exact spool selected during slicing is now used
-  - Priority: tray_info_idx match > exact color match > similar color match > type-only match
-  - Resolves "extrusion motor overloaded" errors caused by wrong tray selection on H2D Pro and other printers with multiple identical spools
+- **AMS Auto-Matching Selects Wrong Slot** (Issue #245):
+  - Fixed AMS slot mapping when multiple trays have the same `tray_info_idx` (filament type identifier)
+  - `tray_info_idx` (e.g., "GFA00" for generic PLA) identifies filament TYPE, not unique spools
+  - When multiple trays match the same type, color is now used as a tiebreaker
+  - Previously used `find()` which always returned the first match regardless of color
+  - Fixed in both backend (print_scheduler.py) and frontend (useFilamentMapping.ts)
+  - Resolves wrong tray selection (e.g., A4 instead of B1) when multiple AMS units have same filament type
 
 ### Added
 - **Windows Portable Launcher** (contributed by nmori):
