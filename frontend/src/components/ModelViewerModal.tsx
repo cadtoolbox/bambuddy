@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, ExternalLink, Box, Code2, Loader2, Layers, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { ModelViewer } from './ModelViewer';
 import { GcodeViewer } from './GcodeViewer';
@@ -130,7 +130,7 @@ export function ModelViewerModal({ archiveId, libraryFileId, title, fileType, on
       .finally(() => setPlatesLoading(false));
   }, [archiveId, fileType, isLibrary, libraryFileId]);
 
-  const plates = platesData?.plates ?? [];
+  const plates = useMemo(() => platesData?.plates ?? [], [platesData]);
   const hasMultiplePlates = (platesData?.is_multi_plate ?? false) && plates.length > 1;
   const splitFullscreen = isFullscreen && hasMultiplePlates;
   const selectedPlate: PlateMetadata | null = selectedPlateId == null
@@ -145,7 +145,6 @@ export function ModelViewerModal({ archiveId, libraryFileId, title, fileType, on
   const platesViewportRef = useRef<HTMLDivElement>(null);
   const [platesPerPage, setPlatesPerPage] = useState(10);
   const [plateColumns, setPlateColumns] = useState(3);
-  const [plateRows, setPlateRows] = useState(3);
   const shouldPaginatePlates = plates.length > platesPerPage;
   const totalPlatePages = Math.max(1, Math.ceil(plates.length / platesPerPage));
   const pagedPlates = shouldPaginatePlates
@@ -175,7 +174,6 @@ export function ModelViewerModal({ archiveId, libraryFileId, title, fileType, on
       const rowHeight = firstItem?.getBoundingClientRect().height ?? 44;
       const availableHeight = viewport.clientHeight;
       const rows = Math.max(1, Math.floor((availableHeight + rowGap) / (rowHeight + rowGap)));
-      setPlateRows((prev) => (prev === rows ? prev : rows));
       const maxSlots = rows * nextCols;
       const nextPerPage = Math.max(1, maxSlots - 1);
       setPlatesPerPage((prev) => (prev === nextPerPage ? prev : nextPerPage));
@@ -486,7 +484,7 @@ export function ModelViewerModal({ archiveId, libraryFileId, title, fileType, on
                               {(() => {
                                 const maxVisible = 5;
                                 let start = Math.max(0, platePage - Math.floor(maxVisible / 2));
-                                let end = Math.min(totalPlatePages, start + maxVisible);
+                                const end = Math.min(totalPlatePages, start + maxVisible);
                                 if (end - start < maxVisible) {
                                   start = Math.max(0, end - maxVisible);
                                 }
