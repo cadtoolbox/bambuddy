@@ -10,7 +10,7 @@ Supports multiple modes:
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.app.core.config import settings as app_settings
@@ -598,7 +598,7 @@ class VirtualPrinterManager:
                     file_size=file_path.stat().st_size,
                     source_ip=source_ip,
                     status="pending",
-                    uploaded_at=datetime.now(UTC),
+                    uploaded_at=datetime.now(timezone.utc),
                 )
                 db.add(pending)
                 await db.commit()

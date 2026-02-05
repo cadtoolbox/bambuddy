@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 
 
@@ -1027,7 +1027,7 @@ async def on_print_start(printer_id: int, data: dict):
         if existing_archive:
             # Check if archive is stale (older than 4 hours) - likely a failed/cancelled print
             # that didn't get properly updated
-            archive_age = datetime.now(UTC) - existing_archive.created_at.replace(tzinfo=UTC)
+            archive_age = datetime.now(timezone.utc) - existing_archive.created_at.replace(tzinfo=timezone.utc)
             if archive_age.total_seconds() > 4 * 60 * 60:  # 4 hours
                 logger.warning(
                     f"Found stale 'printing' archive {existing_archive.id} (age: {archive_age}), "
