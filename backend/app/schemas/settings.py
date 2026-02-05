@@ -23,6 +23,14 @@ class AppSettings(BaseModel):
     spoolman_sync_mode: str = Field(
         default="auto", description="Sync mode: 'auto' syncs immediately, 'manual' requires button press"
     )
+    spoolman_disable_weight_sync: bool = Field(
+        default=False,
+        description="Disable remaining_weight sync. When enabled, only location is updated for existing spools.",
+    )
+    spoolman_report_partial_usage: bool = Field(
+        default=True,
+        description="Report Partial Usage for Failed Prints. When a print fails or is cancelled, report the estimated filament used up to that point based on layer progress.",
+    )
 
     # Updates
     check_updates: bool = Field(default=True, description="Automatically check for updates on startup")
@@ -134,6 +142,8 @@ class AppSettingsUpdate(BaseModel):
     spoolman_enabled: bool | None = None
     spoolman_url: str | None = None
     spoolman_sync_mode: str | None = None
+    spoolman_disable_weight_sync: bool | None = None
+    spoolman_report_partial_usage: bool | None = None
     check_updates: bool | None = None
     check_printer_firmware: bool | None = None
     notification_language: str | None = None
