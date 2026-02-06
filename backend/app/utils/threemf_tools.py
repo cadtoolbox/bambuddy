@@ -10,6 +10,7 @@ import math
 import re
 import zipfile
 from pathlib import Path
+
 import defusedxml.ElementTree as ET
 
 # Default filament properties

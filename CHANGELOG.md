@@ -23,6 +23,13 @@ All notable changes to Bambuddy will be documented in this file.
   - Security scan results visible in GitHub Security tab
 
 ### Enhanced
+- **Per-Filament Spoolman Usage Tracking** (PR #277):
+  - Reports exact filament consumption per spool to Spoolman after each print
+  - Parses G-code from 3MF files for layer-by-layer extrusion data (multi-material support)
+  - New setting: "Disable AMS Estimated Weight Sync" to prefer Spoolman usage tracking over AMS weight estimates
+  - New setting: "Report Partial Usage for Failed Prints" estimates filament used up to the failure point based on layer progress
+  - Persists tracking data in SQLite for reliability across restarts
+  - Extracted Spoolman tracking into dedicated service module with DRY helpers
 - **3D Model Viewer Improvements** (PR #262):
   - Added plate selector for multi-plate 3MF files with thumbnail previews
   - Object count display shows number of objects per plate and total

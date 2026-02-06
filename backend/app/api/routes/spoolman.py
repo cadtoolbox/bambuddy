@@ -52,29 +52,31 @@ class SyncResult(BaseModel):
     errors: list[str]
 
 
-async def get_spoolman_settings(db: AsyncSession) -> tuple[bool, str, str, bool]:
+async def get_spoolman_settings(db: AsyncSession) -> dict:
     """Get Spoolman settings from database.
 
     Returns:
-        Tuple of (enabled, url, sync_mode, disable_weight_sync)
+        Dict with keys: enabled, url, sync_mode, disable_weight_sync
     """
-    enabled = False
-    url = ""
-    sync_mode = "auto"
-    disable_weight_sync = False
+    settings = {
+        "enabled": False,
+        "url": "",
+        "sync_mode": "auto",
+        "disable_weight_sync": False,
+    }
 
     result = await db.execute(select(Settings))
     for setting in result.scalars().all():
         if setting.key == "spoolman_enabled":
-            enabled = setting.value.lower() == "true"
+            settings["enabled"] = setting.value.lower() == "true"
         elif setting.key == "spoolman_url":
-            url = setting.value
+            settings["url"] = setting.value
         elif setting.key == "spoolman_sync_mode":
-            sync_mode = setting.value
+            settings["sync_mode"] = setting.value
         elif setting.key == "spoolman_disable_weight_sync":
-            disable_weight_sync = setting.value.lower() == "true"
+            settings["disable_weight_sync"] = setting.value.lower() == "true"
 
-    return enabled, url, sync_mode, disable_weight_sync
+    return settings
 
 
 @router.get("/status", response_model=SpoolmanStatus)
@@ -83,7 +85,8 @@ async def get_spoolman_status(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_READ),
 ):
     """Get Spoolman integration status."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
 
     client = await get_spoolman_client()
     connected = False
@@ -103,7 +106,8 @@ async def connect_spoolman(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_UPDATE),
 ):
     """Connect to Spoolman server using configured URL."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
 
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
@@ -147,7 +151,8 @@ async def sync_printer_ams(
 ):
     """Sync AMS data from a specific printer to Spoolman."""
     # Check if Spoolman is enabled and connected
-    enabled, url, _, disable_weight_sync = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url, disable_weight_sync = sm["enabled"], sm["url"], sm["disable_weight_sync"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -288,7 +293,8 @@ async def sync_all_printers(
 ):
     """Sync AMS data from all connected printers to Spoolman."""
     # Check if Spoolman is enabled
-    enabled, url, _, disable_weight_sync = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url, disable_weight_sync = sm["enabled"], sm["url"], sm["disable_weight_sync"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -417,7 +423,8 @@ async def get_spools(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_READ),
 ):
     """Get all spools from Spoolman."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -441,7 +448,8 @@ async def get_filaments(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_READ),
 ):
     """Get all filaments from Spoolman."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -476,7 +484,8 @@ async def get_unlinked_spools(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_READ),
 ):
     """Get all Spoolman spools that don't have a tag (not linked to AMS)."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -521,7 +530,8 @@ async def get_linked_spools(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_READ),
 ):
     """Get a map of tag -> spool_id for all Spoolman spools that have a tag assigned."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 
@@ -565,7 +575,8 @@ async def link_spool(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.FILAMENTS_UPDATE),
 ):
     """Link a Spoolman spool to an AMS tray by setting the tag to tray_uuid."""
-    enabled, url, _, _ = await get_spoolman_settings(db)
+    sm = await get_spoolman_settings(db)
+    enabled, url = sm["enabled"], sm["url"]
     if not enabled:
         raise HTTPException(status_code=400, detail="Spoolman integration is not enabled")
 

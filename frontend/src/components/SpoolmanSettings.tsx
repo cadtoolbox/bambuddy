@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Check, X, RefreshCw, Link2, Link2Off, Database, ChevronDown, Info, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader } from './Card';
 import { Button } from './Button';
 
 export function SpoolmanSettings() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [localEnabled, setLocalEnabled] = useState(false);
   const [localUrl, setLocalUrl] = useState('');
@@ -258,11 +260,9 @@ export function SpoolmanSettings() {
         {localSyncMode === 'auto' && (
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white">Disable AMS Estimated Weight Sync</p>
+              <p className="text-white">{t('spoolman.disableWeightSync')}</p>
               <p className="text-sm text-bambu-gray">
-                Don't update remaining capacity from AMS estimates. Use this if you prefer
-                Spoolman's usage tracking over AMS percentage-based estimates. New spools
-                will still use the AMS estimate as their initial weight.
+                {t('spoolman.disableWeightSyncDesc')}
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -282,10 +282,9 @@ export function SpoolmanSettings() {
         {localDisableWeightSync && (
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white">Report Partial Usage for Failed Prints</p>
+              <p className="text-white">{t('spoolman.reportPartialUsage')}</p>
               <p className="text-sm text-bambu-gray">
-                When a print fails or is cancelled, report the estimated filament used
-                up to that point based on layer progress.
+                {t('spoolman.reportPartialUsageDesc')}
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
