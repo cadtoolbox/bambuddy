@@ -10,6 +10,7 @@ Thank you for your interest in contributing to Bambuddy! This document provides 
 - [Making Changes](#making-changes)
 - [Code Style](#code-style)
 - [Testing](#testing)
+- [CI Pipeline](#ci-pipeline)
 - [Submitting Changes](#submitting-changes)
 - [Reporting Bugs](#reporting-bugs)
 - [Requesting Features](#requesting-features)
@@ -35,9 +36,9 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
 
 ### Prerequisites
 
-- Python 3.10+ (3.11/3.12 recommended)
-- Node.js 18+
-- npm or yarn
+- Python 3.11+
+- Node.js 20+
+- npm
 
 ### Backend Setup
 
@@ -48,6 +49,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+pip install -r requirements-dev.txt  # Dev/test dependencies (pytest, ruff, bandit, etc.)
 
 # Install pre-commit hooks
 pip install pre-commit
@@ -74,7 +76,12 @@ The frontend will be available at `http://localhost:5173` and will proxy API req
 ### Running with Docker
 
 ```bash
+# Run the full application
 docker compose up -d --build
+
+# Run tests in Docker (mirrors CI)
+docker compose -f docker-compose.test.yml run --rm backend-test
+docker compose -f docker-compose.test.yml run --rm frontend-test
 ```
 
 ## Making Changes
@@ -107,22 +114,25 @@ docker compose up -d --build
 
 ### Backend (Python)
 
-We use [Ruff](https://github.com/astral-sh/ruff) for linting and formatting:
+We use [Ruff](https://github.com/astral-sh/ruff) for linting and formatting. Configuration is in `pyproject.toml`.
 
 ```bash
 # Check linting
-ruff check .
+ruff check backend/
 
 # Auto-fix issues
-ruff check --fix .
+ruff check --fix backend/
 
 # Format code
-ruff format .
+ruff format backend/
+
+# Check formatting without changes
+ruff format --check backend/
 ```
 
 ### Frontend (TypeScript/React)
 
-We use ESLint and Prettier:
+We use ESLint for linting and TypeScript for type checking:
 
 ```bash
 cd frontend
@@ -131,12 +141,12 @@ cd frontend
 npm run lint
 
 # Type check
-npm run type-check
+npx tsc --noEmit
 ```
 
 ### Pre-commit Hooks
 
-Pre-commit hooks run automatically on `git commit`. To run manually:
+Pre-commit hooks run automatically on `git commit` and include Ruff linting/formatting, trailing whitespace fixes, YAML/JSON validation, and import shadowing checks. To run manually:
 
 ```bash
 pre-commit run --all-files
@@ -144,30 +154,49 @@ pre-commit run --all-files
 
 ## Testing
 
-### Backend Tests
+The easiest way to run tests is with the provided scripts in the project root:
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=backend
-
-# Run specific test file
-pytest backend/app/tests/test_example.py
+./test_frontend.sh    # TypeScript check + ESLint + Vitest
+./test_backend.sh     # Ruff lint/format + pytest (parallel)
+./test_docker.sh      # Full Docker build, unit tests, and integration tests
+./test_all.sh         # All of the above (frontend → backend → docker)
+./test_security.sh    # Security scans (bandit, pip-audit, npm-audit)
 ```
 
-### Frontend Tests
+`test_docker.sh` supports flags like `--backend-only`, `--skip-integration`, `--fresh` — run with `--help` for details.
+
+`test_security.sh` runs fast scans by default. Use `--full` for the complete suite (CodeQL, Trivy, etc.) or specify individual scans like `./test_security.sh bandit codeql`.
+
+### Running Tests Individually
+
+**Backend** — tests are in `backend/tests/` with `unit/` and `integration/` subdirectories:
+
+```bash
+pytest backend/tests/ -v           # All tests
+pytest backend/tests/unit/         # Unit tests only
+pytest backend/tests/ --cov=backend  # With coverage
+```
+
+**Frontend** — tests use [Vitest](https://vitest.dev/) and are in `frontend/src/__tests__/`:
 
 ```bash
 cd frontend
-
-# Run tests
-npm test
-
-# Run with coverage
-npm run test:coverage
+npm run test:run       # Single run
+npm test               # Watch mode
+npm run test:coverage  # With coverage
 ```
+
+## CI Pipeline
+
+Pull requests trigger automated CI checks via GitHub Actions (`.github/workflows/ci.yml`):
+
+- **Backend**: Ruff lint + format check, unit/integration tests, pip-audit
+- **Frontend**: ESLint, TypeScript type check, Vitest tests, production build
+- **Docker**: Full image build, backend/frontend tests in Docker, integration health checks
+- **Security**: CodeQL analysis, dependency audits
+
+All checks must pass before merging. Run `./test_all.sh` locally before pushing to catch issues early.
 
 ## Submitting Changes
 
