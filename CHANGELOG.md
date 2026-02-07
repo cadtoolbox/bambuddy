@@ -2,7 +2,16 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
-## [0.1.9] - Unrelased
+## [0.1.8.1] - 2026-02-07
+
+### Fixed
+- **FTP Upload Broken on All Printer Models** — Fixed critical bug where all FTP uploads failed with "550 Failed to change directory":
+  - `diagnose_storage()` was running before every upload, and its CWD failures (`ftplib.error_perm`) were not caught because `error_perm` is not a subclass of `error_reply`
+  - Removed `diagnose_storage()` from the upload hot path
+  - Changed all FTP exception handlers from `except (OSError, ftplib.error_reply)` to `except (OSError, ftplib.Error)` to catch all FTP error types
+- **HTTP 500 on Reprint and Print Endpoints** — Fixed 500 errors on `/api/v1/archives/{id}/reprint` and `/api/v1/library/files/{id}/print` caused by the FTP failure above
+- **Exception Handling Reverted** — Reverted overly-narrow exception handling introduced in 0.1.8 that could cause uncaught errors in archive parsing, HTTP clients, 3MF/ZIP processing, Home Assistant, and firmware checks
+- **4-Segment Version Support** — Version parser now supports patch releases like `0.1.8.1` for hotfixes without incrementing the minor version
 
 ## [0.1.8] - 2026-02-06
 
