@@ -4,7 +4,7 @@
 # Supports: Linux (all distros), macOS
 #
 # Usage:
-#   Interactive:  curl -fsSL https://raw.githubusercontent.com/maziggy/bambuddy/main/install/docker-install.sh | bash
+#   One-liner:    curl -fsSL https://raw.githubusercontent.com/maziggy/bambuddy/main/install/docker-install.sh | bash -s -- --yes
 #   Unattended:   ./docker-install.sh --path /opt/bambuddy --port 8000 --yes
 #
 # Options:
