@@ -19,6 +19,7 @@ import { SpoolmanSettings } from '../components/SpoolmanSettings';
 import { ExternalLinksSettings } from '../components/ExternalLinksSettings';
 import { VirtualPrinterSettings } from '../components/VirtualPrinterSettings';
 import { GitHubBackupSettings } from '../components/GitHubBackupSettings';
+import { EmailSettings } from '../components/EmailSettings';
 import { APIBrowser } from '../components/APIBrowser';
 import { virtualPrinterApi } from '../api/client';
 import { defaultNavItems, getDefaultView, setDefaultView } from '../components/Layout';
@@ -28,7 +29,7 @@ import { useTheme, type ThemeStyle, type DarkBackground, type LightBackground, t
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Palette } from 'lucide-react';
 
-const validTabs = ['general', 'network', 'plugs', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'users', 'backup'] as const;
+const validTabs = ['general', 'network', 'plugs', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'email', 'users', 'backup'] as const;
 type TabType = typeof validTabs[number];
 
 export function SettingsPage() {
@@ -1010,6 +1011,17 @@ export function SettingsPage() {
           <Printer className="w-4 h-4" />
           {t('settings.tabs.virtualPrinter')}
           <span className={`w-2 h-2 rounded-full ${virtualPrinterRunning ? 'bg-green-400' : 'bg-gray-500'}`} />
+        </button>
+        <button
+          onClick={() => handleTabChange('email')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'email'
+              ? 'text-bambu-green border-bambu-green'
+              : 'text-bambu-gray hover:text-gray-900 dark:hover:text-white border-transparent'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          {t('settings.tabs.email')}
         </button>
         <button
           onClick={() => handleTabChange('users')}
@@ -4177,6 +4189,13 @@ export function SettingsPage() {
           }}
           onCancel={() => setDeleteGroupId(null)}
         />
+      )}
+
+      {/* Email Tab */}
+      {activeTab === 'email' && (
+        <div className="space-y-6">
+          <EmailSettings />
+        </div>
       )}
 
       {/* Backup Tab */}
