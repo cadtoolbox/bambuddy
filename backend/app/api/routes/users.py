@@ -1,3 +1,6 @@
+import logging
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +13,7 @@ from backend.app.core.auth import (
     verify_password,
 )
 from backend.app.core.database import get_db
-from backend.app.core.email import generate_secure_password, send_new_user_email
+from backend.app.core.email import generate_secure_password, send_new_user_email, send_password_reset_email
 from backend.app.core.permissions import Permission
 from backend.app.models.archive import PrintArchive
 from backend.app.models.group import Group
@@ -63,9 +66,6 @@ async def create_user(
     - Password is auto-generated if not provided
     - Email is sent to user with login credentials
     """
-    import logging
-    import os
-    
     logger = logging.getLogger(__name__)
     
     # Check if username already exists (case-insensitive)
@@ -440,9 +440,6 @@ async def admin_reset_password(
     Generates a new random password and sends it via email.
     Requires advanced authentication to be enabled.
     """
-    import logging
-    import os
-    
     logger = logging.getLogger(__name__)
     
     # Check if advanced auth is enabled
@@ -488,8 +485,6 @@ async def admin_reset_password(
         external_url_setting = external_url_result.scalar_one_or_none()
         base_url = external_url_setting.value if external_url_setting else os.getenv("EXTERNAL_URL", "http://localhost:5000")
         login_url = f"{base_url.rstrip('/')}/login"
-        
-        from backend.app.core.email import send_password_reset_email
         
         email_sent = await send_password_reset_email(
             db, user.email, user.username, new_password, login_url

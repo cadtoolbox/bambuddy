@@ -1,3 +1,5 @@
+import logging
+import os
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,9 +13,11 @@ from backend.app.core.auth import (
     create_access_token,
     get_current_active_user,
     get_password_hash,
+    get_user_by_email,
     get_user_by_username,
 )
 from backend.app.core.database import get_db
+from backend.app.core.email import generate_secure_password, send_password_reset_email
 from backend.app.models.group import Group
 from backend.app.models.settings import Settings
 from backend.app.models.user import User
@@ -83,7 +87,6 @@ async def set_setup_completed(db: AsyncSession, completed: bool) -> None:
 @router.post("/setup", response_model=SetupResponse)
 async def setup_auth(request: SetupRequest, db: AsyncSession = Depends(get_db)):
     """First-time setup: enable/disable authentication and create admin user."""
-    import logging
 
     logger = logging.getLogger(__name__)
 
@@ -186,7 +189,6 @@ async def disable_auth(
     db: AsyncSession = Depends(get_db),
 ):
     """Disable authentication (admin only)."""
-    import logging
 
     logger = logging.getLogger(__name__)
 
@@ -275,8 +277,6 @@ async def forgot_password(
     
     Requires advanced authentication to be enabled.
     """
-    import logging
-    import os
     
     logger = logging.getLogger(__name__)
     
@@ -301,8 +301,6 @@ async def forgot_password(
         )
     
     # Get user by email (case-insensitive)
-    from backend.app.core.auth import get_user_by_email
-    
     user = await get_user_by_email(db, email)
     
     # Don't reveal if email exists or not for security (always return success)
@@ -315,9 +313,6 @@ async def forgot_password(
         return {"message": "If the email exists, a password reset email has been sent"}
     
     # Generate new password
-    from backend.app.core.email import generate_secure_password, send_password_reset_email
-    from backend.app.core.auth import get_password_hash
-    
     new_password = generate_secure_password()
     user.password_hash = get_password_hash(new_password)
     

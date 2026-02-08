@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Mail, Check, AlertCircle, Loader2, TestTube, Save, Lock, Unlock } from 'lucide-react';
@@ -36,7 +36,7 @@ export function EmailSettings() {
   });
 
   // Update form data when settings are loaded
-  useState(() => {
+  useEffect(() => {
     if (smtpSettings && smtpSettings.configured) {
       setSmtpFormData({
         smtp_server: smtpSettings.smtp_server || '',
@@ -48,7 +48,7 @@ export function EmailSettings() {
         smtp_use_ssl: smtpSettings.smtp_use_ssl ?? false,
       });
     }
-  });
+  }, [smtpSettings]);
 
   // Save SMTP settings mutation
   const saveSMTPMutation = useMutation({
