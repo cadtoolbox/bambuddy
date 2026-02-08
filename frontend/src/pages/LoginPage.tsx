@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { HelpCircle, X } from 'lucide-react';
+import { api } from '../api/client';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -136,31 +137,78 @@ export function LoginPage() {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <p className="text-bambu-gray">
-                {t('login.forgotPasswordMessage')}
-              </p>
-
-              <div className="bg-bambu-dark rounded-lg p-4 space-y-2">
-                <p className="text-sm text-white font-medium">{t('login.howToReset')}</p>
-                <ol className="text-sm text-bambu-gray space-y-1 list-decimal list-inside">
-                  <li>{t('login.resetStep1')}</li>
-                  <li>{t('login.resetStep2')}</li>
-                  <li>{t('login.resetStep3')}</li>
-                  <li>{t('login.resetStep4')}</li>
-                </ol>
-              </div>
-
-              <button
-                onClick={() => setShowForgotPassword(false)}
-                className="w-full py-2 px-4 bg-bambu-dark-tertiary hover:bg-bambu-dark text-white rounded-lg transition-colors"
-              >
-                {t('login.gotIt')}
-              </button>
-            </div>
+            <ForgotPasswordForm onClose={() => setShowForgotPassword(false)} />
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Forgot Password Form Component
+function ForgotPasswordForm({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [email, setEmail] = useState('');
+
+  const forgotPasswordMutation = useMutation({
+    mutationFn: () => api.forgotPassword(email),
+    onSuccess: () => {
+      showToast(t('login.forgotPasswordSuccess'));
+      onClose();
+    },
+    onError: (error: Error) => {
+      showToast(error.message || t('login.forgotPasswordFailed'), 'error');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      showToast(t('login.enterEmail'), 'error');
+      return;
+    }
+    forgotPasswordMutation.mutate();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <p className="text-bambu-gray">
+        {t('login.forgotPasswordMessage')}
+      </p>
+
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+          {t('login.email')}
+        </label>
+        <input
+          id="email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="block w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+          placeholder={t('login.emailPlaceholder')}
+          autoComplete="email"
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 py-2 px-4 bg-bambu-dark-tertiary hover:bg-bambu-dark text-white rounded-lg transition-colors"
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          type="submit"
+          disabled={forgotPasswordMutation.isPending}
+          className="flex-1 py-2 px-4 bg-bambu-green hover:bg-bambu-green-light text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {forgotPasswordMutation.isPending ? t('common.sending') : t('login.sendReset')}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -1843,6 +1843,7 @@ export interface LoginResponse {
 export interface UserResponse {
   id: number;
   username: string;
+  email?: string | null;
   role: string;  // Deprecated, kept for backward compatibility
   is_active: boolean;
   is_admin: boolean;  // Computed from role and group membership
@@ -1853,7 +1854,8 @@ export interface UserResponse {
 
 export interface UserCreate {
   username: string;
-  password: string;
+  password?: string;  // Optional when advanced auth is enabled
+  email?: string;
   role: string;
   group_ids?: number[];
 }
@@ -1861,6 +1863,7 @@ export interface UserCreate {
 export interface UserUpdate {
   username?: string;
   password?: string;
+  email?: string;
   role?: string;
   is_active?: boolean;
   group_ids?: number[];
@@ -1929,6 +1932,15 @@ export const api = {
     request<{ message: string }>('/users/me/change-password', {
       method: 'POST',
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  resetUserPassword: (userId: number) =>
+    request<{ message: string; email_sent: boolean }>(`/users/${userId}/reset-password`, {
+      method: 'POST',
+    }),
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
 
   // Groups
@@ -2735,6 +2747,43 @@ export const api = {
     request<{ installed: boolean; path: string | null }>('/settings/check-ffmpeg'),
   getNetworkInterfaces: () =>
     request<{ interfaces: NetworkInterface[] }>('/settings/network-interfaces'),
+  
+  // SMTP Settings for Advanced Authentication
+  getSMTPSettings: () =>
+    request<{
+      configured: boolean;
+      smtp_server: string;
+      smtp_port: number;
+      smtp_username: string;
+      smtp_from_address: string;
+      smtp_use_tls: boolean;
+      smtp_use_ssl: boolean;
+    }>('/settings/smtp'),
+  updateSMTPSettings: (data: {
+    smtp_server: string;
+    smtp_port: number;
+    smtp_username?: string;
+    smtp_password?: string;
+    smtp_from_address: string;
+    smtp_use_tls?: boolean;
+    smtp_use_ssl?: boolean;
+  }) =>
+    request<{ message: string }>('/settings/smtp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  testSMTPSettings: (testEmail: string) =>
+    request<{ success: boolean; message: string }>('/settings/smtp/test', {
+      method: 'POST',
+      body: JSON.stringify({ test_email: testEmail }),
+    }),
+  getAdvancedAuthStatus: () =>
+    request<{ enabled: boolean }>('/settings/advanced-auth'),
+  updateAdvancedAuthStatus: (enabled: boolean) =>
+    request<{ message: string; enabled: boolean }>('/settings/advanced-auth', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
 
   // Cloud
   getCloudStatus: () => request<CloudAuthStatus>('/cloud/status'),
