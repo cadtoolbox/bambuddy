@@ -260,11 +260,10 @@ async def _get_plug_energy(plug, db) -> dict | None:
     For MQTT plugs, returns data from the subscription service.
     """
     if plug.plug_type == "homeassistant":
-        from backend.app.api.routes.settings import get_setting
+        from backend.app.api.routes.settings import get_homeassistant_settings
 
-        ha_url = await get_setting(db, "ha_url") or ""
-        ha_token = await get_setting(db, "ha_token") or ""
-        homeassistant_service.configure(ha_url, ha_token)
+        ha_settings = await get_homeassistant_settings(db)
+        homeassistant_service.configure(ha_settings["ha_url"], ha_settings["ha_token"])
         return await homeassistant_service.get_energy(plug)
     elif plug.plug_type == "mqtt":
         # MQTT plugs report "today" energy, not lifetime total

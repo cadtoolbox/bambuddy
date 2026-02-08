@@ -751,6 +751,9 @@ export interface AppSettings {
   ha_enabled: boolean;
   ha_url: string;
   ha_token: string;
+  ha_url_from_env: boolean;
+  ha_token_from_env: boolean;
+  ha_env_managed: boolean;
   // File Manager / Library settings
   library_archive_mode: 'always' | 'never' | 'ask';
   library_disk_warning_gb: number;

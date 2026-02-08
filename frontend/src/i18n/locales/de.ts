@@ -1093,6 +1093,10 @@ export default {
     enableRetry: 'Wiederholung aktivieren',
     // Home Assistant
     homeAssistantDescription: 'Smart Plugs über Home Assistant steuern',
+    environmentManagedLabel: '(Umgebungsvariable)',
+    autoEnabledViaEnv: 'Automatisch über Umgebungsvariablen aktiviert',
+    urlFromEnvReadOnly: 'Wert wird über HA_URL Umgebungsvariable gesetzt (schreibgeschützt)',
+    tokenFromEnvReadOnly: 'Wert wird über HA_TOKEN Umgebungsvariable gesetzt (schreibgeschützt)',
     // MQTT
     mqttConnectedTo: 'Verbunden mit',
     // Prometheus
