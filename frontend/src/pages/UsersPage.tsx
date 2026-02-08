@@ -29,6 +29,7 @@ export function UsersPage() {
   const [formData, setFormData] = useState<FormData>({
     username: '',
     password: '',
+    email: '',
     confirmPassword: '',
     role: 'user',
     group_ids: [],
@@ -40,12 +41,12 @@ export function UsersPage() {
       if (e.key === 'Escape') {
         if (showCreateModal) {
           setShowCreateModal(false);
-          setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+          setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
         }
         if (showEditModal) {
           setShowEditModal(false);
           setEditingUserId(null);
-          setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+          setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
         }
       }
     };
@@ -65,13 +66,18 @@ export function UsersPage() {
     enabled: hasPermission('groups:read'),
   });
 
+  const { data: advancedAuthStatus } = useQuery({
+    queryKey: ['advanced-auth-status'],
+    queryFn: () => api.getAdvancedAuthStatus(),
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: UserCreate) => api.createUser(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       setShowCreateModal(false);
-      setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
       showToast(t('users.toast.created'));
     },
     onError: (error: Error) => {
@@ -86,7 +92,7 @@ export function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       setShowEditModal(false);
       setEditingUserId(null);
-      setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
       showToast(t('users.toast.updated'));
     },
     onError: (error: Error) => {
@@ -105,22 +111,49 @@ export function UsersPage() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: (userId: number) => api.resetUserPassword(userId),
+    onSuccess: (data) => {
+      if (data.email_sent) {
+        showToast('Password reset email sent successfully', 'success');
+      } else {
+        showToast('Password reset but email failed. Contact user manually.', 'warning');
+      }
+    },
+    onError: (error: Error) => {
+      showToast(error.message || 'Failed to reset password', 'error');
+    },
+  });
+
   const handleCreate = () => {
-    if (!formData.username || !formData.password) {
+    if (!formData.username) {
       showToast(t('users.toast.fillRequired'), 'error');
       return;
     }
-    if (formData.password !== formData.confirmPassword) {
-      showToast(t('users.toast.passwordsDoNotMatch'), 'error');
-      return;
+    
+    // Check if advanced auth is enabled
+    const advancedAuthEnabled = advancedAuthStatus?.enabled || false;
+    
+    // If advanced auth is enabled and email is provided, password is optional (auto-generated)
+    if (!advancedAuthEnabled || !formData.email) {
+      if (!formData.password) {
+        showToast(t('users.toast.fillRequired'), 'error');
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        showToast(t('users.toast.passwordsDoNotMatch'), 'error');
+        return;
+      }
+      if (formData.password.length < 6) {
+        showToast(t('users.toast.passwordTooShort'), 'error');
+        return;
+      }
     }
-    if (formData.password.length < 6) {
-      showToast(t('users.toast.passwordTooShort'), 'error');
-      return;
-    }
+    
     createMutation.mutate({
       username: formData.username,
-      password: formData.password,
+      password: formData.password || undefined,
+      email: formData.email || undefined,
       role: formData.role,
       group_ids: formData.group_ids.length > 0 ? formData.group_ids : undefined,
     });
@@ -141,12 +174,17 @@ export function UsersPage() {
     const updateData: UserUpdate = {
       username: formData.username || undefined,
       password: formData.password || undefined,
+      email: formData.email || undefined,
       role: formData.role,
       group_ids: formData.group_ids,
     };
     // Remove password if empty
     if (!updateData.password) {
       delete updateData.password;
+    }
+    // Remove email if empty
+    if (!updateData.email) {
+      delete updateData.email;
     }
     updateMutation.mutate({ id, data: updateData });
   };
@@ -160,6 +198,7 @@ export function UsersPage() {
     setFormData({
       username: user.username,
       password: '',
+      email: user.email || '',
       confirmPassword: '',
       role: user.role,
       group_ids: user.groups?.map(g => g.id) || [],
@@ -170,7 +209,7 @@ export function UsersPage() {
   const closeEditModal = () => {
     setShowEditModal(false);
     setEditingUserId(null);
-    setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+    setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
   };
 
   const toggleGroup = (groupId: number) => {
@@ -221,7 +260,7 @@ export function UsersPage() {
         <Button
           onClick={() => {
             setShowCreateModal(true);
-            setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+            setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
           }}
         >
           <Plus className="w-4 h-4" />
@@ -332,7 +371,7 @@ export function UsersPage() {
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
           onClick={() => {
             setShowCreateModal(false);
-            setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+            setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
           }}
         >
           <Card
@@ -350,7 +389,7 @@ export function UsersPage() {
                   size="sm"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   <X className="w-5 h-5" />
@@ -440,7 +479,7 @@ export function UsersPage() {
                   variant="secondary"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   {t('users.modal.cancel')}
