@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown, ChevronRight, Check, Save } from 'lucide-react';
+import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown, ChevronRight, Check, Save, Mail } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
@@ -19,6 +19,7 @@ import { SpoolmanSettings } from '../components/SpoolmanSettings';
 import { ExternalLinksSettings } from '../components/ExternalLinksSettings';
 import { VirtualPrinterSettings } from '../components/VirtualPrinterSettings';
 import { GitHubBackupSettings } from '../components/GitHubBackupSettings';
+import { EmailSettings } from '../components/EmailSettings';
 import { APIBrowser } from '../components/APIBrowser';
 import { virtualPrinterApi } from '../api/client';
 import { defaultNavItems, getDefaultView, setDefaultView } from '../components/Layout';
@@ -28,7 +29,7 @@ import { useTheme, type ThemeStyle, type DarkBackground, type LightBackground, t
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Palette } from 'lucide-react';
 
-const validTabs = ['general', 'network', 'plugs', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'users', 'backup'] as const;
+const validTabs = ['general', 'network', 'plugs', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'users', 'email', 'backup'] as const;
 type TabType = typeof validTabs[number];
 
 export function SettingsPage() {
@@ -1024,6 +1025,17 @@ export function SettingsPage() {
           {authEnabled && (
             <span className="w-2 h-2 rounded-full bg-green-400" />
           )}
+        </button>
+        <button
+          onClick={() => handleTabChange('email')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'email'
+              ? 'text-bambu-green border-bambu-green'
+              : 'text-bambu-gray hover:text-gray-900 dark:hover:text-white border-transparent'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          {t('settings.tabs.email') || 'Email'}
         </button>
         <button
           onClick={() => handleTabChange('backup')}
@@ -4177,6 +4189,11 @@ export function SettingsPage() {
           }}
           onCancel={() => setDeleteGroupId(null)}
         />
+      )}
+
+      {/* Email Tab */}
+      {activeTab === 'email' && (
+        <EmailSettings />
       )}
 
       {/* Backup Tab */}
