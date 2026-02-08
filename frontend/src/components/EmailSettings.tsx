@@ -19,7 +19,8 @@ export function EmailSettings() {
     smtp_port: 587,
     smtp_username: '',
     smtp_password: '',
-    smtp_use_tls: true,
+    smtp_security: 'starttls',
+    smtp_auth_enabled: true,
     smtp_from_email: '',
     smtp_from_name: 'BamBuddy',
   });
@@ -86,8 +87,13 @@ export function EmailSettings() {
 
   const handleSave = () => {
     // Validate required fields
-    if (!smtpSettings.smtp_host || !smtpSettings.smtp_username || !smtpSettings.smtp_from_email) {
+    if (!smtpSettings.smtp_host || !smtpSettings.smtp_from_email) {
       showToast('Please fill in all required fields', 'error');
+      return;
+    }
+    // Validate auth fields when authentication is enabled
+    if (smtpSettings.smtp_auth_enabled && (!smtpSettings.smtp_username)) {
+      showToast('Username is required when authentication is enabled', 'error');
       return;
     }
     saveMutation.mutate(smtpSettings);
@@ -98,8 +104,13 @@ export function EmailSettings() {
       showToast('Please enter a test email address', 'error');
       return;
     }
-    if (!smtpSettings.smtp_host || !smtpSettings.smtp_username || !smtpSettings.smtp_password || !smtpSettings.smtp_from_email) {
-      showToast('Please fill in all SMTP settings before testing', 'error');
+    if (!smtpSettings.smtp_host || !smtpSettings.smtp_from_email) {
+      showToast('Please fill in SMTP Server and From Email before testing', 'error');
+      return;
+    }
+    // Validate auth fields when authentication is enabled
+    if (smtpSettings.smtp_auth_enabled && (!smtpSettings.smtp_username || !smtpSettings.smtp_password)) {
+      showToast('Username and Password are required when authentication is enabled', 'error');
       return;
     }
     testMutation.mutate({
@@ -107,7 +118,8 @@ export function EmailSettings() {
       smtp_port: smtpSettings.smtp_port,
       smtp_username: smtpSettings.smtp_username,
       smtp_password: smtpSettings.smtp_password,
-      smtp_use_tls: smtpSettings.smtp_use_tls,
+      smtp_security: smtpSettings.smtp_security,
+      smtp_auth_enabled: smtpSettings.smtp_auth_enabled,
       smtp_from_email: smtpSettings.smtp_from_email,
       test_recipient: testEmail,
     });
@@ -131,73 +143,6 @@ export function EmailSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Advanced Authentication Toggle */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail className="w-5 h-5 text-bambu-green" />
-              <h2 className="text-lg font-semibold text-white">
-                {t('settings.email.advancedAuth') || 'Advanced Authentication'}
-              </h2>
-            </div>
-            <Button
-              onClick={handleToggleAdvancedAuth}
-              disabled={toggleAdvancedAuthMutation.isPending}
-              variant={advancedAuthStatus?.advanced_auth_enabled ? 'danger' : 'primary'}
-            >
-              {advancedAuthStatus?.advanced_auth_enabled ? (
-                <>
-                  <Unlock className="w-4 h-4" />
-                  {t('settings.email.disable') || 'Disable'}
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4" />
-                  {t('settings.email.enable') || 'Enable'}
-                </>
-              )}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {advancedAuthStatus?.advanced_auth_enabled ? (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-2">
-                    <p className="text-white font-medium">
-                      {t('settings.email.advancedAuthEnabled') || 'Advanced Authentication is enabled'}
-                    </p>
-                    <ul className="text-sm text-green-300 space-y-1 list-disc list-inside">
-                      <li>{t('settings.email.feature1') || 'Passwords are auto-generated and emailed to new users'}</li>
-                      <li>{t('settings.email.feature2') || 'Users can login with username or email'}</li>
-                      <li>{t('settings.email.feature3') || 'Forgot password feature is available'}</li>
-                      <li>{t('settings.email.feature4') || 'Admins can reset user passwords via email'}</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-2">
-                    <p className="text-white font-medium">
-                      {t('settings.email.advancedAuthDisabled') || 'Advanced Authentication is disabled'}
-                    </p>
-                    <p className="text-sm text-yellow-300">
-                      {t('settings.email.advancedAuthDisabledDesc') || 'Configure and test SMTP settings below, then enable advanced authentication to activate email-based features.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* SMTP Configuration */}
       <Card>
         <CardHeader>
@@ -222,42 +167,77 @@ export function EmailSettings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-white mb-2">
-                  {t('settings.email.smtpPort') || 'Port'} *
+                  {t('settings.email.smtpPort') || 'SMTP Port'}
                 </label>
                 <input
                   type="number"
                   value={smtpSettings.smtp_port}
                   onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_port: parseInt(e.target.value) || 587 })}
+                  placeholder="587"
                   className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                {t('settings.email.username') || 'Username'} *
-              </label>
-              <input
-                type="text"
-                value={smtpSettings.smtp_username}
-                onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_username: e.target.value })}
-                placeholder="your.email@gmail.com"
-                className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  {t('settings.email.security') || 'Security'}
+                </label>
+                <select
+                  value={smtpSettings.smtp_security}
+                  onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_security: e.target.value as 'starttls' | 'ssl' | 'none' })}
+                  className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                >
+                  <option value="starttls">STARTTLS (Port 587)</option>
+                  <option value="ssl">SSL/TLS (Port 465)</option>
+                  <option value="none">None (Port 25)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  {t('settings.email.authentication') || 'Authentication'}
+                </label>
+                <select
+                  value={smtpSettings.smtp_auth_enabled ? 'true' : 'false'}
+                  onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_auth_enabled: e.target.value === 'true' })}
+                  className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                >
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                {t('settings.email.password') || 'Password'} *
-              </label>
-              <input
-                type="password"
-                value={smtpSettings.smtp_password}
-                onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_password: e.target.value })}
-                placeholder={existingSettings ? '••••••••' : 'Enter password'}
-                className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-              />
-            </div>
+            {smtpSettings.smtp_auth_enabled && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    {t('settings.email.username') || 'Username'}
+                  </label>
+                  <input
+                    type="text"
+                    value={smtpSettings.smtp_username || ''}
+                    onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_username: e.target.value })}
+                    placeholder="your.email@gmail.com"
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    {t('settings.email.password') || 'Password'}
+                  </label>
+                  <input
+                    type="password"
+                    value={smtpSettings.smtp_password || ''}
+                    onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_password: e.target.value })}
+                    placeholder={existingSettings ? '••••••••' : 'App password'}
+                    className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+                  />
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -268,7 +248,7 @@ export function EmailSettings() {
                   type="email"
                   value={smtpSettings.smtp_from_email}
                   onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_from_email: e.target.value })}
-                  placeholder="noreply@yourdomain.com"
+                  placeholder="your@email.com"
                   className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
                 />
               </div>
@@ -284,19 +264,6 @@ export function EmailSettings() {
                   className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
                 />
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use_tls"
-                checked={smtpSettings.smtp_use_tls}
-                onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_use_tls: e.target.checked })}
-                className="w-4 h-4 rounded border-bambu-gray text-bambu-green focus:ring-bambu-green focus:ring-offset-0 bg-bambu-dark"
-              />
-              <label htmlFor="use_tls" className="text-sm text-white">
-                {t('settings.email.useTLS') || 'Use TLS (recommended)'}
-              </label>
             </div>
 
             <div className="flex gap-2">
@@ -360,6 +327,75 @@ export function EmailSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Advanced Authentication Toggle - Only show when SMTP is configured */}
+      {advancedAuthStatus?.smtp_configured && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-bambu-green" />
+                <h2 className="text-lg font-semibold text-white">
+                  {t('settings.email.advancedAuth') || 'Advanced Authentication'}
+                </h2>
+              </div>
+              <Button
+                onClick={handleToggleAdvancedAuth}
+                disabled={toggleAdvancedAuthMutation.isPending}
+                variant={advancedAuthStatus?.advanced_auth_enabled ? 'danger' : 'primary'}
+              >
+                {advancedAuthStatus?.advanced_auth_enabled ? (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    {t('settings.email.disable') || 'Disable'}
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    {t('settings.email.enable') || 'Enable'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {advancedAuthStatus?.advanced_auth_enabled ? (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-2">
+                      <p className="text-white font-medium">
+                        {t('settings.email.advancedAuthEnabled') || 'Advanced Authentication is enabled'}
+                      </p>
+                      <ul className="text-sm text-green-300 space-y-1 list-disc list-inside">
+                        <li>{t('settings.email.feature1') || 'Passwords are auto-generated and emailed to new users'}</li>
+                        <li>{t('settings.email.feature2') || 'Users can login with username or email'}</li>
+                        <li>{t('settings.email.feature3') || 'Forgot password feature is available'}</li>
+                        <li>{t('settings.email.feature4') || 'Admins can reset user passwords via email'}</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-2">
+                      <p className="text-white font-medium">
+                        {t('settings.email.advancedAuthDisabled') || 'Advanced Authentication is disabled'}
+                      </p>
+                      <p className="text-sm text-yellow-300">
+                        {t('settings.email.advancedAuthDisabledDesc') || 'Enable advanced authentication to activate email-based features for user management.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

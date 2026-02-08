@@ -71,6 +71,8 @@ async def get_smtp_settings(db: AsyncSession) -> SMTPSettings | None:
                 "smtp_username",
                 "smtp_password",
                 "smtp_use_tls",
+                "smtp_security",
+                "smtp_auth_enabled",
                 "smtp_from_email",
                 "smtp_from_name",
             ])
@@ -79,16 +81,26 @@ async def get_smtp_settings(db: AsyncSession) -> SMTPSettings | None:
     settings_dict = {s.key: s.value for s in result.scalars().all()}
     
     # Check if minimum required settings are present
-    required_keys = ["smtp_host", "smtp_port", "smtp_username", "smtp_from_email"]
+    required_keys = ["smtp_host", "smtp_port", "smtp_from_email"]
     if not all(key in settings_dict for key in required_keys):
         return None
+    
+    # Handle migration: convert old smtp_use_tls to smtp_security if needed
+    smtp_security = settings_dict.get("smtp_security")
+    if not smtp_security:
+        # Migrate from old smtp_use_tls format
+        smtp_use_tls = settings_dict.get("smtp_use_tls", "true").lower() == "true"
+        smtp_security = "starttls" if smtp_use_tls else "ssl"
+    
+    smtp_auth_enabled = settings_dict.get("smtp_auth_enabled", "true").lower() == "true"
     
     return SMTPSettings(
         smtp_host=settings_dict["smtp_host"],
         smtp_port=int(settings_dict["smtp_port"]),
-        smtp_username=settings_dict["smtp_username"],
+        smtp_username=settings_dict.get("smtp_username"),
         smtp_password=settings_dict.get("smtp_password"),
-        smtp_use_tls=settings_dict.get("smtp_use_tls", "true").lower() == "true",
+        smtp_security=smtp_security,
+        smtp_auth_enabled=smtp_auth_enabled,
         smtp_from_email=settings_dict["smtp_from_email"],
         smtp_from_name=settings_dict.get("smtp_from_name", "BamBuddy"),
     )
@@ -107,11 +119,15 @@ async def save_smtp_settings(db: AsyncSession, smtp_settings: SMTPSettings) -> N
     settings_data = {
         "smtp_host": smtp_settings.smtp_host,
         "smtp_port": str(smtp_settings.smtp_port),
-        "smtp_username": smtp_settings.smtp_username,
-        "smtp_use_tls": "true" if smtp_settings.smtp_use_tls else "false",
+        "smtp_security": smtp_settings.smtp_security,
+        "smtp_auth_enabled": "true" if smtp_settings.smtp_auth_enabled else "false",
         "smtp_from_email": smtp_settings.smtp_from_email,
         "smtp_from_name": smtp_settings.smtp_from_name,
     }
+    
+    # Only save username if auth is enabled or if provided
+    if smtp_settings.smtp_username:
+        settings_data["smtp_username"] = smtp_settings.smtp_username
     
     # Only save password if provided
     if smtp_settings.smtp_password:
@@ -159,17 +175,31 @@ def send_email(
     
     # Send email
     try:
-        if smtp_settings.smtp_use_tls:
-            # Use TLS (port 587 typically)
+        security = smtp_settings.smtp_security
+        auth_enabled = smtp_settings.smtp_auth_enabled
+        
+        # Validate username is provided when authentication is enabled
+        if auth_enabled and smtp_settings.smtp_password:
+            if not smtp_settings.smtp_username:
+                raise ValueError("SMTP username is required when authentication is enabled")
+        
+        if security == "ssl":
+            # Direct SSL connection (typically port 465)
+            with smtplib.SMTP_SSL(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
+                    server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
+                server.send_message(msg)
+        elif security == "starttls":
+            # STARTTLS upgrade (typically port 587)
             with smtplib.SMTP(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
                 server.starttls()
-                if smtp_settings.smtp_password:
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
                     server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
                 server.send_message(msg)
         else:
-            # Use SSL (port 465 typically) or no encryption
-            with smtplib.SMTP_SSL(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
-                if smtp_settings.smtp_password:
+            # No encryption (typically port 25) - use with caution
+            with smtplib.SMTP(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
                     server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
                 server.send_message(msg)
         logger.info(f"Email sent successfully to {to_email}")

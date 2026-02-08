@@ -351,7 +351,8 @@ async def test_smtp_connection(
             smtp_port=test_request.smtp_port,
             smtp_username=test_request.smtp_username,
             smtp_password=test_request.smtp_password,
-            smtp_use_tls=test_request.smtp_use_tls,
+            smtp_security=test_request.smtp_security,
+            smtp_auth_enabled=test_request.smtp_auth_enabled,
             smtp_from_email=test_request.smtp_from_email,
         )
 

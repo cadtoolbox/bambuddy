@@ -29,7 +29,7 @@ import { useTheme, type ThemeStyle, type DarkBackground, type LightBackground, t
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Palette } from 'lucide-react';
 
-const validTabs = ['general', 'network', 'plugs', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'users', 'email', 'backup'] as const;
+const validTabs = ['general', 'network', 'plugs', 'email', 'notifications', 'filament', 'apikeys', 'virtual-printer', 'users', 'backup'] as const;
 type TabType = typeof validTabs[number];
 
 export function SettingsPage() {
@@ -946,6 +946,17 @@ export function SettingsPage() {
           )}
         </button>
         <button
+          onClick={() => handleTabChange('email')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'email'
+              ? 'text-bambu-green border-bambu-green'
+              : 'text-bambu-gray hover:text-gray-900 dark:hover:text-white border-transparent'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          {t('settings.tabs.globalEmail') || 'Global Email'}
+        </button>
+        <button
           onClick={() => handleTabChange('notifications')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
             activeTab === 'notifications'
@@ -1025,17 +1036,6 @@ export function SettingsPage() {
           {authEnabled && (
             <span className="w-2 h-2 rounded-full bg-green-400" />
           )}
-        </button>
-        <button
-          onClick={() => handleTabChange('email')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
-            activeTab === 'email'
-              ? 'text-bambu-green border-bambu-green'
-              : 'text-bambu-gray hover:text-gray-900 dark:hover:text-white border-transparent'
-          }`}
-        >
-          <Mail className="w-4 h-4" />
-          {t('settings.tabs.email') || 'Email'}
         </button>
         <button
           onClick={() => handleTabChange('backup')}

@@ -89,21 +89,27 @@ class ResetPasswordResponse(BaseModel):
 class SMTPSettings(BaseModel):
     smtp_host: str
     smtp_port: int
-    smtp_username: str
-    smtp_password: str | None = None  # Optional for read operations
-    smtp_use_tls: bool = True
+    smtp_username: str | None = None  # Optional when auth is disabled
+    smtp_password: str | None = None  # Optional for read operations or when auth is disabled
+    smtp_security: str = "starttls"  # 'starttls', 'ssl', 'none'
+    smtp_auth_enabled: bool = True
     smtp_from_email: str
     smtp_from_name: str = "BamBuddy"
+    # Deprecated field for backward compatibility
+    smtp_use_tls: bool | None = None
 
 
 class TestSMTPRequest(BaseModel):
     smtp_host: str
     smtp_port: int
-    smtp_username: str
-    smtp_password: str
-    smtp_use_tls: bool = True
+    smtp_username: str | None = None  # Optional when auth is disabled
+    smtp_password: str | None = None  # Optional when auth is disabled
+    smtp_security: str = "starttls"  # 'starttls', 'ssl', 'none'
+    smtp_auth_enabled: bool = True
     smtp_from_email: str
     test_recipient: str
+    # Deprecated field for backward compatibility
+    smtp_use_tls: bool | None = None
 
 
 class TestSMTPResponse(BaseModel):
