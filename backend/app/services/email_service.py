@@ -178,24 +178,29 @@ def send_email(
         security = smtp_settings.smtp_security
         auth_enabled = smtp_settings.smtp_auth_enabled
         
+        # Validate username is provided when authentication is enabled
+        if auth_enabled and smtp_settings.smtp_password:
+            if not smtp_settings.smtp_username:
+                raise ValueError("SMTP username is required when authentication is enabled")
+        
         if security == "ssl":
             # Direct SSL connection (typically port 465)
             with smtplib.SMTP_SSL(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
-                if auth_enabled and smtp_settings.smtp_password:
-                    server.login(smtp_settings.smtp_username or "", smtp_settings.smtp_password)
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
+                    server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
                 server.send_message(msg)
         elif security == "starttls":
             # STARTTLS upgrade (typically port 587)
             with smtplib.SMTP(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
                 server.starttls()
-                if auth_enabled and smtp_settings.smtp_password:
-                    server.login(smtp_settings.smtp_username or "", smtp_settings.smtp_password)
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
+                    server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
                 server.send_message(msg)
         else:
             # No encryption (typically port 25) - use with caution
             with smtplib.SMTP(smtp_settings.smtp_host, smtp_settings.smtp_port, timeout=10) as server:
-                if auth_enabled and smtp_settings.smtp_password:
-                    server.login(smtp_settings.smtp_username or "", smtp_settings.smtp_password)
+                if auth_enabled and smtp_settings.smtp_password and smtp_settings.smtp_username:
+                    server.login(smtp_settings.smtp_username, smtp_settings.smtp_password)
                 server.send_message(msg)
         logger.info(f"Email sent successfully to {to_email}")
     except Exception as e:
