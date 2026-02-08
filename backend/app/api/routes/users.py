@@ -10,11 +10,13 @@ from backend.app.core.auth import (
     verify_password,
 )
 from backend.app.core.database import get_db
+from backend.app.core.email import generate_secure_password, send_new_user_email
 from backend.app.core.permissions import Permission
 from backend.app.models.archive import PrintArchive
 from backend.app.models.group import Group
 from backend.app.models.library import LibraryFile
 from backend.app.models.print_queue import PrintQueueItem
+from backend.app.models.settings import Settings
 from backend.app.models.user import User
 from backend.app.schemas.auth import ChangePasswordRequest, GroupBrief, UserCreate, UserResponse, UserUpdate
 
@@ -26,6 +28,7 @@ def _user_to_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         username=user.username,
+        email=user.email,
         role=user.role,
         is_active=user.is_active,
         is_admin=user.is_admin,
@@ -54,14 +57,37 @@ async def create_user(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.USERS_CREATE),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new user."""
-    # Check if username already exists
-    existing_user = await db.execute(select(User).where(User.username == user_data.username))
+    """Create a new user.
+    
+    When advanced authentication is enabled and email is provided:
+    - Password is auto-generated if not provided
+    - Email is sent to user with login credentials
+    """
+    import logging
+    import os
+    
+    logger = logging.getLogger(__name__)
+    
+    # Check if username already exists (case-insensitive)
+    existing_user = await db.execute(
+        select(User).where(func.lower(User.username) == func.lower(user_data.username))
+    )
     if existing_user.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists",
         )
+    
+    # Check if email already exists (if provided)
+    if user_data.email:
+        existing_email = await db.execute(
+            select(User).where(func.lower(User.email) == func.lower(user_data.email))
+        )
+        if existing_email.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists",
+            )
 
     # Validate role
     if user_data.role not in ["admin", "user"]:
@@ -69,10 +95,31 @@ async def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Role must be 'admin' or 'user'",
         )
+    
+    # Check if advanced auth is enabled
+    advanced_auth_result = await db.execute(
+        select(Settings).where(Settings.key == "advanced_auth_enabled")
+    )
+    advanced_auth_setting = advanced_auth_result.scalar_one_or_none()
+    advanced_auth_enabled = advanced_auth_setting and advanced_auth_setting.value.lower() == "true"
+    
+    # Auto-generate password if advanced auth is enabled and email is provided but no password
+    auto_generated_password = None
+    if advanced_auth_enabled and user_data.email and not user_data.password:
+        auto_generated_password = generate_secure_password()
+        password_to_hash = auto_generated_password
+    elif user_data.password:
+        password_to_hash = user_data.password
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is required when advanced authentication is not enabled or email is not provided",
+        )
 
     new_user = User(
         username=user_data.username,
-        password_hash=get_password_hash(user_data.password),
+        password_hash=get_password_hash(password_to_hash),
+        email=user_data.email,
         role=user_data.role,
         is_active=True,
     )
@@ -91,6 +138,25 @@ async def create_user(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+    
+    # Send welcome email if password was auto-generated
+    if auto_generated_password and user_data.email:
+        try:
+            # Get external URL from settings, or construct from environment
+            external_url_result = await db.execute(
+                select(Settings).where(Settings.key == "external_url")
+            )
+            external_url_setting = external_url_result.scalar_one_or_none()
+            base_url = external_url_setting.value if external_url_setting else os.getenv("EXTERNAL_URL", "http://localhost:5000")
+            login_url = f"{base_url.rstrip('/')}/login"
+            
+            email_sent = await send_new_user_email(
+                db, user_data.email, user_data.username, auto_generated_password, login_url
+            )
+            if not email_sent:
+                logger.warning("Failed to send welcome email to %s", user_data.email)
+        except Exception as e:
+            logger.error("Error sending welcome email: %s", e, exc_info=True)
 
     return _user_to_response(new_user)
 
@@ -161,14 +227,28 @@ async def update_user(
             )
 
     if user_data.username is not None:
-        # Check if new username already exists
-        existing_user = await db.execute(select(User).where(User.username == user_data.username, User.id != user_id))
+        # Check if new username already exists (case-insensitive)
+        existing_user = await db.execute(
+            select(User).where(func.lower(User.username) == func.lower(user_data.username), User.id != user_id)
+        )
         if existing_user.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already exists",
             )
         user.username = user_data.username
+    
+    if user_data.email is not None:
+        # Check if new email already exists (case-insensitive)
+        existing_email = await db.execute(
+            select(User).where(func.lower(User.email) == func.lower(user_data.email), User.id != user_id)
+        )
+        if existing_email.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists",
+            )
+        user.email = user_data.email
 
     if user_data.password is not None:
         user.password_hash = get_password_hash(user_data.password)
@@ -347,3 +427,84 @@ async def change_own_password(
     await db.commit()
 
     return {"message": "Password changed successfully"}
+
+
+@router.post("/{user_id}/reset-password", response_model=dict)
+async def admin_reset_password(
+    user_id: int,
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.USERS_UPDATE),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset a user's password (admin only).
+    
+    Generates a new random password and sends it via email.
+    Requires advanced authentication to be enabled.
+    """
+    import logging
+    import os
+    
+    logger = logging.getLogger(__name__)
+    
+    # Check if advanced auth is enabled
+    advanced_auth_result = await db.execute(
+        select(Settings).where(Settings.key == "advanced_auth_enabled")
+    )
+    advanced_auth_setting = advanced_auth_result.scalar_one_or_none()
+    advanced_auth_enabled = advanced_auth_setting and advanced_auth_setting.value.lower() == "true"
+    
+    if not advanced_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Advanced authentication must be enabled to reset passwords",
+        )
+    
+    # Get user
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    if not user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have an email address configured",
+        )
+    
+    # Generate new password
+    new_password = generate_secure_password()
+    user.password_hash = get_password_hash(new_password)
+    
+    await db.commit()
+    
+    # Send password reset email
+    try:
+        # Get external URL from settings
+        external_url_result = await db.execute(
+            select(Settings).where(Settings.key == "external_url")
+        )
+        external_url_setting = external_url_result.scalar_one_or_none()
+        base_url = external_url_setting.value if external_url_setting else os.getenv("EXTERNAL_URL", "http://localhost:5000")
+        login_url = f"{base_url.rstrip('/')}/login"
+        
+        from backend.app.core.email import send_password_reset_email
+        
+        email_sent = await send_password_reset_email(
+            db, user.email, user.username, new_password, login_url
+        )
+        if not email_sent:
+            logger.warning("Failed to send password reset email to %s", user.email)
+            return {
+                "message": "Password reset but email failed to send. Please contact the user manually.",
+                "email_sent": False,
+            }
+    except Exception as e:
+        logger.error("Error sending password reset email: %s", e, exc_info=True)
+        return {
+            "message": "Password reset but email failed to send. Please contact the user manually.",
+            "email_sent": False,
+        }
+    
+    return {"message": "Password reset successfully and email sent", "email_sent": True}

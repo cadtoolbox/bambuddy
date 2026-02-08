@@ -186,3 +186,43 @@ class AppSettingsUpdate(BaseModel):
     camera_view_mode: str | None = None
     prometheus_enabled: bool | None = None
     prometheus_token: str | None = None
+
+
+# SMTP Settings for Advanced Authentication
+class SMTPSettingsCreate(BaseModel):
+    smtp_server: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_from_address: str
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+
+
+class SMTPSettingsUpdate(BaseModel):
+    smtp_server: str | None = None
+    smtp_port: int | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_address: str | None = None
+    smtp_use_tls: bool | None = None
+    smtp_use_ssl: bool | None = None
+
+
+class SMTPSettingsResponse(BaseModel):
+    smtp_server: str
+    smtp_port: int
+    smtp_username: str
+    smtp_from_address: str
+    smtp_use_tls: bool
+    smtp_use_ssl: bool
+    # Note: smtp_password is never returned for security
+
+
+class SMTPTestRequest(BaseModel):
+    test_email: str
+
+
+class SMTPTestResponse(BaseModel):
+    success: bool
+    message: str

@@ -664,3 +664,194 @@ async def get_mqtt_status(
     from backend.app.services.mqtt_relay import mqtt_relay
 
     return mqtt_relay.get_status()
+
+
+# =============================================================================
+# SMTP Settings for Advanced Authentication
+# =============================================================================
+
+
+@router.get("/smtp", response_model=dict)
+async def get_smtp_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_READ),
+):
+    """Get SMTP settings (password is never returned)."""
+    from backend.app.schemas.settings import SMTPSettingsResponse
+    
+    smtp_keys = [
+        "smtp_server",
+        "smtp_port",
+        "smtp_username",
+        "smtp_from_address",
+        "smtp_use_tls",
+        "smtp_use_ssl",
+    ]
+    
+    result = await db.execute(select(Settings).where(Settings.key.in_(smtp_keys)))
+    settings_list = result.scalars().all()
+    settings_dict = {s.key: s.value for s in settings_list}
+    
+    # Return empty response if not configured
+    if not settings_dict:
+        return {
+            "configured": False,
+            "smtp_server": "",
+            "smtp_port": 587,
+            "smtp_username": "",
+            "smtp_from_address": "",
+            "smtp_use_tls": True,
+            "smtp_use_ssl": False,
+        }
+    
+    return {
+        "configured": True,
+        "smtp_server": settings_dict.get("smtp_server", ""),
+        "smtp_port": int(settings_dict.get("smtp_port", "587")),
+        "smtp_username": settings_dict.get("smtp_username", ""),
+        "smtp_from_address": settings_dict.get("smtp_from_address", ""),
+        "smtp_use_tls": settings_dict.get("smtp_use_tls", "true").lower() == "true",
+        "smtp_use_ssl": settings_dict.get("smtp_use_ssl", "false").lower() == "true",
+    }
+
+
+@router.post("/smtp")
+async def update_smtp_settings(
+    settings_data: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_UPDATE),
+):
+    """Update SMTP settings."""
+    # Validate required fields
+    required_fields = ["smtp_server", "smtp_port", "smtp_from_address"]
+    for field in required_fields:
+        if field not in settings_data:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"Missing required field: {field}"},
+            )
+    
+    # Save each setting
+    await set_setting(db, "smtp_server", str(settings_data["smtp_server"]))
+    await set_setting(db, "smtp_port", str(settings_data["smtp_port"]))
+    await set_setting(db, "smtp_username", str(settings_data.get("smtp_username", "")))
+    await set_setting(db, "smtp_from_address", str(settings_data["smtp_from_address"]))
+    await set_setting(db, "smtp_use_tls", str(settings_data.get("smtp_use_tls", True)).lower())
+    await set_setting(db, "smtp_use_ssl", str(settings_data.get("smtp_use_ssl", False)).lower())
+    
+    # Only update password if provided
+    if "smtp_password" in settings_data and settings_data["smtp_password"]:
+        await set_setting(db, "smtp_password", str(settings_data["smtp_password"]))
+    
+    await db.commit()
+    
+    return {"message": "SMTP settings updated successfully"}
+
+
+@router.post("/smtp/test")
+async def test_smtp_settings(
+    test_data: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_UPDATE),
+):
+    """Test SMTP connection and send a test email."""
+    from backend.app.core.email import test_smtp_connection, send_email
+    
+    test_email = test_data.get("test_email")
+    if not test_email:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "test_email is required"},
+        )
+    
+    # Get SMTP settings
+    smtp_keys = [
+        "smtp_server",
+        "smtp_port",
+        "smtp_username",
+        "smtp_password",
+        "smtp_from_address",
+        "smtp_use_tls",
+        "smtp_use_ssl",
+    ]
+    
+    result = await db.execute(select(Settings).where(Settings.key.in_(smtp_keys)))
+    settings_list = result.scalars().all()
+    smtp_settings = {s.key: s.value for s in settings_list}
+    
+    if not smtp_settings or "smtp_server" not in smtp_settings:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "SMTP settings not configured"},
+        )
+    
+    # Test connection
+    success, message = await test_smtp_connection(smtp_settings)
+    
+    if not success:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": message},
+        )
+    
+    # Send test email
+    email_sent = await send_email(
+        db,
+        test_email,
+        "Bambuddy SMTP Test",
+        "This is a test email from Bambuddy. Your SMTP settings are configured correctly!",
+        "<html><body><h2>Bambuddy SMTP Test</h2><p>This is a test email from Bambuddy. "
+        "Your SMTP settings are configured correctly!</p></body></html>",
+    )
+    
+    if email_sent:
+        return {"success": True, "message": f"Test email sent successfully to {test_email}"}
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Failed to send test email. Check server logs for details."},
+        )
+
+
+@router.get("/advanced-auth")
+async def get_advanced_auth_status(
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_READ),
+):
+    """Get advanced authentication status."""
+    result = await db.execute(select(Settings).where(Settings.key == "advanced_auth_enabled"))
+    setting = result.scalar_one_or_none()
+    enabled = setting and setting.value.lower() == "true"
+    
+    return {"enabled": enabled}
+
+
+@router.post("/advanced-auth")
+async def update_advanced_auth_status(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_UPDATE),
+):
+    """Enable or disable advanced authentication.
+    
+    Requires SMTP settings to be configured before enabling.
+    """
+    enabled = data.get("enabled", False)
+    
+    if enabled:
+        # Check if SMTP is configured
+        smtp_result = await db.execute(
+            select(Settings).where(Settings.key == "smtp_server")
+        )
+        smtp_setting = smtp_result.scalar_one_or_none()
+        
+        if not smtp_setting:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "SMTP settings must be configured before enabling advanced authentication"},
+            )
+    
+    await set_setting(db, "advanced_auth_enabled", str(enabled).lower())
+    await db.commit()
+    
+    return {"message": f"Advanced authentication {'enabled' if enabled else 'disabled'} successfully", "enabled": enabled}

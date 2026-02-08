@@ -25,6 +25,7 @@ def _user_to_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         username=user.username,
+        email=user.email,
         role=user.role,
         is_active=user.is_active,
         is_admin=user.is_admin,
@@ -263,3 +264,82 @@ async def get_current_user_info(
 async def logout():
     """Logout (client should discard token)."""
     return {"message": "Logged out successfully"}
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send password reset email to user.
+    
+    Requires advanced authentication to be enabled.
+    """
+    import logging
+    import os
+    
+    logger = logging.getLogger(__name__)
+    
+    email = data.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is required",
+        )
+    
+    # Check if advanced auth is enabled
+    advanced_auth_result = await db.execute(
+        select(Settings).where(Settings.key == "advanced_auth_enabled")
+    )
+    advanced_auth_setting = advanced_auth_result.scalar_one_or_none()
+    advanced_auth_enabled = advanced_auth_setting and advanced_auth_setting.value.lower() == "true"
+    
+    if not advanced_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Advanced authentication is not enabled",
+        )
+    
+    # Get user by email (case-insensitive)
+    from backend.app.core.auth import get_user_by_email
+    
+    user = await get_user_by_email(db, email)
+    
+    # Don't reveal if email exists or not for security (always return success)
+    if not user:
+        logger.warning("Password reset requested for non-existent email: %s", email)
+        return {"message": "If the email exists, a password reset email has been sent"}
+    
+    if not user.is_active:
+        logger.warning("Password reset requested for inactive user: %s", email)
+        return {"message": "If the email exists, a password reset email has been sent"}
+    
+    # Generate new password
+    from backend.app.core.email import generate_secure_password, send_password_reset_email
+    from backend.app.core.auth import get_password_hash
+    
+    new_password = generate_secure_password()
+    user.password_hash = get_password_hash(new_password)
+    
+    await db.commit()
+    
+    # Send password reset email
+    try:
+        # Get external URL from settings
+        external_url_result = await db.execute(
+            select(Settings).where(Settings.key == "external_url")
+        )
+        external_url_setting = external_url_result.scalar_one_or_none()
+        base_url = external_url_setting.value if external_url_setting else os.getenv("EXTERNAL_URL", "http://localhost:5000")
+        login_url = f"{base_url.rstrip('/')}/login"
+        
+        email_sent = await send_password_reset_email(
+            db, user.email, user.username, new_password, login_url
+        )
+        if not email_sent:
+            logger.error("Failed to send password reset email to %s", email)
+    except Exception as e:
+        logger.error("Error sending password reset email: %s", e, exc_info=True)
+    
+    # Always return success to avoid email enumeration
+    return {"message": "If the email exists, a password reset email has been sent"}

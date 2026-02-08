@@ -12,7 +12,7 @@ from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import PyJWTError as JWTError
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -128,14 +128,48 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    """Get a user by username with groups loaded for permission checks."""
-    result = await db.execute(select(User).where(User.username == username).options(selectinload(User.groups)))
+    """Get a user by username with groups loaded for permission checks.
+    
+    Username lookup is case-insensitive for better user experience.
+    """
+    result = await db.execute(
+        select(User).where(func.lower(User.username) == func.lower(username)).options(selectinload(User.groups))
+    )
     return result.scalar_one_or_none()
 
 
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    """Get a user by email with groups loaded for permission checks.
+    
+    Email lookup is case-insensitive for better user experience.
+    """
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == func.lower(email)).options(selectinload(User.groups))
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_username_or_email(db: AsyncSession, identifier: str) -> User | None:
+    """Get a user by username or email with groups loaded for permission checks.
+    
+    Tries to match username first, then email. Both lookups are case-insensitive.
+    """
+    # Try username first
+    user = await get_user_by_username(db, identifier)
+    if user:
+        return user
+    
+    # Try email if username didn't match
+    user = await get_user_by_email(db, identifier)
+    return user
+
+
 async def authenticate_user(db: AsyncSession, username: str, password: str) -> User | None:
-    """Authenticate a user by username and password."""
-    user = await get_user_by_username(db, username)
+    """Authenticate a user by username/email and password.
+    
+    The username parameter can be either a username or email address.
+    """
+    user = await get_user_by_username_or_email(db, username)
     if not user:
         return None
     if not verify_password(password, user.password_hash):
