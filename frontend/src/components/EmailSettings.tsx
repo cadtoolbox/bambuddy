@@ -86,7 +86,7 @@ export function EmailSettings() {
 
   const handleSave = () => {
     // Validate required fields
-    if (!smtpSettings.smtp_host || !smtpSettings.smtp_username || !smtpSettings.smtp_from_email) {
+    if (!smtpSettings.smtp_host || !smtpSettings.smtp_from_email) {
       showToast('Please fill in all required fields', 'error');
       return;
     }
@@ -222,12 +222,13 @@ export function EmailSettings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-white mb-2">
-                  {t('settings.email.smtpPort') || 'Port'} *
+                  {t('settings.email.smtpPort') || 'SMTP Port'}
                 </label>
                 <input
                   type="number"
                   value={smtpSettings.smtp_port}
                   onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_port: parseInt(e.target.value) || 587 })}
+                  placeholder="587"
                   className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
                 />
               </div>
@@ -235,7 +236,7 @@ export function EmailSettings() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                {t('settings.email.username') || 'Username'} *
+                {t('settings.email.username') || 'Username'}
               </label>
               <input
                 type="text"
@@ -248,7 +249,7 @@ export function EmailSettings() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                {t('settings.email.password') || 'Password'} *
+                {t('settings.email.password') || 'Password'}
               </label>
               <input
                 type="password"
