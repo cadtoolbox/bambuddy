@@ -227,7 +227,7 @@ export function EmailSettings() {
                 <input
                   type="number"
                   value={smtpSettings.smtp_port}
-                  onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_port: parseInt(e.target.value) || 587 })}
+                  onChange={(e) => setSMTPSettings({ ...smtpSettings, smtp_port: e.target.value ? parseInt(e.target.value) : 587 })}
                   placeholder="587"
                   className="w-full px-4 py-3 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
                 />

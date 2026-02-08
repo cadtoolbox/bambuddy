@@ -444,7 +444,7 @@ export function SettingsPage() {
   });
 
   const handleToggleAdvancedAuth = () => {
-    if (!advancedAuthStatus?.advanced_auth_enabled && !advancedAuthStatus?.smtp_configured) {
+    if (!advancedAuthStatus?.smtp_configured) {
       showToast('Please configure and test SMTP settings in the Global Email tab first', 'error');
       return;
     }
