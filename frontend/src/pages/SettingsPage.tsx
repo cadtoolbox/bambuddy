@@ -15,6 +15,7 @@ import { AddNotificationModal } from '../components/AddNotificationModal';
 import { NotificationTemplateEditor } from '../components/NotificationTemplateEditor';
 import { NotificationLogViewer } from '../components/NotificationLogViewer';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { CreateUserAdvancedAuthModal } from '../components/CreateUserAdvancedAuthModal';
 import { SpoolmanSettings } from '../components/SpoolmanSettings';
 import { ExternalLinksSettings } from '../components/ExternalLinksSettings';
 import { VirtualPrinterSettings } from '../components/VirtualPrinterSettings';
@@ -100,13 +101,15 @@ export function SettingsPage() {
   const [deleteUserLoading, setDeleteUserLoading] = useState(false);
   const [userFormData, setUserFormData] = useState<{
     username: string;
-    password: string;
+    password?: string;
+    email?: string;
     confirmPassword: string;
     role: string;
     group_ids: number[];
   }>({
     username: '',
     password: '',
+    email: '',
     confirmPassword: '',
     role: 'user',
     group_ids: [],
@@ -308,6 +311,12 @@ export function SettingsPage() {
     queryFn: api.getCloudStatus,
   });
 
+  // Advanced auth status for user creation
+  const { data: advancedAuthStatus = { advanced_auth_enabled: false, smtp_configured: false } } = useQuery({
+    queryKey: ['advancedAuthStatus'],
+    queryFn: () => api.getAdvancedAuthStatus(),
+  });
+
   // User management queries and mutations
   const { hasPermission } = useAuth();
 
@@ -335,7 +344,7 @@ export function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       setShowCreateUserModal(false);
-      setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
       showToast(t('settings.toast.userCreated'));
     },
     onError: (error: Error) => {
@@ -350,7 +359,7 @@ export function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       setShowEditUserModal(false);
       setEditingUserId(null);
-      setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+      setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
       showToast(t('settings.toast.userUpdated'));
     },
     onError: (error: Error) => {
@@ -425,21 +434,40 @@ export function SettingsPage() {
 
   // User management handlers
   const handleCreateUser = () => {
-    if (!userFormData.username || !userFormData.password) {
+    // Use the status from the query hook
+    const advancedAuthEnabled = advancedAuthStatus?.advanced_auth_enabled || false;
+    
+    if (!userFormData.username) {
       showToast(t('settings.toast.fillRequiredFields'), 'error');
       return;
     }
-    if (userFormData.password !== userFormData.confirmPassword) {
-      showToast(t('settings.toast.passwordsDoNotMatch'), 'error');
+    
+    // Email is required when advanced auth is enabled
+    if (advancedAuthEnabled && !userFormData.email) {
+      showToast('Email is required when advanced authentication is enabled', 'error');
       return;
     }
-    if (userFormData.password.length < 6) {
-      showToast(t('settings.toast.passwordTooShort'), 'error');
-      return;
+    
+    // Password validation only when advanced auth is disabled
+    if (!advancedAuthEnabled) {
+      if (!userFormData.password) {
+        showToast(t('settings.toast.fillRequiredFields'), 'error');
+        return;
+      }
+      if (userFormData.password !== userFormData.confirmPassword) {
+        showToast(t('settings.toast.passwordsDoNotMatch'), 'error');
+        return;
+      }
+      if (userFormData.password.length < 6) {
+        showToast(t('settings.toast.passwordTooShort'), 'error');
+        return;
+      }
     }
+    
     createUserMutation.mutate({
       username: userFormData.username,
-      password: userFormData.password,
+      password: advancedAuthEnabled ? undefined : userFormData.password,
+      email: userFormData.email || undefined,
       role: userFormData.role,
       group_ids: userFormData.group_ids.length > 0 ? userFormData.group_ids : undefined,
     });
@@ -3463,7 +3491,7 @@ export function SettingsPage() {
                           size="sm"
                           onClick={() => {
                             setShowCreateUserModal(true);
-                            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                            setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                           }}
                         >
                           <Plus className="w-4 h-4" />
@@ -3649,12 +3677,12 @@ export function SettingsPage() {
       )}
 
       {/* Create User Modal */}
-      {showCreateUserModal && (
+      {showCreateUserModal && !advancedAuthStatus?.advanced_auth_enabled && (
         <div
           className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4"
           onClick={() => {
             setShowCreateUserModal(false);
-            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+            setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
           }}
         >
           <Card
@@ -3672,7 +3700,7 @@ export function SettingsPage() {
                   size="sm"
                   onClick={() => {
                     setShowCreateUserModal(false);
-                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   <X className="w-5 h-5" />
@@ -3754,7 +3782,7 @@ export function SettingsPage() {
                   variant="secondary"
                   onClick={() => {
                     setShowCreateUserModal(false);
-                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   Cancel
@@ -3781,6 +3809,22 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* Create User Modal - Advanced Authentication */}
+      {showCreateUserModal && advancedAuthStatus?.advanced_auth_enabled && (
+        <CreateUserAdvancedAuthModal
+          formData={userFormData}
+          setFormData={setUserFormData}
+          groups={groupsData}
+          onClose={() => {
+            setShowCreateUserModal(false);
+            setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
+          }}
+          onCreate={handleCreateUser}
+          isCreating={createUserMutation.isPending}
+          isCreateButtonDisabled={createUserMutation.isPending || !userFormData.username || !userFormData.email}
+        />
+      )}
+
       {/* Edit User Modal */}
       {showEditUserModal && editingUserId !== null && (
         <div
@@ -3788,7 +3832,7 @@ export function SettingsPage() {
           onClick={() => {
             setShowEditUserModal(false);
             setEditingUserId(null);
-            setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+            setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
           }}
         >
           <Card
@@ -3807,7 +3851,7 @@ export function SettingsPage() {
                   onClick={() => {
                     setShowEditUserModal(false);
                     setEditingUserId(null);
-                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   <X className="w-5 h-5" />
@@ -3891,7 +3935,7 @@ export function SettingsPage() {
                   onClick={() => {
                     setShowEditUserModal(false);
                     setEditingUserId(null);
-                    setUserFormData({ username: '', password: '', confirmPassword: '', role: 'user', group_ids: [] });
+                    setUserFormData({ username: '', password: '', email: '', confirmPassword: '', role: 'user', group_ids: [] });
                   }}
                 >
                   Cancel
