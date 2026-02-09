@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -122,6 +122,26 @@ export function UsersPage() {
       showToast(error.message, 'error');
     },
   });
+
+  // Validation for create user button
+  const isCreateButtonDisabled = useMemo(() => {
+    if (createMutation.isPending || !formData.username) {
+      return true;
+    }
+    if (advancedAuthStatus?.advanced_auth_enabled) {
+      // When advanced auth is enabled, require email (password is auto-generated)
+      return !formData.email;
+    }
+    // When advanced auth is disabled, require valid password
+    return !formData.password || formData.password !== formData.confirmPassword || formData.password.length < 6;
+  }, [
+    createMutation.isPending,
+    formData.username,
+    formData.email,
+    formData.password,
+    formData.confirmPassword,
+    advancedAuthStatus?.advanced_auth_enabled
+  ]);
 
   const handleCreate = () => {
     // Use the status from the query hook
@@ -527,7 +547,7 @@ export function UsersPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createMutation.isPending || !formData.username || !formData.password || formData.password !== formData.confirmPassword || formData.password.length < 6}
+                  disabled={isCreateButtonDisabled}
                 >
                   {createMutation.isPending ? (
                     <>

@@ -918,7 +918,7 @@ export function SettingsPage() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 mb-6 border-b border-bambu-dark-tertiary overflow-x-auto">
+      <div className="flex flex-wrap gap-1 mb-6 border-b border-bambu-dark-tertiary overflow-y-auto max-h-32">
         <button
           onClick={() => handleTabChange('general')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
