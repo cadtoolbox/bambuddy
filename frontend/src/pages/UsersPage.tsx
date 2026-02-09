@@ -527,7 +527,7 @@ export function UsersPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createMutation.isPending || !formData.username || !formData.password || formData.password !== formData.confirmPassword || formData.password.length < 6}
+                  disabled={createMutation.isPending || !formData.username || (advancedAuthStatus?.advanced_auth_enabled ? !formData.email : (!formData.password || formData.password !== formData.confirmPassword || formData.password.length < 6))}
                 >
                   {createMutation.isPending ? (
                     <>
