@@ -42,6 +42,7 @@ import {
   XCircle,
   User,
   Home,
+  Hand,
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
@@ -1407,6 +1408,7 @@ function PrinterCard({
   const [isCheckingPlate, setIsCheckingPlate] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [editingRoi, setEditingRoi] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [showCollectConfirm, setShowCollectConfirm] = useState(false);
   const [isSavingRoi, setIsSavingRoi] = useState(false);
   const [plateCheckLightWasOff, setPlateCheckLightWasOff] = useState(false);
 
@@ -1680,6 +1682,17 @@ function PrinterCard({
       showToast(plateDetectionMutation.variables ? t('printers.toast.plateCheckEnabled') : t('printers.toast.plateCheckDisabled'));
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdateSetting'), 'error'),
+  });
+
+  // Collect part mutation
+  const collectPartMutation = useMutation({
+    mutationFn: () => api.collectPart(printer.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['printers'] });
+      showToast(t('printers.toast.partCollected'));
+      setShowCollectConfirm(false);
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToCollectPart'), 'error'),
   });
 
   // Query for printable objects (for skip functionality)
@@ -2381,6 +2394,51 @@ function PrinterCard({
                   <PrinterQueueWidget printerId={printer.id} />
                 )}
               </>
+            )}
+
+            {/* Part Removal Confirmation Info Box */}
+            {printer.part_removal_required && printer.last_job_name && viewMode === 'expanded' && (
+              <div className="p-3 bg-bambu-dark rounded-lg border border-orange-500/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Hand className="w-4 h-4 text-orange-400" />
+                    <h3 className="text-sm font-medium text-orange-400">{t('printers.partRemoval.title')}</h3>
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs">
+                  <p className="text-white font-medium">{printer.last_job_name}</p>
+                  {printer.last_job_user && (
+                    <p className="text-bambu-gray">
+                      <User className="w-3 h-3 inline mr-1" />
+                      {t('printers.partRemoval.submittedBy', { user: printer.last_job_user })}
+                    </p>
+                  )}
+                  {printer.last_job_start && printer.last_job_end && (
+                    <div className="flex gap-3 text-bambu-gray">
+                      <span>
+                        {t('printers.partRemoval.started')}: {new Date(printer.last_job_start).toLocaleString()}
+                      </span>
+                      <span>
+                        {t('printers.partRemoval.completed')}: {new Date(printer.last_job_end).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowCollectConfirm(true)}
+                  disabled={collectPartMutation.isPending}
+                  className="w-full !border-orange-500 !text-orange-400 hover:!bg-orange-500/20"
+                >
+                  {collectPartMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Hand className="w-4 h-4 mr-2" />
+                  )}
+                  {t('printers.partRemoval.collectButton')}
+                </Button>
+              </div>
             )}
 
             {/* Temperatures */}
@@ -3324,14 +3382,14 @@ function PrinterCard({
                 <Video className="w-4 h-4" />
               </Button>
               {/* Split button: main part toggles detection, chevron opens modal */}
-              <div className={`inline-flex rounded-md ${printer.plate_detection_enabled ? 'ring-1 ring-green-500' : ''}`}>
+              <div className={`inline-flex rounded-md ${printer.plate_detection_enabled && !printer.part_removal_required ? 'ring-1 ring-green-500' : ''}`}>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={handleTogglePlateDetection}
-                  disabled={!status?.connected || plateDetectionMutation.isPending || !hasPermission('printers:update')}
-                  title={!hasPermission('printers:update') ? t('printers.plateDetection.noPermission') : (printer.plate_detection_enabled ? t('printers.plateDetection.enabledClick') : t('printers.plateDetection.disabledClick'))}
-                  className={`!rounded-r-none !border-r-0 ${printer.plate_detection_enabled ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
+                  disabled={!status?.connected || plateDetectionMutation.isPending || !hasPermission('printers:update') || printer.part_removal_required}
+                  title={!hasPermission('printers:update') ? t('printers.plateDetection.noPermission') : printer.part_removal_required ? t('printers.partRemoval.plateCheckDisabledDuringRemoval') : (printer.plate_detection_enabled ? t('printers.plateDetection.enabledClick') : t('printers.plateDetection.disabledClick'))}
+                  className={`!rounded-r-none !border-r-0 ${printer.plate_detection_enabled && !printer.part_removal_required ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
                 >
                   {plateDetectionMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -3343,9 +3401,9 @@ function PrinterCard({
                   variant="secondary"
                   size="sm"
                   onClick={handleOpenPlateManagement}
-                  disabled={!status?.connected || isCheckingPlate || !hasPermission('printers:update')}
-                  title={!hasPermission('printers:update') ? t('printers.plateDetection.noPermission') : t('printers.plateDetection.manageCalibration')}
-                  className={`!rounded-l-none !px-1.5 ${printer.plate_detection_enabled ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
+                  disabled={!status?.connected || isCheckingPlate || !hasPermission('printers:update') || printer.part_removal_required}
+                  title={!hasPermission('printers:update') ? t('printers.plateDetection.noPermission') : printer.part_removal_required ? t('printers.partRemoval.plateCheckDisabledDuringRemoval') : t('printers.plateDetection.manageCalibration')}
+                  className={`!rounded-l-none !px-1.5 ${printer.plate_detection_enabled && !printer.part_removal_required ? "!border-green-500 !text-green-400 hover:!bg-green-500/20" : ""}`}
                 >
                   {isCheckingPlate ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -3354,6 +3412,17 @@ function PrinterCard({
                   )}
                 </Button>
               </div>
+              {/* Part Removal Confirmation Button */}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowCollectConfirm(true)}
+                disabled={!printer.part_removal_required}
+                title={printer.part_removal_required ? t('printers.partRemoval.confirmRemoval') : t('printers.partRemoval.noRemovalRequired')}
+                className={printer.part_removal_required ? "!border-orange-500 !text-orange-400 hover:!bg-orange-500/20 ring-1 ring-orange-500" : ""}
+              >
+                <Hand className="w-4 h-4" />
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -3729,6 +3798,18 @@ function PrinterCard({
             setShowResumeConfirm(false);
           }}
           onCancel={() => setShowResumeConfirm(false)}
+        />
+      )}
+
+      {/* Collect Part Confirmation */}
+      {showCollectConfirm && (
+        <ConfirmModal
+          title={t('printers.partRemoval.confirmTitle')}
+          message={t('printers.partRemoval.confirmMessage')}
+          confirmText={t('printers.partRemoval.confirmButton')}
+          variant="default"
+          onConfirm={() => collectPartMutation.mutate()}
+          onCancel={() => setShowCollectConfirm(false)}
         />
       )}
 
