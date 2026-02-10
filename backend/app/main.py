@@ -728,6 +728,11 @@ async def on_print_start(printer_id: int, data: dict):
 
     logger.info("[CALLBACK] on_print_start called for printer %s, data keys: %s", printer_id, list(data.keys()))
 
+    # Clear cached cover images so the new print's thumbnail is fetched fresh
+    from backend.app.api.routes.printers import clear_cover_cache
+
+    clear_cover_cache(printer_id)
+
     await ws_manager.send_print_start(printer_id, data)
 
     # MQTT relay - publish print start

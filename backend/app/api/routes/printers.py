@@ -553,8 +553,13 @@ async def test_printer_connection(
     return result
 
 
-# Cache for cover images (printer_id -> {(gcode_file, view) -> image_bytes})
+# Cache for cover images (printer_id -> {(subtask_name, plate_num, view) -> image_bytes})
 _cover_cache: dict[int, dict[tuple[str, str], bytes]] = {}
+
+
+def clear_cover_cache(printer_id: int) -> None:
+    """Clear cached cover images for a printer. Call on print start to avoid stale thumbnails."""
+    _cover_cache.pop(printer_id, None)
 
 
 @router.get("/{printer_id}/cover")
