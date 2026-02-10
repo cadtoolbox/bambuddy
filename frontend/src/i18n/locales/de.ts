@@ -271,6 +271,8 @@ export default {
       calibrationSaved: 'Kalibrierung gespeichert!',
       calibrationFailed: 'Kalibrierung fehlgeschlagen',
       rfidRereadInitiated: 'RFID-Neueinlesen gestartet',
+      partCollected: 'Teil entnommen, Druckplatte geleert',
+      failedToCollectPart: 'Teil konnte nicht entnommen werden',
     },
     // Connection status
     connection: {
@@ -407,6 +409,21 @@ export default {
       labelPlaceholder: 'Bezeichnung...',
       clickToEdit: '{{label}} - Zum Bearbeiten klicken',
       clickToAddLabel: 'Zum Hinzufügen einer Bezeichnung klicken',
+    },
+    // Part removal confirmation
+    partRemoval: {
+      title: 'Teileentnahme-Bestätigung',
+      confirmRemoval: 'Teileentnahme bestätigen',
+      noRemovalRequired: 'Keine Teileentnahme erforderlich',
+      plateCheckDisabledDuringRemoval: 'Plattenprüfung deaktiviert bis Teil entnommen wurde',
+      submittedBy: 'Eingereicht von {{user}}',
+      started: 'Gestartet',
+      completed: 'Abgeschlossen',
+      collectButton: 'Entnehmen',
+      confirmTitle: 'Teileentnahme bestätigen',
+      confirmMessage: 'Haben Sie visuell bestätigt, dass die Druckplatte leer und bereit für den nächsten Druckauftrag ist?',
+      confirmButton: 'Druckplatte leer',
+      plateClearMessage: 'Druckplatte leer',
     },
     // Fans
     fans: {
