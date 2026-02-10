@@ -51,8 +51,6 @@ Perfect for remote print farms, traveling makers, or accessing your home printer
 
 ---
 
-> **Testers Needed!** I only have X1C and H2D devices. Help make Bambuddy work with all Bambu Lab printers by [reporting your experience](https://github.com/maziggy/bambuddy/issues)!
-
 ## Why Bambuddy?
 
 - **Own your data** — All print history stored locally, no cloud dependency
@@ -526,9 +524,10 @@ Full documentation available at **[wiki.bambuddy.cool](http://wiki.bambuddy.cool
 
 | Series | Models |
 |--------|--------|
-| H2 | H2D, H2S |
-| X1 | X1, X1 Carbon |
-| P1 | P1P, P1S, P2S |
+| X1 | X1, X1 Carbon, X1E |
+| H2 | H2D, H2D Pro, H2C, H2S |
+| P1 | P1P, P1S |
+| P2 | P2S |
 | A1 | A1, A1 Mini |
 
 ---
