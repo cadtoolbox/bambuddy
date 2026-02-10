@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Plug, Power, PowerOff, Loader2, Trash2, Settings2, Thermometer, Clock, Wifi, WifiOff, Edit2, Bell, Calendar, LayoutGrid, ExternalLink, Home, Radio, Eye } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import type { SmartPlug, SmartPlugUpdate } from '../api/client';
 import { Card, CardContent } from './Card';
@@ -14,6 +15,7 @@ interface SmartPlugCardProps {
 }
 
 export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -171,7 +173,7 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
               ) : (
                 <div className="flex items-center gap-1 text-sm text-status-error">
                   <WifiOff className="w-4 h-4" />
-                  <span>Offline</span>
+                  <span>{t('smartPlugs.offline')}</span>
                 </div>
               )}
               {/* Admin page link - only for Tasmota */}
@@ -181,10 +183,10 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 px-2 py-0.5 bg-bambu-dark hover:bg-bambu-dark-tertiary text-bambu-gray hover:text-white text-xs rounded-full transition-colors"
-                  title="Open plug admin page"
+                  title={t('smartPlugs.openPlugAdminPage')}
                 >
                   <ExternalLink className="w-3 h-3" />
-                  Admin
+                  {t('smartPlugs.admin')}
                 </a>
               )}
             </div>
@@ -449,7 +451,7 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
         <ConfirmModal
-          title="Delete Smart Plug"
+          title={t('smartPlugs.deleteSmartPlug')}
           message={`Are you sure you want to delete "${plug.name}"? This cannot be undone.`}
           confirmText="Delete"
           variant="danger"
@@ -464,9 +466,9 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
       {/* Power On Confirmation */}
       {showPowerOnConfirm && (
         <ConfirmModal
-          title="Turn On Smart Plug"
+          title={t('smartPlugs.turnOnSmartPlug')}
           message={`Are you sure you want to turn on "${plug.name}"?`}
-          confirmText="Turn On"
+          confirmText={t('smartPlugs.turnOn')}
           variant="default"
           onConfirm={() => {
             controlMutation.mutate('on');
@@ -479,9 +481,9 @@ export function SmartPlugCard({ plug, onEdit }: SmartPlugCardProps) {
       {/* Power Off Confirmation */}
       {showPowerOffConfirm && (
         <ConfirmModal
-          title="Turn Off Smart Plug"
+          title={t('smartPlugs.turnOffSmartPlug')}
           message={`Are you sure you want to turn off "${plug.name}"? This will cut power to the connected device.`}
-          confirmText="Turn Off"
+          confirmText={t('smartPlugs.turnOff')}
           variant="danger"
           onConfirm={() => {
             controlMutation.mutate('off');
