@@ -297,10 +297,59 @@ def register_expected_print(printer_id: int, filename: str, archive_id: int):
 
 _last_status_broadcast: dict[int, str] = {}
 _nozzle_count_updated: set[int] = set()  # Track printers where we've updated nozzle_count
+_last_printer_state: dict[int, str] = {}  # Track previous state for transition detection
 
 
 async def on_printer_status_change(printer_id: int, state: PrinterState):
     """Handle printer status changes - broadcast via WebSocket."""
+    # Detect state transitions for part removal confirmation
+    previous_state = _last_printer_state.get(printer_id)
+    current_state = state.state
+    
+    # Update state tracking
+    _last_printer_state[printer_id] = current_state
+    
+    # If transitioning from PAUSE to RUNNING, check if we need to clear part_removal_required
+    if previous_state in ("PAUSE", "PAUSED") and current_state == "RUNNING":
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"[PART REMOVAL] Detected PAUSE -> RUNNING transition for printer {printer_id}"
+        )
+        async with async_session() as db:
+            from backend.app.models.printer import Printer
+            
+            result = await db.execute(select(Printer).where(Printer.id == printer_id))
+            printer = result.scalar_one_or_none()
+            
+            if printer and printer.part_removal_enabled and printer.part_removal_required:
+                logger.info(
+                    f"[PART REMOVAL] Clearing part_removal_required for printer {printer_id} "
+                    f"(resume button pressed)"
+                )
+                # Clear the part removal requirement (same as clicking "Collect" button)
+                printer.part_removal_required = False
+                printer.last_job_name = None
+                printer.last_job_user = None
+                printer.last_job_start = None
+                printer.last_job_end = None
+                
+                await db.commit()
+                
+                # Send WebSocket update to notify frontend
+                from backend.app.main import ws_manager
+                
+                await ws_manager.send_printer_updated(printer_id, {
+                    "part_removal_required": False,
+                    "last_job_name": None,
+                    "last_job_user": None,
+                    "last_job_start": None,
+                    "last_job_end": None,
+                })
+                
+                logger.info(
+                    f"[PART REMOVAL] Part removal cleared for printer {printer_id}, print resumed"
+                )
+    
     # Only broadcast if something meaningful changed (reduce WebSocket spam)
     # Include rounded temperatures to detect meaningful temp changes (within 1 degree)
     temps = state.temperatures or {}
@@ -857,6 +906,47 @@ async def on_print_start(printer_id: int, data: dict):
             except Exception as plate_err:
                 # Don't block print on plate detection errors
                 logger.warning("[PLATE CHECK] Plate detection failed for printer %s: %s", printer_id, plate_err)
+
+        # Part removal confirmation check - pause if part removal required
+        logger.info(
+            f"[PART REMOVAL] printer_id={printer_id}, part_removal_enabled={printer.part_removal_enabled if printer else 'NO PRINTER'}, part_removal_required={printer.part_removal_required if printer else 'NO PRINTER'}"
+        )
+        if printer and printer.part_removal_enabled and printer.part_removal_required:
+            logger.warning(
+                f"[PART REMOVAL] Part removal required for printer {printer_id}! "
+                f"Last job: {printer.last_job_name}"
+            )
+            client = printer_manager.get_client(printer_id)
+            if client:
+                client.pause_print()
+                logger.info("[PART REMOVAL] Print paused for printer %s", printer_id)
+
+            # Send notification about part removal required
+            await ws_manager.broadcast(
+                {
+                    "type": "part_removal_required",
+                    "printer_id": printer_id,
+                    "printer_name": printer.name,
+                    "message": f"Part removal required! Previous job '{printer.last_job_name}' must be collected before starting new print.",
+                    "last_job_name": printer.last_job_name,
+                    "last_job_user": printer.last_job_user,
+                }
+            )
+
+            # Also send push notification
+            try:
+                await notification_service.on_part_removal_required(
+                    printer_id=printer_id,
+                    printer_name=printer.name,
+                    db=db,
+                    last_job_name=printer.last_job_name or "Unknown",
+                    last_job_user=printer.last_job_user,
+                )
+            except Exception as notif_err:
+                logger.warning("[PART REMOVAL] Failed to send notification: %s", notif_err)
+        else:
+            if printer and printer.part_removal_enabled:
+                logger.info("[PART REMOVAL] No part removal required for printer %s, proceeding with print", printer_id)
 
         if not printer or not printer.auto_archive:
             # Send notification without archive data (auto-archive disabled)
