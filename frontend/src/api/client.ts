@@ -89,6 +89,12 @@ export interface Printer {
   external_camera_enabled: boolean;
   plate_detection_enabled: boolean;  // Check plate before print
   plate_detection_roi?: PlateDetectionROI;  // ROI for plate detection
+  part_removal_enabled: boolean;  // Require part removal confirmation
+  part_removal_required: boolean;  // Active when job needs collection
+  last_job_name: string | null;  // Last completed job name
+  last_job_user: string | null;  // User who submitted last job
+  last_job_start: string | null;  // Job start time
+  last_job_end: string | null;  // Job end time
   created_at: string;
   updated_at: string;
 }
@@ -2153,6 +2159,12 @@ export const api = {
     }),
   resumePrint: (printerId: number) =>
     request<{ success: boolean; message: string }>(`/printers/${printerId}/print/resume`, {
+      method: 'POST',
+    }),
+
+  // Collect part - acknowledge build plate has been cleared
+  collectPart: (printerId: number) =>
+    request<{ success: boolean; message: string }>(`/printers/${printerId}/collect-part`, {
       method: 'POST',
     }),
 

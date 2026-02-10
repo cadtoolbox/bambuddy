@@ -814,6 +814,30 @@ class NotificationService:
             providers, title, message, db, "plate_not_empty", printer_id, printer_name, force_immediate=True
         )
 
+    async def on_part_removal_required(
+        self,
+        printer_id: int,
+        printer_name: str,
+        db: AsyncSession,
+        last_job_name: str,
+        last_job_user: str | None = None,
+    ):
+        """Handle part removal required event - previous job must be collected before new print."""
+        providers = await self._get_providers_for_event(db, "on_part_removal_required", printer_id)
+        if not providers:
+            return
+
+        variables = {
+            "printer": printer_name,
+            "job_name": last_job_name,
+            "user": last_job_user or "Unknown",
+        }
+
+        title, message = await self._build_message_from_template(db, "part_removal_required", variables)
+        await self._send_to_providers(
+            providers, title, message, db, "part_removal_required", printer_id, printer_name, force_immediate=True
+        )
+
     async def on_filament_low(
         self,
         printer_id: int,

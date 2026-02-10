@@ -265,6 +265,8 @@ export default {
       calibrationSaved: 'Calibrazione salvata!',
       calibrationFailed: 'Calibrazione non riuscita',
       rfidRereadInitiated: 'Rilettura RFID avviata',
+      partCollected: 'Pezzo raccolto, piatto di stampa liberato',
+      failedToCollectPart: 'Impossibile raccogliere il pezzo',
     },
     // Connection status
     connection: {
@@ -401,6 +403,24 @@ export default {
       labelPlaceholder: 'Etichetta...',
       clickToEdit: '{{label}} - Clicca per modificare',
       clickToAddLabel: 'Clicca per aggiungere etichetta',
+    },
+    // Part removal confirmation
+    partRemoval: {
+      title: 'Conferma Rimozione Pezzo',
+      confirmRemoval: 'Conferma rimozione pezzo',
+      noRemovalRequired: 'Nessuna rimozione pezzo richiesta',
+      plateCheckDisabledDuringRemoval: 'Controllo piatto disabilitato fino alla raccolta del pezzo',
+      submittedBy: 'Inviato da {{user}}',
+      started: 'Iniziato',
+      completed: 'Completato',
+      collectButton: 'Raccogli',
+      confirmTitle: 'Conferma Rimozione Pezzo',
+      confirmMessage: 'Hai confermato visivamente che il piatto di stampa è libero e pronto per il prossimo lavoro?',
+      confirmButton: 'Piatto di Stampa Libero',
+      plateClearMessage: 'Piatto di Stampa Libero',
+      pausedForRemoval: 'Stampa in Pausa - Rimozione Pezzo Richiesta',
+      pausedMessage: 'Il lavoro precedente "{{jobName}}" deve essere raccolto prima che questa stampa possa continuare.',
+      resumeInstructions: 'Clicca sul pulsante "Raccogli" qui sotto o premi Riprendi sulla stampante per continuare.',
     },
     // Fans
     fans: {

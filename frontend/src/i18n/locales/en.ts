@@ -271,6 +271,8 @@ export default {
       calibrationSaved: 'Calibration saved!',
       calibrationFailed: 'Calibration failed',
       rfidRereadInitiated: 'RFID re-read initiated',
+      partCollected: 'Part collected, build plate cleared',
+      failedToCollectPart: 'Failed to collect part',
     },
     // Connection status
     connection: {
@@ -407,6 +409,24 @@ export default {
       labelPlaceholder: 'Label...',
       clickToEdit: '{{label}} - Click to edit',
       clickToAddLabel: 'Click to add label',
+    },
+    // Part removal confirmation
+    partRemoval: {
+      title: 'Part Removal Confirmation',
+      confirmRemoval: 'Confirm part removal',
+      noRemovalRequired: 'No part removal required',
+      plateCheckDisabledDuringRemoval: 'Plate check disabled until part is collected',
+      submittedBy: 'Submitted by {{user}}',
+      started: 'Started',
+      completed: 'Completed',
+      collectButton: 'Collect',
+      confirmTitle: 'Confirm Part Removal',
+      confirmMessage: 'Have you visually confirmed the printer build plate is clear and ready for the next job?',
+      confirmButton: 'Build Plate Clear',
+      plateClearMessage: 'Build Plate Clear',
+      pausedForRemoval: 'Print Paused - Part Removal Required',
+      pausedMessage: 'Previous job "{{jobName}}" must be collected before this print can continue.',
+      resumeInstructions: 'Click "Collect" button below or press Resume on the printer to clear and continue.',
     },
     // Fans
     fans: {
