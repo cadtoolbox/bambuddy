@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import smtplib
 import string
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.models.notification_template import NotificationTemplate
 from backend.app.models.settings import Settings
 from backend.app.schemas.auth import SMTPSettings
 
@@ -51,6 +54,40 @@ def generate_secure_password(length: int = 16) -> str:
     random.shuffle(password_chars)
     
     return "".join(password_chars)
+
+
+async def get_notification_template(db: AsyncSession, event_type: str) -> NotificationTemplate | None:
+    """Get a notification template by event type from database.
+    
+    Args:
+        db: Database session
+        event_type: Type of event (e.g., 'user_created', 'password_reset')
+        
+    Returns:
+        NotificationTemplate object or None if not found
+    """
+    result = await db.execute(
+        select(NotificationTemplate).where(NotificationTemplate.event_type == event_type)
+    )
+    return result.scalar_one_or_none()
+
+
+def render_template(template_str: str, variables: dict[str, Any]) -> str:
+    """Render a template string with variables.
+    
+    Args:
+        template_str: Template string with {variable} placeholders
+        variables: Dictionary of variables to substitute
+        
+    Returns:
+        Rendered template string
+    """
+    result = template_str
+    for key, value in variables.items():
+        result = result.replace("{" + key + "}", str(value) if value is not None else "")
+    # Remove any remaining unreplaced placeholders
+    result = re.sub(r"\{[a-z_]+\}", "", result)
+    return result
 
 
 async def get_smtp_settings(db: AsyncSession) -> SMTPSettings | None:
@@ -346,3 +383,129 @@ BamBuddy Team
 """
     
     return subject, text_body, html_body
+
+
+async def create_welcome_email_from_template(
+    db: AsyncSession, username: str, password: str, login_url: str, app_name: str = "BamBuddy"
+) -> tuple[str, str, str]:
+    """Create welcome email content using notification template from database.
+    
+    Args:
+        db: Database session
+        username: Username of the new user
+        password: Auto-generated password
+        login_url: URL to login page
+        app_name: Application name (default: BamBuddy)
+        
+    Returns:
+        Tuple of (subject, text_body, html_body)
+    """
+    # Try to get template from database
+    template = await get_notification_template(db, "user_created")
+    
+    if template:
+        # Render template with variables
+        variables = {
+            "app_name": app_name,
+            "username": username,
+            "password": password,
+            "login_url": login_url,
+        }
+        
+        subject = render_template(template.title_template, variables)
+        text_body = render_template(template.body_template, variables)
+        
+        # Create HTML version with embedded login button
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">{subject}</h1>
+    </div>
+    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #ddd; border-top: none;">
+        <div style="white-space: pre-wrap; font-size: 16px;">{text_body}</div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{login_url}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login Now</a>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        logger.info("Using custom welcome email template from database")
+        return subject, text_body, html_body
+    else:
+        # Fallback to hardcoded template
+        logger.warning("No welcome email template found in database, using default")
+        return create_welcome_email(username, password, login_url)
+
+
+async def create_password_reset_email_from_template(
+    db: AsyncSession, username: str, password: str, login_url: str, app_name: str = "BamBuddy"
+) -> tuple[str, str, str]:
+    """Create password reset email content using notification template from database.
+    
+    Args:
+        db: Database session
+        username: Username of the user
+        password: New auto-generated password
+        login_url: URL to login page
+        app_name: Application name (default: BamBuddy)
+        
+    Returns:
+        Tuple of (subject, text_body, html_body)
+    """
+    # Try to get template from database
+    template = await get_notification_template(db, "password_reset")
+    
+    if template:
+        # Render template with variables
+        variables = {
+            "app_name": app_name,
+            "username": username,
+            "password": password,
+            "login_url": login_url,
+        }
+        
+        subject = render_template(template.title_template, variables)
+        text_body = render_template(template.body_template, variables)
+        
+        # Create HTML version with embedded login button
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">{subject}</h1>
+    </div>
+    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #ddd; border-top: none;">
+        <div style="white-space: pre-wrap; font-size: 16px;">{text_body}</div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{login_url}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login Now</a>
+        </div>
+        
+        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #856404;">
+                <strong>⚠️ Security Alert:</strong> If you did not request this password reset, please contact your administrator immediately.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        logger.info("Using custom password reset email template from database")
+        return subject, text_body, html_body
+    else:
+        # Fallback to hardcoded template
+        logger.warning("No password reset email template found in database, using default")
+        return create_password_reset_email(username, password, login_url)

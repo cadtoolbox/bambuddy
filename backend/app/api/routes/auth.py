@@ -35,7 +35,7 @@ from backend.app.schemas.auth import (
     UserResponse,
 )
 from backend.app.services.email_service import (
-    create_password_reset_email,
+    create_password_reset_email_from_template,
     generate_secure_password,
     get_smtp_settings,
     save_smtp_settings,
@@ -559,7 +559,9 @@ async def forgot_password(request: ForgotPasswordRequest, db: AsyncSession = Dep
             login_url = await get_external_login_url(db)
 
             # Send password reset email
-            subject, text_body, html_body = create_password_reset_email(user.username, new_password, login_url)
+            subject, text_body, html_body = await create_password_reset_email_from_template(
+                db, user.username, new_password, login_url
+            )
             send_email(smtp_settings, user.email, subject, text_body, html_body)
 
             logger.info(f"Password reset email sent to {user.email}")
@@ -633,7 +635,9 @@ async def reset_user_password(
         login_url = await get_external_login_url(db)
 
         # Send password reset email
-        subject, text_body, html_body = create_password_reset_email(user.username, new_password, login_url)
+        subject, text_body, html_body = await create_password_reset_email_from_template(
+            db, user.username, new_password, login_url
+        )
         send_email(smtp_settings, user.email, subject, text_body, html_body)
 
         logger.info(f"Password reset by admin {admin_user.username} for user {user.username}")

@@ -19,7 +19,7 @@ from backend.app.models.settings import Settings
 from backend.app.models.user import User
 from backend.app.schemas.auth import ChangePasswordRequest, GroupBrief, UserCreate, UserResponse, UserUpdate
 from backend.app.services.email_service import (
-    create_welcome_email,
+    create_welcome_email_from_template,
     generate_secure_password,
     get_smtp_settings,
     send_email,
@@ -153,7 +153,9 @@ async def create_user(
             smtp_settings = await get_smtp_settings(db)
             if smtp_settings:
                 login_url = await get_external_login_url(db)
-                subject, text_body, html_body = create_welcome_email(new_user.username, password, login_url)
+                subject, text_body, html_body = await create_welcome_email_from_template(
+                    db, new_user.username, password, login_url
+                )
                 send_email(smtp_settings, new_user.email, subject, text_body, html_body)
                 logger.info(f"Welcome email sent to {new_user.email}")
             else:
