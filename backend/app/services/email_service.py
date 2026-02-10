@@ -67,9 +67,7 @@ async def get_notification_template(db: AsyncSession, event_type: str) -> Notifi
     Returns:
         NotificationTemplate object or None if not found
     """
-    result = await db.execute(
-        select(NotificationTemplate).where(NotificationTemplate.event_type == event_type)
-    )
+    result = await db.execute(select(NotificationTemplate).where(NotificationTemplate.event_type == event_type))
     return result.scalar_one_or_none()
 
 
@@ -103,17 +101,19 @@ async def get_smtp_settings(db: AsyncSession) -> SMTPSettings | None:
     # Fetch all SMTP-related settings
     result = await db.execute(
         select(Settings).where(
-            Settings.key.in_([
-                "smtp_host",
-                "smtp_port",
-                "smtp_username",
-                "smtp_password",
-                "smtp_use_tls",
-                "smtp_security",
-                "smtp_auth_enabled",
-                "smtp_from_email",
-                "smtp_from_name",
-            ])
+            Settings.key.in_(
+                [
+                    "smtp_host",
+                    "smtp_port",
+                    "smtp_username",
+                    "smtp_password",
+                    "smtp_use_tls",
+                    "smtp_security",
+                    "smtp_auth_enabled",
+                    "smtp_from_email",
+                    "smtp_from_name",
+                ]
+            )
         )
     )
     settings_dict = {s.key: s.value for s in result.scalars().all()}
@@ -417,8 +417,8 @@ async def create_welcome_email_from_template(
         text_body = render_template(template.body_template, variables)
 
         # Create HTML version with embedded login button
-        # Escape text_body to prevent XSS vulnerabilities
-        escaped_text_body = html.escape(text_body)
+        # Escape text_body to prevent XSS vulnerabilities and convert newlines to <br> tags
+        escaped_text_body = html.escape(text_body).replace("\n", "<br>\n")
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -426,11 +426,11 @@ async def create_welcome_email_from_template(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0;">
         <h1 style="color: white; margin: 0; font-size: 24px;">{html.escape(subject)}</h1>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #ddd; border-top: none;">
-        <div style="white-space: pre-wrap; font-size: 16px;">{escaped_text_body}</div>
+        <div style="font-size: 16px;">{escaped_text_body}</div>
 
         <div style="text-align: center; margin: 30px 0;">
             <a href="{login_url}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login Now</a>
@@ -479,8 +479,8 @@ async def create_password_reset_email_from_template(
         text_body = render_template(template.body_template, variables)
 
         # Create HTML version with embedded login button
-        # Escape text_body to prevent XSS vulnerabilities
-        escaped_text_body = html.escape(text_body)
+        # Escape text_body to prevent XSS vulnerabilities and convert newlines to <br> tags
+        escaped_text_body = html.escape(text_body).replace("\n", "<br>\n")
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -488,11 +488,11 @@ async def create_password_reset_email_from_template(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0;">
         <h1 style="color: white; margin: 0; font-size: 24px;">{html.escape(subject)}</h1>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #ddd; border-top: none;">
-        <div style="white-space: pre-wrap; font-size: 16px;">{escaped_text_body}</div>
+        <div style="font-size: 16px;">{escaped_text_body}</div>
 
         <div style="text-align: center; margin: 30px 0;">
             <a href="{login_url}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login Now</a>
