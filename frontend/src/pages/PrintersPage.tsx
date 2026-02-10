@@ -43,6 +43,7 @@ import {
   User,
   Home,
   Hand,
+  SquareDashedMousePointer,
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
@@ -1684,6 +1685,16 @@ function PrinterCard({
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdateSetting'), 'error'),
   });
 
+  // Part removal confirmation setting mutation
+  const partRemovalMutation = useMutation({
+    mutationFn: (enabled: boolean) => api.updatePrinter(printer.id, { part_removal_enabled: enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['printers'] });
+      showToast(partRemovalMutation.variables ? t('printers.toast.partRemovalEnabled') : t('printers.toast.partRemovalDisabled'));
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdateSetting'), 'error'),
+  });
+
   // Collect part mutation
   const collectPartMutation = useMutation({
     mutationFn: () => api.collectPart(printer.id),
@@ -1768,6 +1779,10 @@ function PrinterCard({
   // Toggle plate detection enabled/disabled
   const handleTogglePlateDetection = () => {
     plateDetectionMutation.mutate(!printer.plate_detection_enabled);
+  };
+
+  const handleTogglePartRemoval = () => {
+    partRemovalMutation.mutate(!printer.part_removal_enabled);
   };
 
   // Open plate detection management modal (for calibration/references)
@@ -3433,16 +3448,20 @@ function PrinterCard({
                 </Button>
               </div>
               {/* Part Removal Confirmation Button */}
-              {hasPermission('printers:control') && (
+              {hasPermission('printers:update') && (
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setShowCollectConfirm(true)}
-                  disabled={!printer.part_removal_required}
-                  title={printer.part_removal_required ? t('printers.partRemoval.confirmRemoval') : t('printers.partRemoval.noRemovalRequired')}
-                  className={printer.part_removal_required ? "!border-orange-500 !text-orange-400 hover:!bg-orange-500/20 ring-1 ring-orange-500" : ""}
+                  onClick={handleTogglePartRemoval}
+                  disabled={!status?.connected || partRemovalMutation.isPending || !hasPermission('printers:update') || printer.plate_detection_enabled}
+                  title={!hasPermission('printers:update') ? t('printers.plateDetection.noPermission') : printer.plate_detection_enabled ? t('printers.partRemoval.disabledDuringPlateCheck') : (printer.part_removal_enabled ? t('printers.partRemoval.enabled') : t('printers.partRemoval.disabled'))}
+                  className={printer.part_removal_enabled && !printer.plate_detection_enabled ? "!border-orange-500 !text-orange-400 hover:!bg-orange-500/20 ring-1 ring-orange-500" : ""}
                 >
-                  <Hand className="w-4 h-4" />
+                  {partRemovalMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <SquareDashedMousePointer className="w-4 h-4" />
+                  )}
                 </Button>
               )}
               <Button

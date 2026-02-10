@@ -258,6 +258,7 @@ export interface PrinterCreate {
   external_camera_enabled?: boolean;
   plate_detection_enabled?: boolean;
   plate_detection_roi?: PlateDetectionROI;
+  part_removal_enabled?: boolean;
 }
 
 // Plate Detection
