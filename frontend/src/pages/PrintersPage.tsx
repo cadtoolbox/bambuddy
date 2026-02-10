@@ -2431,7 +2431,7 @@ function PrinterCard({
             )}
 
             {/* Part Removal Confirmation Info Box */}
-            {printer.part_removal_required && printer.last_job_name && viewMode === 'expanded' && (
+            {printer.part_removal_enabled && printer.last_job_name && viewMode === 'expanded' && (
               <div className="p-3 bg-bambu-dark rounded-lg border border-orange-500/50 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
