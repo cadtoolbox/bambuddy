@@ -1951,7 +1951,7 @@ async def on_print_complete(printer_id: int, data: dict):
                     # Try current user first (from queue tracking), then fall back to archive owner
                     current_user_dict = printer_manager.get_current_print_user(printer_id)
                     username = None
-                    if current_user_dict and isinstance(current_user_dict, dict):
+                    if current_user_dict:
                         username = current_user_dict.get("username")
                     # Fallback to archive creator if no current user
                     if not username and archive and archive.created_by:
