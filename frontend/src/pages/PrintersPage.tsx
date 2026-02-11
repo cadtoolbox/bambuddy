@@ -1873,7 +1873,6 @@ function PrinterCard({
     // 2. Printer has part_removal_enabled
     // 3. There's a job name to show
     // 4. We're in expanded view mode (modal is only shown in this mode)
-    // 5. The modal is not already showing
     const partRemovalJustRequired = 
       printer.part_removal_required && 
       !prevPartRemovalRequiredRef.current;
@@ -1882,15 +1881,14 @@ function PrinterCard({
       partRemovalJustRequired &&
       printer.part_removal_enabled &&
       printer.last_job_name &&
-      viewMode === 'expanded' &&
-      !showCollectConfirm
+      viewMode === 'expanded'
     ) {
       setShowCollectConfirm(true);
     }
 
     // Update the ref for next render
     prevPartRemovalRequiredRef.current = printer.part_removal_required;
-  }, [printer.part_removal_required, printer.part_removal_enabled, printer.last_job_name, viewMode, showCollectConfirm]);
+  }, [printer.part_removal_required, printer.part_removal_enabled, printer.last_job_name, viewMode]);
 
   // Open plate detection management modal (for calibration/references)
   const handleOpenPlateManagement = async () => {
