@@ -2520,9 +2520,11 @@ function PrinterCard({
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
+                        {/* Current paused job name */}
                         <p className="text-sm font-medium text-orange-400">
                           {t('printers.partRemoval.pausedForRemoval', { jobName: getCurrentJobName() })}
                         </p>
+                        {/* Previous job that needs to be collected */}
                         <p className="text-xs text-bambu-gray mt-1">
                           {t('printers.partRemoval.pausedMessage', { jobName: printer.last_job_name })}
                         </p>
