@@ -414,7 +414,7 @@ export default {
     },
     // Part removal confirmation
     partRemoval: {
-      title: 'Part Removal Confirmation',
+      title: 'Part Removal Confirmation Required',
       confirmRemoval: 'Confirm part removal',
       noRemovalRequired: 'No part removal required',
       plateCheckDisabledDuringRemoval: 'Plate check disabled until part is collected',
@@ -429,7 +429,7 @@ export default {
       confirmMessage: 'Have you visually confirmed the printer build plate is clear and ready for the next job?',
       confirmButton: 'Build Plate Clear',
       plateClearMessage: 'Build Plate Clear',
-      pausedForRemoval: 'Print Paused - Part Removal Required',
+      pausedForRemoval: '{{jobName}} Paused - Part Removal Required',
       pausedMessage: 'Previous job "{{jobName}}" must be collected before this print can continue.',
       resumeInstructions: 'Click "Collect" button below or press Resume on the printer to clear and continue.',
     },
