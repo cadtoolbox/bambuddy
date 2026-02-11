@@ -2060,7 +2060,7 @@ function PrinterCard({
   };
 
   return (
-    <Card className="relative">
+    <Card className={`relative ${viewMode === 'compact' && printer.part_removal_required ? 'ring-2 ring-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' : ''}`}>
       <CardContent className={cardSize >= 3 ? 'p-5' : ''}>
         {/* Header */}
         <div className={getSpacing()}>
@@ -2083,6 +2083,13 @@ function PrinterCard({
                         status?.connected ? 'bg-status-ok' : 'bg-status-error'
                       }`}
                       title={status?.connected ? t('printers.connection.connected') : t('printers.connection.offline')}
+                    />
+                  )}
+                  {/* Part removal indicator for compact mode */}
+                  {viewMode === 'compact' && printer.part_removal_required && (
+                    <Hand
+                      className="w-4 h-4 text-orange-400 flex-shrink-0"
+                      title={t('printers.partRemoval.title')}
                     />
                   )}
                 </div>
