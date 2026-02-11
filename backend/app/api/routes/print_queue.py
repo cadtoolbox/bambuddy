@@ -261,7 +261,7 @@ async def list_queue(
             query = query.where(PrintQueueItem.printer_id.is_(None))
         else:
             query = query.where(PrintQueueItem.printer_id == printer_id)
-    
+
     # Special status filter for "not_collected" - completed jobs with part_removal_required
     if status == "not_collected":
         # Join with printer to filter by part_removal_required
