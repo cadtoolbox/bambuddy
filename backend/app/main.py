@@ -1943,12 +1943,14 @@ async def on_print_complete(printer_id: int, data: dict):
                     # Get queue item if this was a queue print
                     # NOTE: At this point the queue item is still marked as "printing"
                     # (it gets updated to "completed" later in this function)
+                    # There should only be one item with status "printing" per printer
                     queue_item = None
                     queue_result = await db.execute(
                         select(PrintQueueItem)
                         .options(selectinload(PrintQueueItem.created_by))
                         .where(PrintQueueItem.printer_id == printer_id)
                         .where(PrintQueueItem.status == "printing")
+                        .limit(1)
                     )
                     queue_item = queue_result.scalar_one_or_none()
                     

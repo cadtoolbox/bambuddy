@@ -38,6 +38,9 @@ from backend.app.services.printer_manager import get_derived_status_name, printe
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/printers", tags=["printers"])
 
+# Constant for debug mode queue item ID
+DEBUG_QUEUE_ITEM_ID = -1
+
 
 @router.get("/", response_model=list[PrinterResponse])
 async def list_printers(
@@ -2204,7 +2207,7 @@ async def create_dummy_part_removal(
     printer.last_job_user = "Admin (Debug)"
     printer.last_job_start = start_time
     printer.last_job_end = now
-    printer.last_job_queue_item_id = -1  # Use -1 for debug mode (no real queue item)
+    printer.last_job_queue_item_id = DEBUG_QUEUE_ITEM_ID
 
     await db.commit()
 
@@ -2221,7 +2224,7 @@ async def create_dummy_part_removal(
             "last_job_user": "Admin (Debug)",
             "last_job_start": start_time.isoformat(),
             "last_job_end": now.isoformat(),
-            "last_job_queue_item_id": -1,
+            "last_job_queue_item_id": DEBUG_QUEUE_ITEM_ID,
         },
     )
 

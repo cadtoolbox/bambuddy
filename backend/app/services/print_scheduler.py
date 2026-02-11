@@ -18,6 +18,7 @@ from backend.app.models.library import LibraryFile
 from backend.app.models.print_queue import PrintQueueItem
 from backend.app.models.printer import Printer
 from backend.app.models.smart_plug import SmartPlug
+from backend.app.models.user import User
 from backend.app.services.bambu_ftp import delete_file_async, get_ftp_retry_settings, upload_file_async, with_ftp_retry
 from backend.app.services.notification_service import notification_service
 from backend.app.services.printer_manager import printer_manager
@@ -1039,7 +1040,6 @@ class PrintScheduler:
         # Track current print user (Issue #206)
         # Load the created_by relationship if not already loaded
         if item.created_by_id:
-            from backend.app.models.user import User
             if not item.created_by:
                 user_result = await db.execute(select(User).where(User.id == item.created_by_id))
                 user = user_result.scalar_one_or_none()
