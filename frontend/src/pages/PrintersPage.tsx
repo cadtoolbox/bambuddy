@@ -2058,9 +2058,37 @@ function PrinterCard({
       default: return 'mb-4';
     }
   };
+  const getCardClassName = () => {
+    const baseClass = 'relative';
+    const partRemovalIndicator = viewMode === 'compact' && printer.part_removal_required
+      ? 'ring-2 ring-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]'
+      : '';
+    return `${baseClass} ${partRemovalIndicator}`;
+  };
+  const getStopButtonTooltip = () => {
+    if (!hasPermission('printers:control')) {
+      return t('printers.permission.noControl');
+    }
+    if (printer.part_removal_required) {
+      return t('printers.partRemoval.plateCheckDisabledDuringRemoval');
+    }
+    return t('printers.stop');
+  };
+  const getResumeButtonTooltip = () => {
+    if (!hasPermission('printers:control')) {
+      return t('printers.permission.noControl');
+    }
+    if (isPaused && printer.part_removal_required) {
+      return t('printers.partRemoval.plateCheckDisabledDuringRemoval');
+    }
+    return isPaused ? t('printers.resume') : t('printers.pause');
+  };
+  const getCurrentJobName = () => {
+    return status?.subtask_name || status?.current_print || t('common.print');
+  };
 
   return (
-    <Card className={`relative ${viewMode === 'compact' && printer.part_removal_required ? 'ring-2 ring-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' : ''}`}>
+    <Card className={getCardClassName()}>
       <CardContent className={cardSize >= 3 ? 'p-5' : ''}>
         {/* Header */}
         <div className={getSpacing()}>
@@ -2493,7 +2521,7 @@ function PrinterCard({
                       <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm font-medium text-orange-400">
-                          {t('printers.partRemoval.pausedForRemoval', { jobName: status.subtask_name || status.current_print || 'Print' })}
+                          {t('printers.partRemoval.pausedForRemoval', { jobName: getCurrentJobName() })}
                         </p>
                         <p className="text-xs text-bambu-gray mt-1">
                           {t('printers.partRemoval.pausedMessage', { jobName: printer.last_job_name })}
@@ -2719,7 +2747,7 @@ function PrinterCard({
                             : 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
                           }
                         `}
-                        title={!hasPermission('printers:control') ? t('printers.permission.noControl') : printer.part_removal_required ? t('printers.partRemoval.plateCheckDisabledDuringRemoval') : t('printers.stop')}
+                        title={getStopButtonTooltip()}
                       >
                         <Square className="w-3 h-3" />
                         {t('printers.stop')}
@@ -2739,7 +2767,7 @@ function PrinterCard({
                             : 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
                           }
                         `}
-                        title={!hasPermission('printers:control') ? t('printers.permission.noControl') : (isPaused && printer.part_removal_required) ? t('printers.partRemoval.plateCheckDisabledDuringRemoval') : (isPaused ? t('printers.resume') : t('printers.pause'))}
+                        title={getResumeButtonTooltip()}
                       >
                         {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                         {isPaused ? t('printers.resume') : t('printers.pause')}
