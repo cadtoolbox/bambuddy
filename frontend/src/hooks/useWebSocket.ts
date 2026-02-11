@@ -215,6 +215,8 @@ export function useWebSocket() {
       case 'printer_updated':
         // Printer data changed (e.g., part removal status updated)
         // Update the printer data immediately in the cache to show part removal without delay
+        // The spread operation merges partial updates from the backend (e.g., part_removal_required,
+        // last_job_name, etc.) - the backend only sends fields that changed
         if (message.printer_id !== undefined && message.data) {
           queryClient.setQueryData(['printers'], (old: Printer[] | undefined) => {
             if (!old) return old;

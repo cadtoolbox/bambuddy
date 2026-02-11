@@ -1951,7 +1951,8 @@ async def on_print_complete(printer_id: int, data: dict):
                     printer.last_job_user = current_user
                     # Use archive's actual start/end times, not created_at or current time
                     printer.last_job_start = archive.started_at if archive else None
-                    printer.last_job_end = archive.completed_at if archive else None
+                    # Fallback to current time if completed_at is not set (shouldn't happen for completed prints)
+                    printer.last_job_end = archive.completed_at if (archive and archive.completed_at) else datetime.now()
                     
                     await db.commit()
                     logger.info(
