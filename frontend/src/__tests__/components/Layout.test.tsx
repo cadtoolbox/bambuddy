@@ -183,5 +183,65 @@ describe('Layout', () => {
         expect(document.body.textContent).not.toContain('Print Paused!');
       });
     });
+
+    it('resumes print when I Understand is clicked and queue has pending items', async () => {
+      let resumeCalled = false;
+      server.use(
+        http.get('/api/v1/queue/', ({ request }) => {
+          const url = new URL(request.url);
+          const printerId = url.searchParams.get('printer_id');
+          if (printerId === '1') {
+            return HttpResponse.json([
+              {
+                id: 1,
+                printer_id: 1,
+                archive_id: 1,
+                position: 1,
+                status: 'pending',
+                archive_name: 'Next Print',
+                printer_name: 'X1 Carbon',
+                scheduled_time: null,
+              },
+            ]);
+          }
+          return HttpResponse.json([]);
+        }),
+        http.post('/api/v1/printers/1/print/resume', () => {
+          resumeCalled = true;
+          return HttpResponse.json({ success: true, message: 'Print resume command sent' });
+        })
+      );
+
+      render(<Layout />);
+
+      // Dispatch the plate-not-empty event
+      window.dispatchEvent(
+        new CustomEvent('plate-not-empty', {
+          detail: {
+            printer_id: 1,
+            printer_name: 'Test Printer',
+            message: 'Objects detected on build plate',
+          },
+        })
+      );
+
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Print Paused!');
+      });
+
+      // Click the "I Understand" button
+      const buttons = document.querySelectorAll('button');
+      buttons.forEach((btn) => {
+        if (btn.textContent?.includes('I Understand')) {
+          btn.click();
+        }
+      });
+
+      await waitFor(() => {
+        // Modal should be closed and resume should be called
+        expect(document.body.textContent).not.toContain('Print Paused!');
+        expect(resumeCalled).toBe(true);
+      });
+    });
   });
 });

@@ -127,4 +127,90 @@ describe('PrinterQueueWidget', () => {
       });
     });
   });
+
+  describe('display name fallback', () => {
+    it('shows library_file_name when archive_name is null', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: null,
+              library_file_id: 42,
+              position: 1,
+              status: 'pending',
+              archive_name: null,
+              library_file_name: 'Library File Print',
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+            },
+          ]);
+        })
+      );
+
+      render(<PrinterQueueWidget printerId={1} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Library File Print')).toBeInTheDocument();
+      });
+    });
+
+    it('shows archive_id fallback when both names are null but archive_id exists', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: 123,
+              library_file_id: null,
+              position: 1,
+              status: 'pending',
+              archive_name: null,
+              library_file_name: null,
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+            },
+          ]);
+        })
+      );
+
+      render(<PrinterQueueWidget printerId={1} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Archive #123')).toBeInTheDocument();
+      });
+    });
+
+    it('shows "Unknown" when all identifiers are null', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: null,
+              library_file_id: null,
+              position: 1,
+              status: 'pending',
+              archive_name: null,
+              library_file_name: null,
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+            },
+          ]);
+        })
+      );
+
+      render(<PrinterQueueWidget printerId={1} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Unknown')).toBeInTheDocument();
+      });
+    });
+  });
 });

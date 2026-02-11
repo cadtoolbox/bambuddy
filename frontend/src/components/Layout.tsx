@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { SwitchbarPopover } from './SwitchbarPopover';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, supportApi, pendingUploadsApi } from '../api/client';
 import { getIconByName } from './IconPicker';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -160,6 +160,19 @@ export function Layout() {
     refetchOnWindowFocus: true,
   });
   const pendingUploadsCount = pendingUploadsData?.count ?? 0;
+
+  const queryClient = useQueryClient();
+
+  // Mutation to resume printer after plate alert is acknowledged
+  const resumePrintMutation = useMutation({
+    mutationFn: (printerId: number) => api.resumePrint(printerId),
+    onSuccess: () => {
+      showToast(t('plateAlert.resumed') || 'Print resumed', 'success');
+    },
+    onError: () => {
+      showToast(t('plateAlert.resumeError') || 'Failed to resume print', 'error');
+    },
+  });
 
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);
@@ -330,6 +343,32 @@ export function Layout() {
     window.addEventListener('plate-not-empty', handlePlateNotEmpty);
     return () => window.removeEventListener('plate-not-empty', handlePlateNotEmpty);
   }, [hasPermission]);
+
+  // Handler for plate detection alert dismissal
+  const handlePlateAlertDismiss = useCallback(async () => {
+    if (!plateDetectionAlert) return;
+    
+    const printerId = plateDetectionAlert.printer_id;
+    
+    // Close the alert first
+    setPlateDetectionAlert(null);
+    
+    // Check if there are pending queue items for this printer
+    try {
+      const queue = await queryClient.fetchQuery({
+        queryKey: ['queue', printerId, 'pending'],
+        queryFn: () => api.getQueue(printerId, 'pending'),
+      });
+      
+      // If there are pending items, unpause the printer
+      if (queue && queue.length > 0) {
+        resumePrintMutation.mutate(printerId);
+      }
+    } catch (error) {
+      // Silently fail if we can't fetch queue - just dismiss the alert
+      console.error('Failed to fetch queue for printer', printerId, error);
+    }
+  }, [plateDetectionAlert, queryClient, resumePrintMutation]);
 
   // Global keyboard shortcuts for navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -838,7 +877,7 @@ export function Layout() {
                 {t('plateAlert.message')}
               </p>
               <button
-                onClick={() => setPlateDetectionAlert(null)}
+                onClick={handlePlateAlertDismiss}
                 className="w-full py-3 px-6 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors"
               >
                 {t('plateAlert.understand')}
