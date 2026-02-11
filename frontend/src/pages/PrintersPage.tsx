@@ -1414,6 +1414,7 @@ function PrinterCard({
   
   // Long-press state for debug dummy part creation
   const [longPressProgress, setLongPressProgress] = useState(0);
+  const [showRotateAnimation, setShowRotateAnimation] = useState(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const longPressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -1825,6 +1826,11 @@ function PrinterCard({
         clearInterval(longPressIntervalRef.current);
       }
       setLongPressProgress(0);
+      
+      // Trigger rotation animation
+      setShowRotateAnimation(true);
+      setTimeout(() => setShowRotateAnimation(false), 1000); // Animation duration: 1s (2 rotations at 0.5s each)
+      
       createDummyPartMutation.mutate();
     }, LONG_PRESS_DURATION);
   };
@@ -3530,7 +3536,9 @@ function PrinterCard({
                     {partRemovalMutation.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <Hand className="w-4 h-4" />
+                      <Hand 
+                        className={`w-4 h-4 ${showRotateAnimation ? 'animate-[spin_0.5s_ease-in-out_2]' : ''}`}
+                      />
                     )}
                   </Button>
                   {/* Long-press progress indicator */}
