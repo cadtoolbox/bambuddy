@@ -1566,6 +1566,8 @@ export default {
     title: 'Print Paused!',
     message: 'Objects detected on build plate. The print has been automatically paused. Please clear the plate and resume the print.',
     understand: 'I Understand',
+    resumed: 'Print resumed',
+    resumeError: 'Failed to resume print',
   },
 
   // Camera page
