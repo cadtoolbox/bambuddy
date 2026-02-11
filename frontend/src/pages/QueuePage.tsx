@@ -737,17 +737,30 @@ export function QueuePage() {
 
   const clearHistoryMutation = useMutation({
     mutationFn: async () => {
-      const historyItems = queue?.filter(i =>
+      // Get all history items
+      const allHistoryItems = queue?.filter(i =>
         ['completed', 'failed', 'skipped', 'cancelled'].includes(i.status)
       ) || [];
-      for (const item of historyItems) {
+      
+      // Filter out items that still need to be collected (part_removal_required)
+      const itemsToClear = allHistoryItems.filter(i => !i.part_removal_required);
+      
+      for (const item of itemsToClear) {
         await api.removeFromQueue(item.id);
       }
-      return historyItems.length;
+      
+      return {
+        cleared: itemsToClear.length,
+        kept: allHistoryItems.length - itemsToClear.length
+      };
     },
-    onSuccess: (count) => {
+    onSuccess: ({ cleared, kept }) => {
       queryClient.invalidateQueries({ queryKey: ['queue'] });
-      showToast(t('queue.toast.historyCleared', { count }));
+      if (kept > 0) {
+        showToast(t('queue.toast.historyClearedWithKept', { cleared, kept }));
+      } else {
+        showToast(t('queue.toast.historyCleared', { count: cleared }));
+      }
     },
     onError: () => showToast(t('queue.toast.clearHistoryFailed'), 'error'),
   });
@@ -1346,19 +1359,31 @@ export function QueuePage() {
       )}
 
       {/* Clear History Confirm Modal */}
-      {showClearHistoryConfirm && (
-        <ConfirmModal
-          title={t('queue.confirm.clearHistoryTitle')}
-          message={t('queue.confirm.clearHistoryMessage', { count: historyItems.length })}
-          confirmText={t('queue.clearHistory')}
-          variant="danger"
-          onConfirm={() => {
-            clearHistoryMutation.mutate();
-            setShowClearHistoryConfirm(false);
-          }}
-          onCancel={() => setShowClearHistoryConfirm(false)}
-        />
-      )}
+      {showClearHistoryConfirm && (() => {
+        const itemsNeedingCollection = historyItems.filter(i => i.part_removal_required);
+        const itemsToClear = historyItems.filter(i => !i.part_removal_required);
+        
+        return (
+          <ConfirmModal
+            title={t('queue.confirm.clearHistoryTitle')}
+            message={
+              itemsNeedingCollection.length > 0
+                ? t('queue.confirm.clearHistoryMessageWithKept', { 
+                    toClear: itemsToClear.length, 
+                    toKeep: itemsNeedingCollection.length 
+                  })
+                : t('queue.confirm.clearHistoryMessage', { count: itemsToClear.length })
+            }
+            confirmText={t('queue.clearHistory')}
+            variant="danger"
+            onConfirm={() => {
+              clearHistoryMutation.mutate();
+              setShowClearHistoryConfirm(false);
+            }}
+            onCancel={() => setShowClearHistoryConfirm(false)}
+          />
+        );
+      })()}
 
       {/* Bulk Edit Modal */}
       {showBulkEditModal && (
