@@ -2074,7 +2074,7 @@ function PrinterCard({
     }
     return t('printers.stop');
   };
-  const getResumeButtonTooltip = () => {
+  const getResumeButtonTooltip = (isPaused: boolean) => {
     if (!hasPermission('printers:control')) {
       return t('printers.permission.noControl');
     }
@@ -2769,7 +2769,7 @@ function PrinterCard({
                             : 'bg-bambu-dark text-bambu-gray/50 cursor-not-allowed'
                           }
                         `}
-                        title={getResumeButtonTooltip()}
+                        title={getResumeButtonTooltip(isPaused)}
                       >
                         {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                         {isPaused ? t('printers.resume') : t('printers.pause')}
