@@ -505,14 +505,23 @@ class PrintScheduler:
         # Parse AMS units from raw_data
         ams_data = status.raw_data.get("ams", [])
         for ams_unit in ams_data:
-            ams_id = int(ams_unit.get("id", 0))
+            try:
+                ams_id = int(ams_unit.get("id", 0))
+            except (ValueError, TypeError):
+                logger.warning("Invalid AMS ID: %s, skipping unit", ams_unit.get("id"))
+                continue
+
             trays = ams_unit.get("tray", [])
             is_ht = len(trays) == 1  # AMS-HT has single tray
 
             for tray in trays:
                 tray_type = tray.get("tray_type")
                 if tray_type:
-                    tray_id = int(tray.get("id", 0))
+                    try:
+                        tray_id = int(tray.get("id", 0))
+                    except (ValueError, TypeError):
+                        logger.warning("Invalid tray ID: %s in AMS %s, skipping tray", tray.get("id"), ams_id)
+                        continue
                     tray_color = tray.get("tray_color", "")
                     # tray_info_idx identifies the specific spool (e.g., "GFA00", "P4d64437")
                     tray_info_idx = tray.get("tray_info_idx", "")
