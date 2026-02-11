@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Printer } from '../api/client';
 
 interface WebSocketMessage {
   type: string;
@@ -212,9 +213,20 @@ export function useWebSocket() {
         break;
 
       case 'printer_updated':
-        // Printer data changed (e.g., part removal status cleared)
-        // Invalidate printers list to refresh the UI
-        debouncedInvalidate('printers');
+        // Printer data changed (e.g., part removal status updated)
+        // Update the printer data immediately in the cache to show part removal without delay
+        // The spread operation merges partial updates from the backend (e.g., part_removal_required,
+        // last_job_name, etc.) - the backend only sends fields that changed
+        if (message.printer_id !== undefined && message.data) {
+          queryClient.setQueryData(['printers'], (old: Printer[] | undefined) => {
+            if (!old) return old;
+            return old.map((printer) =>
+              printer.id === message.printer_id
+                ? { ...printer, ...message.data }
+                : printer
+            );
+          });
+        }
         break;
 
       case 'pong':
