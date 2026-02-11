@@ -2206,6 +2206,7 @@ async def create_dummy_part_removal(
     
     # Send WebSocket update to notify frontend
     await ws_manager.send_printer_updated(printer_id, {
+        "part_removal_enabled": True,
         "part_removal_required": True,
         "last_job_name": "DEBUG_TEST_PRINT.3mf",
         "last_job_user": "Admin (Debug)",
