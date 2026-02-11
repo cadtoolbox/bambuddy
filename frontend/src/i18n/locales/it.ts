@@ -1498,6 +1498,8 @@ export default {
     title: 'Stampa in pausa!',
     message: 'Oggetti rilevati sul piatto. La stampa è stata messa automaticamente in pausa. Svuota il piatto e riprendi la stampa.',
     understand: 'Ho capito',
+    resumed: 'Stampa ripresa',
+    resumeError: 'Impossibile riprendere la stampa',
   },
 
   // Camera page

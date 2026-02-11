@@ -1566,6 +1566,8 @@ export default {
     title: 'Druck pausiert!',
     message: 'Objekte auf dem Druckbett erkannt. Der Druck wurde automatisch pausiert. Bitte räumen Sie das Druckbett und setzen Sie den Druck fort.',
     understand: 'Verstanden',
+    resumed: 'Druck fortgesetzt',
+    resumeError: 'Druck konnte nicht fortgesetzt werden',
   },
 
   // Camera page
