@@ -1586,7 +1586,8 @@ export function SettingsPage() {
                     onChange={(e) =>
                       updateSetting('default_filament_cost', parseFloat(e.target.value) || 0)
                     }
-                    className="w-full pl-8 pr-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                    style={{ paddingLeft: `${Math.max(2, getCurrencySymbol(localSettings.currency).length * 0.6 + 1)}rem` }}
+                    className="w-full pr-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
                   />
                 </div>
               </div>
@@ -1606,7 +1607,8 @@ export function SettingsPage() {
                     onChange={(e) =>
                       updateSetting('energy_cost_per_kwh', parseFloat(e.target.value) || 0)
                     }
-                    className="w-full pl-8 pr-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
+                    style={{ paddingLeft: `${Math.max(2, getCurrencySymbol(localSettings.currency).length * 0.6 + 1)}rem` }}
+                    className="w-full pr-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none"
                   />
                 </div>
               </div>
