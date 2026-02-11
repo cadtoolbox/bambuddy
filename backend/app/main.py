@@ -1941,14 +1941,14 @@ async def on_print_complete(printer_id: int, data: dict):
                 
                 if printer and printer.part_removal_enabled:
                     # Get queue item if this was a queue print
+                    # NOTE: At this point the queue item is still marked as "printing"
+                    # (it gets updated to "completed" later in this function)
                     queue_item = None
                     queue_result = await db.execute(
                         select(PrintQueueItem)
                         .options(selectinload(PrintQueueItem.created_by))
                         .where(PrintQueueItem.printer_id == printer_id)
-                        .where(PrintQueueItem.status == "completed")
-                        .order_by(PrintQueueItem.completed_at.desc())
-                        .limit(1)
+                        .where(PrintQueueItem.status == "printing")
                     )
                     queue_item = queue_result.scalar_one_or_none()
                     
