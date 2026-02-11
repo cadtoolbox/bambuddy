@@ -10,6 +10,7 @@ from pathlib import Path
 import defusedxml.ElementTree as ET
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.app.core.config import settings
 from backend.app.core.database import async_session
@@ -59,8 +60,10 @@ class PrintScheduler:
         """Check for prints ready to start."""
         async with async_session() as db:
             # Get all pending items, ordered by printer and position
+            # Load created_by relationship to avoid lazy load issues after commit
             result = await db.execute(
                 select(PrintQueueItem)
+                .options(selectinload(PrintQueueItem.created_by))
                 .where(PrintQueueItem.status == "pending")
                 .order_by(PrintQueueItem.printer_id, PrintQueueItem.position)
             )
@@ -1038,19 +1041,22 @@ class PrintScheduler:
         logger.info("Queue item %s: Status set to 'printing', sending print command...", item.id)
 
         # Track current print user (Issue #206)
-        # Load the created_by relationship if not already loaded
-        if item.created_by_id:
-            if not item.created_by:
-                user_result = await db.execute(select(User).where(User.id == item.created_by_id))
-                user = user_result.scalar_one_or_none()
-                if user:
-                    printer_manager.set_current_print_user(item.printer_id, user.id, user.username)
-                    logger.info("Queue item %s: Tracking user %s", item.id, user.username)
-            else:
-                printer_manager.set_current_print_user(
-                    item.printer_id, item.created_by.id, item.created_by.username
-                )
-                logger.info("Queue item %s: Tracking user %s", item.id, item.created_by.username)
+        # Wrap in try/except to ensure print command is still sent even if user tracking fails
+        try:
+            if item.created_by_id:
+                if not item.created_by:
+                    user_result = await db.execute(select(User).where(User.id == item.created_by_id))
+                    user = user_result.scalar_one_or_none()
+                    if user:
+                        printer_manager.set_current_print_user(item.printer_id, user.id, user.username)
+                        logger.info("Queue item %s: Tracking user %s", item.id, user.username)
+                else:
+                    printer_manager.set_current_print_user(
+                        item.printer_id, item.created_by.id, item.created_by.username
+                    )
+                    logger.info("Queue item %s: Tracking user %s", item.id, item.created_by.username)
+        except Exception as e:
+            logger.warning("Queue item %s: Failed to track user: %s", item.id, e)
 
         # Start the print with AMS mapping, plate_id and print options
         started = printer_manager.start_print(
