@@ -732,6 +732,7 @@ export default {
       failed: 'Fallito',
       skipped: 'Saltato',
       cancelled: 'Annullato',
+      notCollected: 'Non ancora ritirato',
     },
     // Summary cards
     summary: {
@@ -783,6 +784,7 @@ export default {
       stopPrint: 'Ferma Stampa',
       startPrint: 'Avvia Stampa',
       requeue: 'Rimetti in coda',
+      collect: 'Ritira',
     },
     // Bulk edit
     bulkEdit: {

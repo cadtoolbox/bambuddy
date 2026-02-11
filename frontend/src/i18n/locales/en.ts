@@ -738,6 +738,7 @@ export default {
       failed: 'Failed',
       skipped: 'Skipped',
       cancelled: 'Cancelled',
+      notCollected: 'Not yet Collected',
     },
     // Summary cards
     summary: {
@@ -789,6 +790,7 @@ export default {
       stopPrint: 'Stop Print',
       startPrint: 'Start Print',
       requeue: 'Re-queue',
+      collect: 'Collect',
     },
     // Bulk edit
     bulkEdit: {

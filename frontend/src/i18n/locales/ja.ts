@@ -808,6 +808,7 @@ export default {
       failed: '失敗',
       skipped: 'スキップ',
       cancelled: 'キャンセル済み',
+      notCollected: 'まだ回収されていません',
     },
     summary: {
       printing: '印刷中',
@@ -852,6 +853,7 @@ export default {
       stopPrint: '印刷を停止',
       startPrint: '印刷を開始',
       requeue: '再キュー',
+      collect: '回収',
     },
     bulkEdit: {
       title: '{{count}}件のアイテムを編集',
