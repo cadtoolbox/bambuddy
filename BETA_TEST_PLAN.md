@@ -131,7 +131,7 @@
 ## Reporting Issues
 
 When reporting a bug, please include:
-- Test case number (e.g., "3.4 failed")
+- Test case number (e.g., "Beta 9.1 failed")
 - Browser + version
 - Screenshot or screen recording
 - Backend logs (if relevant — check Docker logs)
