@@ -2707,6 +2707,7 @@ export default {
     noLinksConfigured: '外部リンクが設定されていません',
     deleteLink: 'リンクを削除',
     removeCustomIcon: 'カスタムアイコンを削除',
+    openInNewTab: '新しいタブで開く',
     placeholders: {
       linkName: 'マイリンク',
     },

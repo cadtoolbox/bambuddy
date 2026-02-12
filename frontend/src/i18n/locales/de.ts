@@ -2782,6 +2782,7 @@ export default {
     noLinksConfigured: 'Keine externen Links konfiguriert',
     deleteLink: 'Link löschen',
     removeCustomIcon: 'Benutzerdefiniertes Symbol entfernen',
+    openInNewTab: 'In neuem Tab öffnen',
     placeholders: {
       linkName: 'Mein Link',
     },

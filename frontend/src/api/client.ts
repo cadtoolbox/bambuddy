@@ -1804,6 +1804,7 @@ export interface ExternalLink {
   name: string;
   url: string;
   icon: string;
+  open_in_new_tab: boolean;
   custom_icon: string | null;
   sort_order: number;
   created_at: string;
@@ -1814,12 +1815,14 @@ export interface ExternalLinkCreate {
   name: string;
   url: string;
   icon: string;
+  open_in_new_tab?: boolean;
 }
 
 export interface ExternalLinkUpdate {
   name?: string;
   url?: string;
   icon?: string;
+  open_in_new_tab?: boolean;
 }
 
 // Permission type - all available permissions

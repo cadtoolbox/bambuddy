@@ -2783,6 +2783,7 @@ export default {
     noLinksConfigured: 'No external links configured',
     deleteLink: 'Delete Link',
     removeCustomIcon: 'Remove custom icon',
+    openInNewTab: 'Open in new tab',
     placeholders: {
       linkName: 'My Link',
     },

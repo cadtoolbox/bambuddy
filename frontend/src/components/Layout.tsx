@@ -347,9 +347,14 @@ export function Layout() {
         e.preventDefault();
 
         if (isExternalLinkId(id)) {
-          // External link - navigate to iframe page
-          const linkId = id.replace('ext-', '');
-          navigate(`/external/${linkId}`);
+          // External link
+          const extLink = extLinksMap.get(id);
+          if (extLink?.open_in_new_tab) {
+            window.open(extLink.url, '_blank', 'noopener,noreferrer');
+          } else {
+            const linkId = id.replace('ext-', '');
+            navigate(`/external/${linkId}`);
+          }
         } else {
           // Internal nav item
           const navItem = navItemsMap.get(id);
@@ -451,31 +456,55 @@ export function Layout() {
                         : ''
                     }`}
                   >
-                    <NavLink
-                      to={`/external/${link.id}`}
-                      className={({ isActive }) =>
-                        `flex items-center ${isMobile || sidebarExpanded ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-lg transition-colors group ${
-                          isActive
-                            ? 'bg-bambu-green text-white'
-                            : 'text-bambu-gray-light hover:bg-bambu-dark-tertiary hover:text-white'
-                        }`
-                      }
-                      title={!isMobile && !sidebarExpanded ? link.name : undefined}
-                    >
-                      {sidebarExpanded && !isMobile && (
-                        <GripVertical className="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing -ml-1" />
-                      )}
-                      {link.custom_icon ? (
-                        <img
-                          src={`/api/v1/external-links/${link.id}/icon`}
-                          alt=""
-                          className="w-5 h-5 flex-shrink-0"
-                        />
-                      ) : (
-                        LinkIcon && <LinkIcon className="w-5 h-5 flex-shrink-0" />
-                      )}
-                      {(isMobile || sidebarExpanded) && <span>{link.name}</span>}
-                    </NavLink>
+                    {link.open_in_new_tab ? (
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center ${isMobile || sidebarExpanded ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-lg transition-colors group text-bambu-gray-light hover:bg-bambu-dark-tertiary hover:text-white`}
+                        title={!isMobile && !sidebarExpanded ? link.name : undefined}
+                      >
+                        {sidebarExpanded && !isMobile && (
+                          <GripVertical className="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing -ml-1" />
+                        )}
+                        {link.custom_icon ? (
+                          <img
+                            src={`/api/v1/external-links/${link.id}/icon`}
+                            alt=""
+                            className="w-5 h-5 flex-shrink-0"
+                          />
+                        ) : (
+                          LinkIcon && <LinkIcon className="w-5 h-5 flex-shrink-0" />
+                        )}
+                        {(isMobile || sidebarExpanded) && <span>{link.name}</span>}
+                      </a>
+                    ) : (
+                      <NavLink
+                        to={`/external/${link.id}`}
+                        className={({ isActive }) =>
+                          `flex items-center ${isMobile || sidebarExpanded ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-lg transition-colors group ${
+                            isActive
+                              ? 'bg-bambu-green text-white'
+                              : 'text-bambu-gray-light hover:bg-bambu-dark-tertiary hover:text-white'
+                          }`
+                        }
+                        title={!isMobile && !sidebarExpanded ? link.name : undefined}
+                      >
+                        {sidebarExpanded && !isMobile && (
+                          <GripVertical className="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing -ml-1" />
+                        )}
+                        {link.custom_icon ? (
+                          <img
+                            src={`/api/v1/external-links/${link.id}/icon`}
+                            alt=""
+                            className="w-5 h-5 flex-shrink-0"
+                          />
+                        ) : (
+                          LinkIcon && <LinkIcon className="w-5 h-5 flex-shrink-0" />
+                        )}
+                        {(isMobile || sidebarExpanded) && <span>{link.name}</span>}
+                      </NavLink>
+                    )}
                   </li>
                 );
               } else {
