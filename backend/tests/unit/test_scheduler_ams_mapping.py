@@ -216,7 +216,11 @@ class TestBuildLoadedFilaments:
                     {
                         "id": 0,  # Valid AMS ID
                         "tray": [
-                            {"id": "abc", "tray_type": "PLA", "tray_color": "FF0000"},  # Invalid tray ID - should be skipped
+                            {
+                                "id": "abc",
+                                "tray_type": "PLA",
+                                "tray_color": "FF0000",
+                            },  # Invalid tray ID - should be skipped
                             {"id": 1, "tray_type": "PETG", "tray_color": "00FF00"},  # Valid tray
                         ],
                     },

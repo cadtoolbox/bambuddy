@@ -306,26 +306,23 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
     # Detect state transitions for part removal confirmation
     previous_state = _last_printer_state.get(printer_id)
     current_state = state.state
-    
+
     # Update state tracking
     _last_printer_state[printer_id] = current_state
-    
+
     # If transitioning from PAUSE to RUNNING, check if we need to clear part_removal_required
     if previous_state in ("PAUSE", "PAUSED") and current_state == "RUNNING":
         logger = logging.getLogger(__name__)
-        logger.info(
-            f"[PART REMOVAL] Detected PAUSE -> RUNNING transition for printer {printer_id}"
-        )
+        logger.info(f"[PART REMOVAL] Detected PAUSE -> RUNNING transition for printer {printer_id}")
         async with async_session() as db:
             from backend.app.models.printer import Printer
-            
+
             result = await db.execute(select(Printer).where(Printer.id == printer_id))
             printer = result.scalar_one_or_none()
-            
+
             if printer and printer.part_removal_enabled and printer.part_removal_required:
                 logger.info(
-                    f"[PART REMOVAL] Clearing part_removal_required for printer {printer_id} "
-                    f"(resume button pressed)"
+                    f"[PART REMOVAL] Clearing part_removal_required for printer {printer_id} (resume button pressed)"
                 )
                 # Clear the part removal requirement (same as clicking "Collect" button)
                 printer.part_removal_required = False
@@ -334,23 +331,24 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
                 printer.last_job_start = None
                 printer.last_job_end = None
                 printer.last_job_queue_item_id = None
-                
+
                 await db.commit()
-                
+
                 # Send WebSocket update to notify frontend
-                await ws_manager.send_printer_updated(printer_id, {
-                    "part_removal_required": False,
-                    "last_job_name": None,
-                    "last_job_user": None,
-                    "last_job_start": None,
-                    "last_job_end": None,
-                    "last_job_queue_item_id": None,
-                })
-                
-                logger.info(
-                    f"[PART REMOVAL] Part removal cleared for printer {printer_id}, print resumed"
+                await ws_manager.send_printer_updated(
+                    printer_id,
+                    {
+                        "part_removal_required": False,
+                        "last_job_name": None,
+                        "last_job_user": None,
+                        "last_job_start": None,
+                        "last_job_end": None,
+                        "last_job_queue_item_id": None,
+                    },
                 )
-    
+
+                logger.info(f"[PART REMOVAL] Part removal cleared for printer {printer_id}, print resumed")
+
     # Only broadcast if something meaningful changed (reduce WebSocket spam)
     # Include rounded temperatures to detect meaningful temp changes (within 1 degree)
     temps = state.temperatures or {}
@@ -914,8 +912,7 @@ async def on_print_start(printer_id: int, data: dict):
         )
         if printer and printer.part_removal_enabled and printer.part_removal_required:
             logger.warning(
-                f"[PART REMOVAL] Part removal required for printer {printer_id}! "
-                f"Last job: {printer.last_job_name}"
+                f"[PART REMOVAL] Part removal required for printer {printer_id}! Last job: {printer.last_job_name}"
             )
             client = printer_manager.get_client(printer_id)
             if client:
@@ -1932,13 +1929,13 @@ async def on_print_complete(printer_id: int, data: dict):
     if data.get("status") == "completed":
         try:
             async with async_session() as db:
-                from backend.app.models.printer import Printer
                 from backend.app.models.archive import PrintArchive
                 from backend.app.models.print_queue import PrintQueueItem
+                from backend.app.models.printer import Printer
 
                 result = await db.execute(select(Printer).where(Printer.id == printer_id))
                 printer = result.scalar_one_or_none()
-                
+
                 if printer and printer.part_removal_enabled:
                     # Get queue item if this was a queue print
                     # NOTE: At this point the queue item is still marked as "printing"
@@ -1953,7 +1950,7 @@ async def on_print_complete(printer_id: int, data: dict):
                         .limit(1)
                     )
                     queue_item = queue_result.scalar_one_or_none()
-                    
+
                     # Get archive to extract start time and user
                     archive = None
                     if archive_id:
@@ -1963,27 +1960,27 @@ async def on_print_complete(printer_id: int, data: dict):
                             .where(PrintArchive.id == archive_id)
                         )
                         archive = archive_result.scalar_one_or_none()
-                    
+
                     # Get the username who started this print
                     # Priority: queue item creator > current user tracking > archive owner
                     username = None
                     queue_item_id = None
-                    
+
                     if queue_item:
                         queue_item_id = queue_item.id
                         if queue_item.created_by:
                             username = queue_item.created_by.username
-                    
+
                     # Fallback to current user tracking if no queue item
                     if not username:
                         current_user_dict = printer_manager.get_current_print_user(printer_id)
                         if current_user_dict:
                             username = current_user_dict.get("username")
-                    
+
                     # Final fallback to archive creator
                     if not username and archive and archive.created_by:
                         username = archive.created_by.username
-                    
+
                     # Update printer with last job info
                     printer.part_removal_required = True
                     printer.last_job_name = subtask_name or filename
@@ -1992,23 +1989,31 @@ async def on_print_complete(printer_id: int, data: dict):
                     # Use archive's actual start/end times, not created_at or current time
                     printer.last_job_start = archive.started_at if archive else None
                     # Fallback to current time if completed_at is not set (shouldn't happen for completed prints)
-                    printer.last_job_end = archive.completed_at if (archive and archive.completed_at) else datetime.now()
-                    
+                    printer.last_job_end = (
+                        archive.completed_at if (archive and archive.completed_at) else datetime.now()
+                    )
+
                     await db.commit()
                     logger.info(
-                        "[PART-REMOVAL] Updated printer %s with last job: %s by %s (queue_item_id=%s)", 
-                        printer_id, printer.last_job_name, printer.last_job_user, queue_item_id
+                        "[PART-REMOVAL] Updated printer %s with last job: %s by %s (queue_item_id=%s)",
+                        printer_id,
+                        printer.last_job_name,
+                        printer.last_job_user,
+                        queue_item_id,
                     )
-                    
+
                     # Send WebSocket update to notify frontend
-                    await ws_manager.send_printer_updated(printer_id, {
-                        "part_removal_required": True,
-                        "last_job_name": printer.last_job_name,
-                        "last_job_user": printer.last_job_user,
-                        "last_job_start": printer.last_job_start.isoformat() if printer.last_job_start else None,
-                        "last_job_end": printer.last_job_end.isoformat() if printer.last_job_end else None,
-                        "last_job_queue_item_id": queue_item_id,
-                    })
+                    await ws_manager.send_printer_updated(
+                        printer_id,
+                        {
+                            "part_removal_required": True,
+                            "last_job_name": printer.last_job_name,
+                            "last_job_user": printer.last_job_user,
+                            "last_job_start": printer.last_job_start.isoformat() if printer.last_job_start else None,
+                            "last_job_end": printer.last_job_end.isoformat() if printer.last_job_end else None,
+                            "last_job_queue_item_id": queue_item_id,
+                        },
+                    )
         except Exception as e:
             logger.warning("[PART-REMOVAL] Failed to update printer with last job info: %s", e)
 

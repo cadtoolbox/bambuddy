@@ -267,6 +267,7 @@ async def list_queue(
     if status == "not_collected":
         # Join with printer to filter by part_removal_required
         from backend.app.models.printer import Printer
+
         query = (
             query.join(Printer, PrintQueueItem.printer_id == Printer.id)
             .where(PrintQueueItem.status == "completed")

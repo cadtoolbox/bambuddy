@@ -2176,14 +2176,10 @@ async def create_dummy_part_removal(
     Only accessible to admin users.
     """
     from datetime import datetime, timedelta
-    from backend.app.core.auth import get_current_user_optional
-    from fastapi import Request
 
     # Get current user to check admin status and get username
     # We need to manually get the user here since we're using permission dependency
     # which might not return the user object
-    from backend.app.core.auth import require_auth_if_enabled
-    from fastapi import Depends as FastAPIDepends
 
     # For now, we'll create a simple check - this endpoint should only be accessible
     # via the frontend which will check admin status before allowing the long-press
