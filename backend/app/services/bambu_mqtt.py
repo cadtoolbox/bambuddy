@@ -2106,7 +2106,7 @@ class BambuMQTTClient:
                     "bed_type": "auto",
                     "timelapse": (1 if timelapse else 0) if is_h2d else timelapse,
                     "bed_leveling": (1 if bed_levelling else 0) if is_h2d else bed_levelling,
-                    "auto_bed_leveling": 1 if bed_levelling else 0,
+                    "auto_bed_leveling": (1 if bed_levelling else 0) if is_h2d else bed_levelling,
                     "flow_cali": (1 if flow_cali else 0) if is_h2d else flow_cali,
                     "vibration_cali": (1 if vibration_cali else 0) if is_h2d else vibration_cali,
                     "layer_inspect": (1 if layer_inspect else 0) if is_h2d else layer_inspect,
