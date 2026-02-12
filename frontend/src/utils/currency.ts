@@ -23,6 +23,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   THB: '฿',
   ZAR: 'R',
   TRY: '₺',
+  RUB: '₽',
 };
 
 export function getCurrencySymbol(currencyCode: string): string {
@@ -54,4 +55,5 @@ export const SUPPORTED_CURRENCIES = [
   { code: 'THB', label: 'THB (฿)' },
   { code: 'ZAR', label: 'ZAR (R)' },
   { code: 'TRY', label: 'TRY (₺)' },
+  { code: 'RUB', label: 'RUB (₽)' },
 ] as const;

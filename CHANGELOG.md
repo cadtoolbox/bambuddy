@@ -9,7 +9,7 @@ All notable changes to Bambuddy will be documented in this file.
 - **H2C Nozzle Rack Text Unreadable on Light Filament Colors** ([#300](https://github.com/maziggy/bambuddy/issues/300)) — Nozzle rack slots use the loaded filament color as background, but white/light filaments made the white "0.4" text nearly invisible. Now uses a luminance check to switch to dark text on light backgrounds.
 
 ### Improved
-- **Additional Currency Options** ([#329](https://github.com/maziggy/bambuddy/issues/329)) — Added 16 additional currencies to the cost tracking dropdown: HKD, INR, KRW, SEK, NOK, DKK, PLN, BRL, TWD, SGD, NZD, MXN, CZK, THB, ZAR.
+- **Additional Currency Options** ([#329](https://github.com/maziggy/bambuddy/issues/329), [#333](https://github.com/maziggy/bambuddy/issues/333)) — Added 17 additional currencies to the cost tracking dropdown: HKD, INR, KRW, SEK, NOK, DKK, PLN, BRL, TWD, SGD, NZD, MXN, CZK, THB, ZAR, RUB.
 - **Move Email Settings Under Authentication Tab** — Renamed the settings "Users" tab to "Authentication" and moved the standalone "Global Email" tab into it as an "Email Authentication" sub-tab. Groups email/SMTP configuration with user management where it logically belongs. Legacy `?tab=email` URLs are handled automatically.
 
 ## [0.1.9] - 2026-02-10
