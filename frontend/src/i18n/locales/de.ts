@@ -2462,6 +2462,8 @@ export default {
     searchSpoolWeight: 'Spulengewicht suchen...',
     weightUsed: 'Verbraucht',
     currentWeight: 'Restgewicht',
+    measuredWeight: 'Gemessenes Gewicht',
+    measuredWeightError: 'Das gemessene Gewicht muss zwischen {{min}}g und {{max}}g liegen.',
     slicerFilament: 'Slicer-Filament',
     slicerFilamentName: 'Slicer-Preset-Name',
     slicerPreset: 'Slicer-Preset',

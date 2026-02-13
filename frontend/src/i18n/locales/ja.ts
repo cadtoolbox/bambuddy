@@ -2393,6 +2393,8 @@ export default {
     searchSpoolWeight: 'スプール重量を検索...',
     weightUsed: '使用量',
     currentWeight: '残量',
+    measuredWeight: '計測重量',
+    measuredWeightError: '計測重量は{{min}}gから{{max}}gの間で入力してください。',
     slicerFilament: 'スライサーフィラメント',
     slicerFilamentName: 'スライサープリセット名',
     slicerPreset: 'スライサープリセット',

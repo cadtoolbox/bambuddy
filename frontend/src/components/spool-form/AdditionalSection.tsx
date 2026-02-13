@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Scale } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../../contexts/ToastContext';
 import type { AdditionalSectionProps } from './types';
 
 function SpoolWeightPicker({
@@ -129,6 +130,18 @@ export function AdditionalSection({
   spoolCatalog,
 }: AdditionalSectionProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [measuredInput, setMeasuredInput] = useState('');
+  const [isMeasuredFocused, setIsMeasuredFocused] = useState(false);
+
+  const remainingWeight = Math.max(0, formData.label_weight - formData.weight_used);
+  const measuredDefault = formData.core_weight + remainingWeight;
+
+  useEffect(() => {
+    if (!isMeasuredFocused) {
+      setMeasuredInput(String(measuredDefault));
+    }
+  }, [isMeasuredFocused, measuredDefault]);
 
   return (
     <div className="space-y-4">
@@ -146,7 +159,7 @@ export function AdditionalSection({
           <div className="relative flex-1">
             <input
               type="number"
-              value={Math.max(0, formData.label_weight - formData.weight_used)}
+              value={remainingWeight}
               min={0}
               max={formData.label_weight}
               onChange={(e) => {
@@ -158,6 +171,45 @@ export function AdditionalSection({
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-bambu-gray">g</span>
           </div>
           <span className="text-xs text-bambu-gray shrink-0">/ {formData.label_weight}g</span>
+        </div>
+      </div>
+
+      {/* Measured Weight (empty spool + remaining filament) */}
+      <div>
+        <label className="block text-sm font-medium text-bambu-gray mb-1">{t('inventory.measuredWeight')}</label>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="number"
+              value={measuredInput}
+              min={0}
+              onFocus={() => setIsMeasuredFocused(true)}
+              onChange={(e) => {
+                setMeasuredInput(e.target.value);
+              }}
+              onBlur={() => {
+                setIsMeasuredFocused(false);
+                const raw = measuredInput.trim();
+                const measured = Number(raw);
+                const minAllowed = formData.core_weight;
+                const maxAllowed = formData.core_weight + formData.label_weight;
+
+                if (!raw || !Number.isFinite(measured) || measured < minAllowed || measured > maxAllowed) {
+                  showToast(t('inventory.measuredWeightError', { min: minAllowed, max: maxAllowed }), 'error');
+                  setMeasuredInput(String(measuredDefault));
+                  return;
+                }
+
+                const rounded = Math.round(measured);
+                const remaining = Math.max(0, Math.min(formData.label_weight, rounded - formData.core_weight));
+                updateField('weight_used', Math.max(0, formData.label_weight - remaining));
+                setMeasuredInput(String(rounded));
+              }}
+              className="w-full px-3 py-2 pr-7 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:outline-none focus:border-bambu-green"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-bambu-gray">g</span>
+          </div>
+          <span className="text-xs text-bambu-gray shrink-0">/ {formData.core_weight + formData.label_weight}g</span>
         </div>
       </div>
 

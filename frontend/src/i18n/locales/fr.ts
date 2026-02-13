@@ -2458,6 +2458,8 @@ export default {
     searchSpoolWeight: 'Chercher poids bobine...',
     weightUsed: 'Consommé',
     currentWeight: 'Poids restant',
+    measuredWeight: 'Poids mesuré',
+    measuredWeightError: 'Le poids mesuré doit être entre {{min}}g et {{max}}g.',
     slicerFilament: 'Filament Slicer',
     slicerFilamentName: 'Nom du Preset Slicer',
     slicerPreset: 'Preset Slicer',

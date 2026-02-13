@@ -19,9 +19,12 @@ export function FilamentSection({
   const { t } = useTranslation();
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
+  const [subtypeDropdownOpen, setSubtypeDropdownOpen] = useState(false);
   const [brandSearch, setBrandSearch] = useState('');
+  const [subtypeSearch, setSubtypeSearch] = useState('');
   const presetRef = useRef<HTMLDivElement>(null);
   const brandRef = useRef<HTMLDivElement>(null);
+  const subtypeRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -31,6 +34,9 @@ export function FilamentSection({
       }
       if (brandRef.current && !brandRef.current.contains(e.target as Node)) {
         setBrandDropdownOpen(false);
+      }
+      if (subtypeRef.current && !subtypeRef.current.contains(e.target as Node)) {
+        setSubtypeDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -53,6 +59,12 @@ export function FilamentSection({
     const search = brandSearch.toLowerCase();
     return availableBrands.filter(b => b.toLowerCase().includes(search));
   }, [availableBrands, brandSearch]);
+
+  const filteredVariants = useMemo(() => {
+    if (!subtypeSearch) return KNOWN_VARIANTS;
+    const search = subtypeSearch.toLowerCase();
+    return KNOWN_VARIANTS.filter(v => v.toLowerCase().includes(search));
+  }, [subtypeSearch]);
 
   // Handle preset selection
   const handlePresetSelect = (option: FilamentOption) => {
@@ -210,20 +222,59 @@ export function FilamentSection({
       {/* Variant / Subtype */}
       <div>
         <label className="block text-sm font-medium text-bambu-gray mb-1">{t('inventory.subtype')}</label>
-        <div className="relative">
+        <div className="relative" ref={subtypeRef}>
           <input
             type="text"
-            value={formData.subtype}
-            onChange={(e) => updateField('subtype', e.target.value)}
-            list="variant-suggestions"
+            value={subtypeDropdownOpen ? subtypeSearch : formData.subtype}
+            onChange={(e) => {
+              setSubtypeSearch(e.target.value);
+              setSubtypeDropdownOpen(true);
+            }}
+            onFocus={() => {
+              setSubtypeDropdownOpen(true);
+              setSubtypeSearch('');
+            }}
             placeholder="Basic, Matte, Silk..."
             className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm placeholder:text-bambu-gray/50 focus:outline-none focus:border-bambu-green"
           />
-          <datalist id="variant-suggestions">
-            {KNOWN_VARIANTS.map(v => (
-              <option key={v} value={v} />
-            ))}
-          </datalist>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/50 pointer-events-none" />
+          {subtypeDropdownOpen && (
+            <div className="absolute z-50 w-full mt-1 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {filteredVariants.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-bambu-gray">{t('inventory.noResults')}</div>
+              ) : (
+                filteredVariants.map(variant => (
+                  <button
+                    key={variant}
+                    type="button"
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-bambu-dark-tertiary ${
+                      formData.subtype === variant ? 'bg-bambu-green/10 text-bambu-green' : 'text-white'
+                    }`}
+                    onClick={() => {
+                      updateField('subtype', variant);
+                      setSubtypeDropdownOpen(false);
+                      setSubtypeSearch('');
+                    }}
+                  >
+                    {variant}
+                  </button>
+                ))
+              )}
+              {subtypeSearch && !KNOWN_VARIANTS.some(v => v.toLowerCase() === subtypeSearch.toLowerCase().trim()) && (
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-bambu-dark-tertiary text-bambu-green border-t border-bambu-dark-tertiary"
+                  onClick={() => {
+                    updateField('subtype', subtypeSearch);
+                    setSubtypeDropdownOpen(false);
+                    setSubtypeSearch('');
+                  }}
+                >
+                  {t('inventory.useCustomBrand', { brand: subtypeSearch })}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
