@@ -468,6 +468,26 @@ class SpoolmanClient:
                         return spool
         return None
 
+    def _find_spool_by_location(self, location: str, cached_spools: list[dict] | None) -> dict | None:
+        """Find a spool by exact location match.
+
+        Used as fallback when RFID tag data is unavailable (e.g., newer firmware
+        that doesn't expose tray_uuid/tag_uid via MQTT).
+
+        Args:
+            location: Exact location string (e.g., "H2D-1 - AMS A1")
+            cached_spools: Pre-fetched list of spools to search
+
+        Returns:
+            Spool dictionary or None if not found.
+        """
+        if not cached_spools:
+            return None
+        for spool in cached_spools:
+            if spool.get("location") == location:
+                return spool
+        return None
+
     async def find_spools_by_location_prefix(
         self, location_prefix: str, cached_spools: list[dict] | None = None
     ) -> list[dict]:
@@ -494,17 +514,21 @@ class SpoolmanClient:
         printer_name: str,
         current_tray_uuids: set[str],
         cached_spools: list[dict] | None = None,
+        synced_spool_ids: set[int] | None = None,
     ) -> int:
         """Clear location for spools that are no longer in the AMS.
 
         When a spool is removed from the AMS, its location should be cleared
         in Spoolman. This method finds all spools with locations for this printer
-        and clears the location for any that are not in the current_tray_uuids set.
+        and clears the location for any that are not in the current_tray_uuids set
+        and were not synced in this cycle (synced_spool_ids).
 
         Args:
             printer_name: The printer name used as location prefix
             current_tray_uuids: Set of tray_uuids currently in the AMS
             cached_spools: Optional pre-fetched list of spools to search (avoids API call)
+            synced_spool_ids: Set of spool IDs that were synced in this cycle
+                (protects location-matched spools when RFID data is unavailable)
 
         Returns:
             Number of spools whose location was cleared.
@@ -514,6 +538,12 @@ class SpoolmanClient:
         cleared_count = 0
 
         for spool in spools_at_printer:
+            spool_id = spool.get("id")
+
+            # Skip spools that were just synced (matched by location or tag)
+            if synced_spool_ids and spool_id in synced_spool_ids:
+                continue
+
             # Get the tray_uuid (stored as "tag" in extra field)
             extra = spool.get("extra", {}) or {}
             stored_tag = extra.get("tag", "")
@@ -526,10 +556,10 @@ class SpoolmanClient:
             # If this spool's UUID is not in the current AMS, clear its location
             if spool_uuid not in current_tray_uuids:
                 logger.info(
-                    f"Clearing location for spool {spool['id']} "
+                    f"Clearing location for spool {spool_id} "
                     f"(was: {spool.get('location')}, uuid: {spool_uuid[:16] if spool_uuid else 'none'}...)"
                 )
-                result = await self.update_spool(spool_id=spool["id"], clear_location=True)
+                result = await self.update_spool(spool_id=spool_id, clear_location=True)
                 if result:
                     cleared_count += 1
 
@@ -774,48 +804,74 @@ class SpoolmanClient:
             tray.tray_uuid if tray.tray_uuid and tray.tray_uuid != "00000000000000000000000000000000" else tray.tag_uid
         )
 
-        # If no unique identifier available, we can't sync even if it's a Bambu Lab spool
-        if not spool_tag:
-            logger.warning(
-                f"Bambu Lab spool detected but no unique identifier for Spoolman: "
-                f"{printer_name} AMS {tray.ams_id} tray {tray.tray_id} (tray_info_idx={tray.tray_info_idx})"
-            )
-            return None
-
-        # Calculate remaining weight
-        remaining = self.calculate_remaining_weight(tray.remain, tray.tray_weight)
+        # Calculate remaining weight (skip if data is invalid/unavailable)
+        # Some firmware sends remain=-1 (→0 after max) and tray_weight=0, making weight unreliable
+        remaining = (
+            self.calculate_remaining_weight(tray.remain, tray.tray_weight)
+            if tray.remain > 0 and tray.tray_weight > 0
+            else None
+        )
         location = f"{printer_name} - {self.convert_ams_slot_to_location(tray.ams_id, tray.tray_id)}"
 
-        # Find existing spool by tag (tray_uuid or tag_uid, stored as "tag" in Spoolman)
-        existing = await self.find_spool_by_tag(spool_tag, cached_spools=cached_spools)
+        if spool_tag:
+            # Primary path: match by RFID tag
+            existing = await self.find_spool_by_tag(spool_tag, cached_spools=cached_spools)
+            if existing:
+                logger.info("Updating existing spool %s for tag %s...", existing["id"], spool_tag[:16])
+                return await self.update_spool(
+                    spool_id=existing["id"],
+                    remaining_weight=None if disable_weight_sync else remaining,
+                    location=location,
+                )
+
+            # Spool not found by tag - auto-create it
+            logger.info("Creating new spool in Spoolman for %s (tag: %s...)", tray.tray_sub_brands, spool_tag[:16])
+            filament = await self._find_or_create_filament(tray)
+            if not filament:
+                logger.error("Failed to find or create filament for %s", tray.tray_sub_brands)
+                return None
+
+            import json
+
+            return await self.create_spool(
+                filament_id=filament["id"],
+                remaining_weight=remaining,
+                location=location,
+                comment="Created by Bambuddy",
+                extra={"tag": json.dumps(spool_tag)},
+            )
+
+        # Fallback path: no RFID tag available (newer firmware may not expose UUIDs)
+        # Match existing Spoolman spools by their location (AMS slot position)
+        existing = self._find_spool_by_location(location, cached_spools)
         if existing:
-            # Update existing spool
-            logger.info("Updating existing spool %s for tag %s...", existing["id"], spool_tag[:16])
+            logger.info(
+                "Updating spool %s by location match '%s' (no RFID tag available)",
+                existing["id"],
+                location,
+            )
             return await self.update_spool(
                 spool_id=existing["id"],
                 remaining_weight=None if disable_weight_sync else remaining,
                 location=location,
             )
 
-        # Spool not found - auto-create it
-        logger.info("Creating new spool in Spoolman for %s (tag: %s...)", tray.tray_sub_brands, spool_tag[:16])
-
-        # First find or create the filament type
+        # No existing spool at this location — create a new one without a tag
+        logger.info(
+            "Creating new spool in Spoolman for %s at %s (no RFID tag available)",
+            tray.tray_sub_brands,
+            location,
+        )
         filament = await self._find_or_create_filament(tray)
         if not filament:
             logger.error("Failed to find or create filament for %s", tray.tray_sub_brands)
             return None
-
-        # Create the spool with identifier stored as "tag" in extra field
-        # Note: Spoolman extra field values must be valid JSON, so we encode the string
-        import json
 
         return await self.create_spool(
             filament_id=filament["id"],
             remaining_weight=remaining,
             location=location,
             comment="Created by Bambuddy",
-            extra={"tag": json.dumps(spool_tag)},
         )
 
     async def _find_or_create_filament(self, tray: AMSTray) -> dict | None:

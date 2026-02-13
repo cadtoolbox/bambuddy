@@ -345,6 +345,8 @@ async def sync_all_printers(
     all_errors = []
     # Track tray UUIDs per printer (for clearing removed spools)
     printer_tray_uuids: dict[str, set[str]] = {}
+    # Track synced spool IDs per printer (for location-based cleanup when no UUIDs available)
+    printer_synced_ids: dict[str, set[int]] = {}
 
     # OPTIMIZATION: Fetch all spools once before processing ALL printers/trays
     # This eliminates redundant API calls across all printers
@@ -368,8 +370,9 @@ async def sync_all_printers(
         if not ams_data:
             continue
 
-        # Initialize tray UUID set for this printer
+        # Initialize tracking sets for this printer
         printer_tray_uuids[printer.name] = set()
+        printer_synced_ids[printer.name] = set()
 
         # Handle different AMS data structures
         # Traditional AMS: list of {"id": N, "tray": [...]} dicts
@@ -440,8 +443,10 @@ async def sync_all_printers(
                     )
                     if sync_result:
                         total_synced += 1
-                        # Add newly created spool to cache
+                        # Track synced spool ID for cleanup
                         if sync_result.get("id"):
+                            printer_synced_ids[printer.name].add(sync_result["id"])
+                            # Add newly created spool to cache
                             spool_exists = any(s.get("id") == sync_result["id"] for s in cached_spools)
                             if not spool_exists:
                                 cached_spools.append(sync_result)
@@ -453,7 +458,10 @@ async def sync_all_printers(
     for printer_name, current_tray_uuids in printer_tray_uuids.items():
         try:
             cleared = await client.clear_location_for_removed_spools(
-                printer_name, current_tray_uuids, cached_spools=cached_spools
+                printer_name,
+                current_tray_uuids,
+                cached_spools=cached_spools,
+                synced_spool_ids=printer_synced_ids.get(printer_name, set()),
             )
             if cleared > 0:
                 logger.info("Cleared location for %s spools removed from %s", cleared, printer_name)

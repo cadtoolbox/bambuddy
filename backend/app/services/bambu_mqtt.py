@@ -945,8 +945,9 @@ class BambuMQTTClient:
                                 # Fields that should always be updated (even with empty/zero values):
                                 # - remain, k, id, cali_idx: status indicators where 0 is valid
                                 # - tray_type, tray_sub_brands, tag_uid, tray_uuid, tray_info_idx,
-                                #   tray_color, tray_id_name: slot content indicators that must be
-                                #   cleared when a spool is removed (fixes #147 - old AMS empty slot)
+                                #   tray_color, tray_id_name: slot content indicators that must
+                                #   be cleared when a spool is removed (fixes #147 - old AMS
+                                #   empty slot)
                                 always_update_fields = (
                                     "remain",
                                     "k",
@@ -1066,7 +1067,9 @@ class BambuMQTTClient:
             self._previous_ams_hash = ams_hash
             if self.on_ams_change:
                 logger.info("[%s] AMS data changed, triggering sync callback", self.serial_number)
-                self.on_ams_change(ams_list)
+                # Pass merged AMS data (not raw ams_list) — partial MQTT updates
+                # may lack fields like 'remain' that the merged state preserves
+                self.on_ams_change(merged_ams)
 
     def _update_state(self, data: dict):
         """Update printer state from message data."""
