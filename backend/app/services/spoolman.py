@@ -658,8 +658,8 @@ class SpoolmanClient:
         # Get tray_info_idx (Bambu filament preset ID like "GFA00")
         tray_info_idx = tray_data.get("tray_info_idx", "") or ""
 
-        # Get remaining percentage, ensure non-negative
-        remain = max(0, int(tray_data.get("remain", 0)))
+        # Get remaining percentage (-1 means unknown/not read by AMS)
+        remain = int(tray_data.get("remain", -1))
 
         return AMSTray(
             ams_id=ams_id,
@@ -760,6 +760,7 @@ class SpoolmanClient:
         printer_name: str,
         disable_weight_sync: bool = False,
         cached_spools: list[dict] | None = None,
+        inventory_remaining: float | None = None,
     ) -> dict | None:
         """Sync a single AMS tray to Spoolman.
 
@@ -777,6 +778,8 @@ class SpoolmanClient:
             cached_spools: Optional pre-fetched list of spools to search (avoids API calls).
                 When provided, this cache is passed to find_spool_by_tag to avoid redundant
                 API calls during batch sync operations.
+            inventory_remaining: Optional fallback remaining weight (grams) from the built-in
+                inventory when AMS MQTT data has invalid remain/tray_weight values.
 
         Returns:
             Synced spool dictionary or None if skipped or failed.
@@ -800,17 +803,31 @@ class SpoolmanClient:
             return None
 
         # Determine which identifier to use for Spoolman (prefer tray_uuid, fallback to tag_uid)
-        spool_tag = (
-            tray.tray_uuid if tray.tray_uuid and tray.tray_uuid != "00000000000000000000000000000000" else tray.tag_uid
-        )
+        # Zero-filled values mean the AMS hasn't read the RFID tag — treat as no tag
+        zero_uuid = "00000000000000000000000000000000"
+        zero_tag = "0000000000000000"
+        spool_tag = None
+        if tray.tray_uuid and tray.tray_uuid != zero_uuid:
+            spool_tag = tray.tray_uuid
+        elif tray.tag_uid and tray.tag_uid != zero_tag:
+            spool_tag = tray.tag_uid
 
-        # Calculate remaining weight (skip if data is invalid/unavailable)
-        # Some firmware sends remain=-1 (→0 after max) and tray_weight=0, making weight unreliable
-        remaining = (
-            self.calculate_remaining_weight(tray.remain, tray.tray_weight)
-            if tray.remain > 0 and tray.tray_weight > 0
-            else None
-        )
+        # Calculate remaining weight
+        # Primary: AMS MQTT data (remain percentage + tray_weight)
+        # Fallback: Built-in inventory tracked weight (when firmware sends invalid remain/tray_weight)
+        if tray.remain >= 0 and tray.tray_weight > 0:
+            remaining = self.calculate_remaining_weight(tray.remain, tray.tray_weight)
+        elif inventory_remaining is not None:
+            remaining = inventory_remaining
+            logger.debug(
+                "Using inventory weight fallback for %s AMS %s tray %s: %.1fg",
+                printer_name,
+                tray.ams_id,
+                tray.tray_id,
+                remaining,
+            )
+        else:
+            remaining = None
         location = f"{printer_name} - {self.convert_ams_slot_to_location(tray.ams_id, tray.tray_id)}"
 
         if spool_tag:
@@ -842,7 +859,8 @@ class SpoolmanClient:
             )
 
         # Fallback path: no RFID tag available (newer firmware may not expose UUIDs)
-        # Match existing Spoolman spools by their location (AMS slot position)
+        # Only update existing spools matched by location — never create new ones without a tag
+        # to avoid duplicates when old spools exist from previous RFID-based syncs
         existing = self._find_spool_by_location(location, cached_spools)
         if existing:
             logger.info(
@@ -856,23 +874,11 @@ class SpoolmanClient:
                 location=location,
             )
 
-        # No existing spool at this location — create a new one without a tag
         logger.info(
-            "Creating new spool in Spoolman for %s at %s (no RFID tag available)",
-            tray.tray_sub_brands,
+            "No existing spool found at '%s' — skipping (no RFID tag to create with)",
             location,
         )
-        filament = await self._find_or_create_filament(tray)
-        if not filament:
-            logger.error("Failed to find or create filament for %s", tray.tray_sub_brands)
-            return None
-
-        return await self.create_spool(
-            filament_id=filament["id"],
-            remaining_weight=remaining,
-            location=location,
-            comment="Created by Bambuddy",
-        )
+        return None
 
     async def _find_or_create_filament(self, tray: AMSTray) -> dict | None:
         """Find existing filament or create new one.

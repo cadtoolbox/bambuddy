@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.app.core.auth import RequirePermissionIfAuthEnabled
 from backend.app.core.database import get_db
 from backend.app.core.permissions import Permission
 from backend.app.models.printer import Printer
 from backend.app.models.settings import Settings
+from backend.app.models.spool_assignment import SpoolAssignment
 from backend.app.models.user import User
 from backend.app.services.printer_manager import printer_manager
 from backend.app.services.spoolman import (
@@ -230,6 +232,22 @@ async def sync_printer_ams(
             detail=f"Failed to connect to Spoolman after multiple retries: {str(e)}",
         )
 
+    # Load inventory weights as fallback (when AMS MQTT data lacks remain values)
+    inv_weights: dict[tuple[int, int], float] = {}
+    try:
+        assign_result = await db.execute(
+            select(SpoolAssignment)
+            .options(selectinload(SpoolAssignment.spool))
+            .where(SpoolAssignment.printer_id == printer_id)
+        )
+        for assignment in assign_result.scalars().all():
+            spool = assignment.spool
+            if spool and spool.label_weight > 0:
+                remaining = max(0.0, spool.label_weight - (spool.weight_used or 0))
+                inv_weights[(assignment.ams_id, assignment.tray_id)] = remaining
+    except Exception as e:
+        logger.debug("Could not load inventory weights for printer %s: %s", printer_id, e)
+
     for ams_unit in ams_units:
         if not isinstance(ams_unit, dict):
             continue
@@ -270,11 +288,13 @@ async def sync_printer_ams(
                 current_tray_uuids.add(spool_tag.upper())
 
             try:
+                inv_remaining = inv_weights.get((ams_id, tray.tray_id))
                 sync_result = await client.sync_ams_tray(
                     tray,
                     printer.name,
                     disable_weight_sync=disable_weight_sync,
                     cached_spools=cached_spools,
+                    inventory_remaining=inv_remaining,
                 )
                 if sync_result:
                     synced += 1
@@ -361,6 +381,19 @@ async def sync_all_printers(
             detail=f"Failed to connect to Spoolman after multiple retries: {str(e)}",
         )
 
+    # Load inventory assignments for weight fallback (when AMS MQTT data lacks remain values)
+    # Key: (printer_id, ams_id, tray_id) → remaining_weight in grams
+    inventory_weights: dict[tuple[int, int, int], float] = {}
+    try:
+        assign_result = await db.execute(select(SpoolAssignment).options(selectinload(SpoolAssignment.spool)))
+        for assignment in assign_result.scalars().all():
+            spool = assignment.spool
+            if spool and spool.label_weight > 0:
+                remaining = max(0.0, spool.label_weight - (spool.weight_used or 0))
+                inventory_weights[(assignment.printer_id, assignment.ams_id, assignment.tray_id)] = remaining
+    except Exception as e:
+        logger.debug("Could not load inventory assignments for weight fallback: %s", e)
+
     for printer in printers:
         state = printer_manager.get_status(printer.id)
         if not state or not state.raw_data:
@@ -435,11 +468,14 @@ async def sync_all_printers(
                     printer_tray_uuids[printer.name].add(spool_tag.upper())
 
                 try:
+                    # Look up inventory weight as fallback when AMS data is invalid
+                    inv_remaining = inventory_weights.get((printer.id, ams_id, tray.tray_id))
                     sync_result = await client.sync_ams_tray(
                         tray,
                         printer.name,
                         disable_weight_sync=disable_weight_sync,
                         cached_spools=cached_spools,
+                        inventory_remaining=inv_remaining,
                     )
                     if sync_result:
                         total_synced += 1

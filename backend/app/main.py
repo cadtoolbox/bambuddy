@@ -771,6 +771,26 @@ async def on_ams_change(printer_id: int, ams_data: list):
                 )
                 return
 
+            # Load inventory weights as fallback (when AMS MQTT data lacks remain values)
+            from sqlalchemy.orm import selectinload
+
+            from backend.app.models.spool_assignment import SpoolAssignment
+
+            inventory_weights: dict[tuple[int, int], float] = {}
+            try:
+                assign_result = await db.execute(
+                    select(SpoolAssignment)
+                    .options(selectinload(SpoolAssignment.spool))
+                    .where(SpoolAssignment.printer_id == printer_id)
+                )
+                for assignment in assign_result.scalars().all():
+                    spool = assignment.spool
+                    if spool and spool.label_weight > 0:
+                        remaining = max(0.0, spool.label_weight - (spool.weight_used or 0))
+                        inventory_weights[(assignment.ams_id, assignment.tray_id)] = remaining
+            except Exception as e:
+                logger.debug("Could not load inventory weights for printer %s: %s", printer_id, e)
+
             # Sync each AMS tray
             synced = 0
             for ams_unit in ams_data:
@@ -783,11 +803,13 @@ async def on_ams_change(printer_id: int, ams_data: list):
                         continue  # Empty tray
 
                     try:
+                        inv_remaining = inventory_weights.get((ams_id, tray.tray_id))
                         result = await client.sync_ams_tray(
                             tray,
                             printer_name,
                             disable_weight_sync=disable_weight_sync,
                             cached_spools=cached_spools,
+                            inventory_remaining=inv_remaining,
                         )
                         if result:
                             synced += 1
