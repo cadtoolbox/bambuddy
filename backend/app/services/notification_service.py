@@ -345,7 +345,9 @@ class NotificationService:
         except Exception as e:
             return False, f"Email error: {str(e)}"
 
-    async def _send_discord(self, config: dict, title: str, message: str) -> tuple[bool, str]:
+    async def _send_discord(
+        self, config: dict, title: str, message: str, image_data: bytes | None = None
+    ) -> tuple[bool, str]:
         """Send notification via Discord webhook."""
         webhook_url = config.get("webhook_url", "").strip()
 
@@ -356,18 +358,25 @@ class NotificationService:
             return False, "Invalid Discord webhook URL"
 
         # Discord embed format for nicer messages
-        data = {
-            "embeds": [
-                {
-                    "title": title,
-                    "description": message,
-                    "color": 0x00AE42,  # Bambu green
-                }
-            ]
+        embed = {
+            "title": title,
+            "description": message,
+            "color": 0x00AE42,  # Bambu green
         }
 
         client = await self._get_client()
-        response = await client.post(webhook_url, json=data)
+
+        if image_data:
+            # Attach image via multipart form-data and reference in embed
+            embed["image"] = {"url": "attachment://photo.jpg"}
+            payload = {"embeds": [embed]}
+            response = await client.post(
+                webhook_url,
+                data={"payload_json": json.dumps(payload)},
+                files={"files[0]": ("photo.jpg", image_data, "image/jpeg")},
+            )
+        else:
+            response = await client.post(webhook_url, json={"embeds": [embed]})
 
         if response.status_code in (200, 204):
             return True, "Message sent successfully"
@@ -450,7 +459,7 @@ class NotificationService:
             elif provider.provider_type == "email":
                 return await self._send_email(config, title, message)
             elif provider.provider_type == "discord":
-                return await self._send_discord(config, title, message)
+                return await self._send_discord(config, title, message, image_data=image_data)
             elif provider.provider_type == "webhook":
                 return await self._send_webhook(config, title, message)
             else:
