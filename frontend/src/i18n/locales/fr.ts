@@ -8,6 +8,7 @@ export default {
     profiles: 'Profils',
     maintenance: 'Maintenance',
     projects: 'Projets',
+    inventory: 'Filament',
     files: 'Gestionnaire de fichiers',
     settings: 'Paramètres',
     system: 'Système',
@@ -74,6 +75,8 @@ export default {
     dismiss: 'Ignorer',
     apply: 'Appliquer',
     reset: 'Réinitialiser',
+    export: 'Exporter',
+    import: 'Importer',
     clear: 'Effacer',
     selectAll: 'Tout sélectionner',
     deselectAll: 'Tout désélectionner',
@@ -121,6 +124,7 @@ export default {
     nozzleCount: 'Nombre de buses',
     autoArchive: 'Auto-archivage',
     status: {
+      available: 'Disponible',
       idle: 'Inactif',
       printing: 'Impression en cours',
       paused: 'En pause',
@@ -142,6 +146,7 @@ export default {
     maintenanceWarning_plural: '{{count}} avertissements',
     maintenanceDue: '{{count}} échéance',
     maintenanceDue_plural: '{{count}} échéances',
+    // Sort options
     sort: {
       name: 'Nom',
       status: 'Statut',
@@ -150,16 +155,20 @@ export default {
       ascending: 'Tri croissant',
       descending: 'Tri décroissant',
     },
+    // Card size
     cardSize: {
       small: 'Petites cartes',
       medium: 'Cartes moyennes',
       large: 'Grandes cartes',
       extraLarge: 'Très grandes cartes',
     },
-    hideOffline: 'Masquer les imprimantes hors ligne',
+    // Controls
+    hideOffline: 'Masquer hors ligne',
+    nextAvailable: 'Prochaine disponible',
     powerOn: 'Allumer',
     offlinePrintersWithPlugs: 'Imprimantes hors ligne avec prises connectées',
     noPrintersConfigured: 'Aucune imprimante configurée pour le moment',
+    // Printer card
     readyToPrint: 'Prête à imprimer',
     external: 'Externe',
     deleteArchives: 'Supprimer les archives d\'impression',
@@ -173,6 +182,7 @@ export default {
     name: 'Nom',
     serialCannotBeChanged: 'Le numéro de série ne peut pas être modifié',
     locationHelp: 'Utilisé pour grouper les imprimantes et filtrer la file d\'attente',
+    // WiFi signal strength
     wifiSignal: {
       veryWeak: 'Très faible',
       weak: 'Faible',
@@ -180,14 +190,20 @@ export default {
       good: 'Bon',
       excellent: 'Excellent',
     },
+    // Maintenance
     maintenanceUpToDate: 'Maintenance à jour - Cliquez pour voir',
+    // Chamber light
     chamberLightOn: 'Allumer la lumière de la chambre',
     chamberLightOff: 'Éteindre la lumière de la chambre',
+    // Files
     browseFiles: 'Parcourir les fichiers de l\'imprimante',
+    // Smart plug
     autoOffAfterPrint: 'Extinction auto après impression',
     autoOffExecuted: 'Extinction auto exécutée - rallumez pour réinitialiser',
+    // HMS errors
     hmsErrors: 'Erreurs HMS',
     viewHmsErrors: 'Voir {{count}} erreur(s) HMS',
+    // Actions
     resume: 'Reprendre',
     pause: 'Pause',
     stop: 'Arrêter',
@@ -214,15 +230,18 @@ export default {
     nozzleFlow: 'Débit',
     nozzleHighFlow: 'Haut débit',
     nozzleStandardFlow: 'Standard',
+    // Firmware
     firmwareUpdate: 'Mise à jour Firmware',
     firmwareInstructions: 'Sur l\'écran de l\'imprimante, allez dans',
     firmwareNav: 'Naviguez vers',
     settings: 'Paramètres',
     firmware: 'Firmware',
+    // Discovery
     discoverPrinters: 'Découvrir les imprimantes',
     searching: 'Recherche...',
     manualEntry: 'Saisie manuelle',
     addFromCloud: 'Ajouter depuis le Cloud',
+    // Toast messages
     toast: {
       printerDeleted: 'Imprimante supprimée',
       printerAdded: 'Imprimante ajoutée',
@@ -258,18 +277,23 @@ export default {
       calibrationFailed: 'Échec de la calibration',
       rfidRereadInitiated: 'Lecture RFID initiée',
     },
+    // Connection status
     connection: {
       connected: 'Connecté',
       offline: 'Hors ligne',
     },
+    // Queue info
     queue: {
       inQueue: '{{count}} impression en file',
       inQueue_plural: '{{count}} impressions en file',
     },
+    // Controls section
     controls: 'Contrôles',
+    // RFID
     rfid: {
       reread: 'Relire RFID',
     },
+    // Permissions
     permission: {
       noAdd: 'Pas d\'autorisation pour ajouter',
       noEdit: 'Pas d\'autorisation pour modifier',
@@ -279,6 +303,7 @@ export default {
       noAmsRfid: 'Pas d\'autorisation pour le RFID',
       noSmartPlugControl: 'Pas d\'autorisation pour les prises',
     },
+    // Add/Edit modal
     modal: {
       addTitle: 'Ajouter une imprimante',
       editTitle: 'Modifier l\'imprimante',
@@ -291,6 +316,7 @@ export default {
       modelOptional: 'Modèle (optionnel)',
       saveChanges: 'Enregistrer les modifications',
     },
+    // Skip objects
     skipObjects: {
       tooltip: 'Sauter des objets',
       onlyWhilePrinting: 'Sauter (uniquement pendant l\'impression)',
@@ -305,9 +331,12 @@ export default {
       skipped: 'sauté',
       objectsSkipped: 'Objets sautés',
       activeCount: '{{count}} actifs',
-      waitForLayer: 'Attendez la couche 2 pour sauter des objets (couche actuelle : {{layer}})',
+      waitForLayer: 'Attendez la couche 2 pour sauter des objets (actuelle : {{layer}})',
       skip: 'Sauter',
+      confirmTitle: 'Sauter l\'objet ?',
+      confirmMessage: 'Voulez-vous vraiment sauter "{{name}}" ? Cette action est irréversible.',
     },
+    // Confirm modals
     confirm: {
       deleteTitle: 'Supprimer l\'imprimante',
       deleteMessage: 'Supprimer "{{name}}" ? Cela retirera tous les paramètres de connexion.',
@@ -330,6 +359,7 @@ export default {
       powerOffWarning: 'ATTENTION : "{{name}}" imprime ! L\'éteindre maintenant peut endommager l\'imprimante.',
       powerOffButton: 'Éteindre',
     },
+    // Discovery
     discovery: {
       title: 'Découvrir les imprimantes',
       searching: 'Recherche...',
@@ -354,12 +384,16 @@ export default {
       unknown: 'Inconnu',
       failedToStart: 'Échec du démarrage de la découverte',
     },
+    // Filaments section
     filaments: 'Filaments',
+    // Camera
     openCameraOverlay: 'Ouvrir la caméra en superposition',
     openCameraWindow: 'Ouvrir la caméra dans une fenêtre',
+    // Firmware
     firmwareUpdateAvailable: 'Mise à jour firmware : {{current}} → {{latest}}',
     firmwareUpToDate: 'Firmware {{version}} — À jour',
     firmwareUpdateButton: 'Mettre à jour',
+    // Plate detection
     plateDetection: {
       noPermission: 'Pas d\'autorisation de modification',
       enabledClick: 'Vérification activée - Cliquez pour désactiver',
@@ -368,7 +402,7 @@ export default {
       calibrationRequired: 'Calibration requise',
       calibrationInstructions: 'Videz le plateau, puis cliquez sur Calibrer.',
       calibrationDescription: 'Capture une image de référence du plateau vide.',
-      calibrationTip: 'Conseil : Stockez jusqu\'à 5 références pour différents plateaux.',
+      calibrationTip: 'Conseil : Stockez jusqu\'à 5 références. Le système utilise la meilleure correspondance.',
       plateEmpty: 'Le plateau semble vide',
       objectsDetected: 'Objets détectés sur le plateau',
       confidence: 'Confiance',
@@ -381,14 +415,17 @@ export default {
       clickToEdit: '{{label}} - Modifier',
       clickToAddLabel: 'Ajouter une étiquette',
     },
+    // Fans
     fans: {
       partCooling: 'Ventilateur pièce',
       auxiliary: 'Ventilateur auxiliaire',
       chamber: 'Ventilateur chambre',
     },
+    // HMS errors
     clickToViewHmsErrors: 'Cliquez pour voir les erreurs HMS',
     estimatedCompletion: 'Fin estimée',
     slotOptions: 'Options du slot',
+    // Firmware modal
     firmwareModal: {
       title: 'Mise à jour Firmware',
       titleUpToDate: 'Infos Firmware',
@@ -410,6 +447,7 @@ export default {
       uploadedToast: 'Firmware téléversé ! Lancez la mise à jour sur l\'écran.',
     },
     accessCodePlaceholder: 'Laissez vide pour garder l\'actuel',
+    // ROI editor
     roi: {
       title: 'Zone de détection (ROI)',
       xStart: 'Début X',
@@ -638,6 +676,7 @@ export default {
     title: 'File d\'attente',
     subtitle: 'Gérez vos travaux d\'impression',
     addToQueue: 'Ajouter à la file',
+    // Print modal
     print: 'Imprimer',
     reprint: 'Réimprimer',
     schedulePrint: 'Planifier',
@@ -665,11 +704,17 @@ export default {
     dragToReorder: 'Glisser pour réordonner (ASAP uniquement)',
     reorderHint: 'La position n\'affecte que les éléments ASAP.',
     addedBy: 'Ajouté par {{name}}',
+    nextInQueue: 'Prochain en file',
+    clearPlate: 'Vider plateau & lancer suivant',
+    clearPlateSuccess: 'Plateau vidé — prêt pour l\'impression suivante',
+    plateReady: 'Plateau vidé — prêt pour l\'impression suivante',
+    // Sections
     sections: {
       currentlyPrinting: 'En cours',
       queued: 'En attente',
       history: 'Historique',
     },
+    // Status
     status: {
       pending: 'En attente',
       waiting: 'En attente',
@@ -680,12 +725,14 @@ export default {
       skipped: 'Sauté',
       cancelled: 'Annulé',
     },
+    // Summary cards
     summary: {
       printing: 'Impressions',
       queued: 'En attente',
       totalTime: 'Temps total estimé',
       history: 'Historique',
     },
+    // Filters
     filter: {
       allPrinters: 'Toutes les imprimantes',
       unassigned: 'Non assigné',
@@ -693,6 +740,7 @@ export default {
       allLocations: 'Tous les emplacements',
       any: 'Tout',
     },
+    // Sort
     sort: {
       byPosition: 'Par position',
       byName: 'Par nom',
@@ -702,15 +750,18 @@ export default {
       ascendingOldest: 'Croissant (plus vieux)',
       descendingNewest: 'Décroissant (plus récent)',
     },
+    // Badges
     badges: {
       staged: 'Préparé',
       requiresPrevious: 'Nécessite succès précédent',
       autoPowerOff: 'Extinction auto',
     },
+    // Empty state
     empty: {
       title: 'Aucune impression prévue',
       description: 'Planifiez depuis les Archives ou glissez des fichiers ici.',
     },
+    // Time
     time: {
       asap: 'Dès que possible',
       overdue: 'En retard',
@@ -719,11 +770,13 @@ export default {
       inMinutes: 'Dans {{count}} min',
       inHours: 'Dans {{count}} heures',
     },
+    // Actions
     actions: {
       stopPrint: 'Arrêter',
       startPrint: 'Démarrer',
       requeue: 'Remettre en file',
     },
+    // Bulk edit
     bulkEdit: {
       title: 'Modifier {{count}} élément',
       title_plural: 'Modifier {{count}} éléments',
@@ -748,6 +801,7 @@ export default {
       editSelected: 'Modifier la sélection',
       cancelSelected: 'Annuler la sélection',
     },
+    // Confirmations
     confirm: {
       cancelTitle: 'Annuler l\'impression prévue',
       cancelMessage: 'Annuler "{{name}}" ?',
@@ -762,6 +816,7 @@ export default {
       thisPrint: 'cette impression',
       thisItem: 'cet élément',
     },
+    // Toast messages
     toast: {
       cancelled: 'Élément annulé',
       cancelFailed: 'Échec annulation',
@@ -778,6 +833,7 @@ export default {
       bulkCancelled: '{{count}} éléments annulés',
       bulkCancelFailed: 'Échec annulation',
     },
+    // Permissions
     permissions: {
       noStopPrint: 'Pas d\'autorisation d\'arrêt',
       noStartPrint: 'Pas d\'autorisation de démarrage',
@@ -816,6 +872,7 @@ export default {
     last30Days: '30 derniers jours',
     last90Days: '90 derniers jours',
     allTime: 'Tout le temps',
+    // Widgets
     quickStats: 'Stats rapides',
     printActivity: 'Activité d\'impression',
     filamentTypes: 'Types de filament',
@@ -834,6 +891,7 @@ export default {
     topFailureReasons: 'Top raisons d\'échec',
     failedPrintsCount: '{{failed}} / {{total}} impressions ont échoué',
     lastWeekRate: 'Semaine dernière : {{rate}}%',
+    // Actions
     resetLayout: 'Réinitialiser la mise en page',
     recalculateCosts: 'Recalculer les coûts',
     recalculateCostsHint: 'Recalcule les coûts avec les prix actuels des filaments',
@@ -841,12 +899,15 @@ export default {
     exportAsCsv: 'Exporter en CSV',
     exportAsExcel: 'Exporter en Excel',
     hiddenCount: '{{count}} Masqués',
+    // Toast
     exportDownloaded: 'Export téléchargé',
     exportFailed: 'Échec export',
     layoutReset: 'Mise en page réinitialisée',
     recalculatedCosts: 'Coûts recalculés pour {{count}} archives',
     recalculateFailed: 'Échec du calcul',
+    // Loading
     loadingStats: 'Chargement des statistiques...',
+    // Permissions
     noPermissionResetLayout: 'Pas d\'autorisation de réinitialisation',
     noPermissionRecalculate: 'Pas d\'autorisation de recalcul',
   },
@@ -874,8 +935,10 @@ export default {
     noHistory: 'Aucun historique',
     editPrintHours: 'Modifier les heures d\'impression',
     currentHours: 'Heures actuelles',
+    // Tabs
     statusTab: 'Statut',
     settingsTab: 'Paramètres',
+    // Status
     overdueCount: '{{count}} en retard',
     dueSoonCount: '{{count}} bientôt',
     dueSoon: 'Bientôt',
@@ -883,6 +946,7 @@ export default {
     overdueBy: 'Retard de {{duration}}',
     dueIn: 'Dans {{duration}}',
     timeLeft: '{{duration}} restant',
+    // Duration formats
     day: '1 jour',
     days: '{{count}} jours',
     week: '1 semaine',
@@ -890,6 +954,7 @@ export default {
     month: '1 mois',
     months: '{{count}} mois',
     year: '1 an',
+    // Settings
     maintenanceTypes: 'Types de maintenance',
     maintenanceTypesDescription: 'Types système et tâches personnalisées',
     addCustomType: 'Ajouter un type',
@@ -906,14 +971,18 @@ export default {
     exampleName: 'ex: Remplacement filtre HEPA',
     viewDocumentation: 'Voir documentation',
     timeBasedInterval: 'Intervalle temporel',
+    // Interval overrides
     intervalOverrides: 'Exceptions d\'intervalle',
     intervalOverridesDescription: 'Intervalles spécifiques par imprimante',
+    // Printer assignment
     assignedToPrinters: 'Assigné aux imprimantes :',
     noPrintersAssigned: 'Aucune imprimante assignée',
     addPrinterShort: 'Ajouter :',
     printersAssignedClick: '{{count}} imprimante(s) assignée(s) - gérer',
     removeFromPrinter: 'Retirer de cette imprimante',
+    // Types
     types: {
+      lubricateCarbonRods: 'Lubrifier les tiges carbone',
       lubricateRails: 'Lubrifier les rails linéaires',
       cleanNozzle: 'Nettoyer la buse / hotend',
       checkBelts: 'Vérifier la tension des courroies',
@@ -922,18 +991,22 @@ export default {
       checkCooling: 'Vérifier les ventilateurs',
       generalInspection: 'Inspection générale',
       cleanCarbonRods: 'Nettoyer les tiges carbone',
+      cleanLinearRails: 'Nettoyer les rails linéaires',
       checkPtfeTube: 'Vérifier le tube PTFE',
       replaceHepaFilter: 'Remplacer le filtre HEPA',
       replaceCarbonFilter: 'Remplacer le filtre charbon',
       lubricateLeftNozzleRail: 'Lubrifier le rail de buse gauche',
     },
+    // Toast
     maintenanceComplete: 'Maintenance marquée comme faite',
     typeUpdated: 'Type mis à jour',
     typeDeleted: 'Type supprimé',
     printHoursUpdated: 'Heures mises à jour',
     printerAssigned: 'Imprimante assignée',
     printerRemoved: 'Imprimante retirée',
+    // Confirmation
     deleteTypeConfirm: 'Supprimer "{{name}}" ?',
+    // Permissions
     noPermissionUpdate: 'Pas d\'autorisation de mise à jour',
     noPermissionPerform: 'Pas d\'autorisation d\'action',
     noPermissionEditTypes: 'Pas d\'autorisation de modification types',
@@ -942,6 +1015,7 @@ export default {
     noPermissionRemovePrinter: 'Pas d\'autorisation retrait imprimante',
     noPermissionAssignPrinter: 'Pas d\'autorisation assignation',
     noPermissionEditIntervals: 'Pas d\'autorisation modification intervalles',
+    // Configure link
     configureSettings: 'Configurer types et intervalles',
   },
 
@@ -949,6 +1023,7 @@ export default {
   settings: {
     title: 'Paramètres',
     general: 'Général',
+    // Tab names
     tabs: {
       general: 'Général',
       smartPlugs: 'Prises connectées',
@@ -957,10 +1032,11 @@ export default {
       network: 'Réseau',
       apiKeys: 'Clés API',
       virtualPrinter: 'Imprimante virtuelle',
-      users: 'Utilisateurs',
+      users: 'Authentification',
       backup: 'Sauvegarde',
-      globalEmail: 'Email Global',
+      emailAuth: 'Authentification Email',
     },
+    // Email settings
     email: {
       smtpSettings: 'Configuration SMTP',
       smtpHost: 'Serveur SMTP',
@@ -979,15 +1055,16 @@ export default {
       saving: 'Enregistrement...',
       advancedAuth: 'Authentification avancée',
       advancedAuthEnabled: 'L\'authentification avancée est activée',
-      advancedAuthEnabledDesc: 'Nouvelles fonctionnalités de gestion par email actives.',
+      advancedAuthEnabledDesc: 'La gestion des utilisateurs par email est active. Les nouveaux utilisateurs recevront un mot de passe auto-généré.',
       advancedAuthDisabled: 'Authentification avancée désactivée',
-      advancedAuthDisabledDesc: 'Activez pour les fonctionnalités liées à l\'email.',
+      advancedAuthDisabledDesc: 'Activez pour les fonctionnalités liées à l\'email (mot de passe oublié, etc).',
       enable: 'Activer',
       disable: 'Désactiver',
       feature1: 'Génération auto et envoi de mots de passe par email',
       feature2: 'Connexion par utilisateur ou email',
-      feature3: 'Mot de passe oublié disponible',
+      feature3: 'Réinitialisation mot de passe oublié disponible',
       feature4: 'Réinitialisation admin par email',
+      // Error messages
       errors: {
         requiredFields: 'Remplissez tous les champs requis',
         usernameRequired: 'L\'utilisateur est requis pour l\'authentification',
@@ -996,14 +1073,17 @@ export default {
         usernamePasswordRequired: 'Utilisateur et mot de passe requis pour l\'auth',
         configureSmtpFirst: 'Configurez et testez le SMTP d\'abord',
       },
+      // Success messages
       success: {
         settingsSaved: 'Paramètres SMTP enregistrés',
       },
+      // Security options
       securityOptions: {
         starttls: 'STARTTLS (Port 587)',
         ssl: 'SSL/TLS (Port 465)',
         none: 'Aucun (Port 25)',
       },
+      // Authentication options
       authOptions: {
         enabled: 'Activée',
         disabled: 'Désactivée',
@@ -1028,6 +1108,7 @@ export default {
     latestVersion: 'Dernière version',
     upToDate: 'Bambuddy est à jour',
     updateAvailable: 'Mise à jour disponible',
+    // Notifications
     notificationLanguage: 'Langue des notifications',
     notificationLanguageDescription: 'Langue pour les notifications push',
     notificationProviders: 'Fournisseurs de notifications',
@@ -1055,6 +1136,7 @@ export default {
       maintenanceDue: 'Maintenance due',
       maintenanceDueDescription: 'Notifier quand une tâche est due',
     },
+    // Smart Plugs
     smartPlug: {
       title: 'Prises connectées',
       add: 'Ajouter une prise',
@@ -1073,53 +1155,98 @@ export default {
       turnOn: 'Allumer',
       turnOff: 'Éteindre',
     },
-    spoolmanEnabled: 'Activer l\'intégration Spoolman',
+    // Filament Tracking Mode
+    filamentTracking: 'Suivi de Filament',
+    filamentTrackingDesc: 'Choisissez comment suivre vos bobines. Utilisez l\'inventaire intégré ou connectez un serveur Spoolman.',
+    trackingModeBuiltIn: 'Inventaire Intégré',
+    trackingModeBuiltInDesc: 'Correspondance RFID et suivi de consommation inclus',
+    trackingModeSpoolmanDesc: 'Serveur de gestion externe',
+    builtInFeatureRfid: 'Détecte auto les bobines RFID Bambu Lab dans l\'AMS',
+    builtInFeatureUsage: 'Suit la consommation par impression',
+    builtInFeatureCatalog: 'Gère bobines, couleurs et profils facteur K',
+    // Spoolman settings
     spoolmanUrl: 'URL Spoolman',
+    spoolmanUrlHint: 'URL de votre serveur Spoolman (ex: http://localhost:7912)',
     spoolmanConnected: 'Connecté',
     spoolmanDisconnected: 'Déconnecté',
+    status: 'Statut',
+    connect: 'Connecter',
+    disconnect: 'Déconnecter',
+    howSyncWorks: 'Fonctionnement de la Sync',
+    syncInfoRfidOnly: 'Seules les bobines officielles RFID sont synchronisées',
+    syncInfoAutoCreate: 'Les bobines sont créées dans Spoolman à la 1ère sync',
+    syncInfoThirdPartySkipped: 'Les bobines tierces ou rechargées sont ignorées',
+    linkingExistingSpools: 'Lier des bobines existantes',
+    linkingExistingSpoolsDesc: 'Pour lier une bobine Spoolman, survolez un slot AMS et cliquez sur "Lier à Spoolman".',
+    syncMode: 'Mode de Sync',
+    syncModeAuto: 'Automatique',
+    syncModeManual: 'Manuel uniquement',
+    syncModeAutoDesc: 'Sync auto lors de changements AMS',
+    syncModeManualDesc: 'Sync uniquement sur déclenchement manuel',
+    syncAmsData: 'Synchroniser AMS',
+    syncAmsDataDesc: 'Synchroniser manuellement les données vers Spoolman',
+    allPrinters: 'Toutes les imprimantes',
+    // Default printer
     noDefaultPrinter: 'Aucune par défaut (demander à chaque fois)',
+    // Sidebar
     sidebarOrder: 'Ordre de la barre latérale',
+    // Camera
     saveThumbnails: 'Enregistrer les vignettes',
     captureFinishPhoto: 'Prendre une photo à la fin',
     noPrintersConfigured: 'Aucune imprimante configurée',
+    // Archive settings
     archiveMode: {
       always: 'Toujours créer une archive',
       never: 'Ne jamais créer d\'archive',
       ask: 'Demander à chaque fois',
     },
+    // Updates
     checkForUpdatesLabel: 'Vérifier les mises à jour',
     checkPrinterFirmware: 'Vérifier le firmware imprimante',
+    // Queue
     enableRetry: 'Activer la rétentative',
+    // Home Assistant
     homeAssistantDescription: 'Contrôler les prises via Home Assistant',
     environmentManagedLabel: '(Géré par l\'environnement)',
     autoEnabledViaEnv: 'Activé via variables d\'environnement',
     urlFromEnvReadOnly: 'Valeur HA_URL (lecture seule)',
     tokenFromEnvReadOnly: 'Valeur HA_TOKEN (lecture seule)',
+    // MQTT
     mqttConnectedTo: 'Connecté à',
+    // Prometheus
     prometheusDescription: 'Exposer les données au format Prometheus',
+    // Smart plugs empty state
     noSmartPlugsTitle: 'Aucune prise configurée',
     noSmartPlugsDescription: 'Ajoutez une prise Tasmota pour suivre l\'énergie et automatiser.',
+    // Notifications empty state
     noProvidersTitle: 'Aucun fournisseur configuré',
     noProvidersDescription: 'Ajoutez un fournisseur pour recevoir des alertes.',
     noTemplatesAvailable: 'Aucun modèle dispo. Redémarrez pour les générer.',
+    // API permissions
     apiPermissionView: 'Voir statut et file',
     apiPermissionEdit: 'Gérer la file d\'attente',
+    // API keys
     apiKeysEmptyTitle: 'Aucune clé API',
     apiKeysEmptyDescription: 'Créez une clé pour vos intégrations.',
+    // Users
     noUsersFound: 'Aucun utilisateur trouvé',
     noGroupsFound: 'Aucun groupe trouvé',
     noGroupsAvailable: 'Aucun groupe disponible',
     passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
     systemGroupWarning: 'Les noms des groupes système sont fixes',
+    // Auth disabled
     authDisabledTitle: 'Authentification désactivée',
     authDisabledFeature1: 'Requis pour accéder au système',
     authDisabledFeature2: 'Gestion multi-utilisateurs et groupes',
     authDisabledFeature3: 'Plus de 50 permissions granulaires',
+    // User deletion
     userHasCreated: 'Cet utilisateur a créé :',
     userItemsQuestion: 'Que faire de ces éléments ?',
     deleteUserConfirm: 'Supprimer cet utilisateur ?',
     actionCannotBeUndone: 'Cette action est irréversible.',
+    // Smart plugs
     addFirstSmartPlug: 'Ajoutez votre première prise',
+    // Notifications
     providers: 'Fournisseurs',
     log: 'Journal',
     testAll: 'Tout tester',
@@ -1128,6 +1255,7 @@ export default {
     testFailedCount: '{{count}} échecs',
     messageTemplates: 'Modèles de message',
     messageTemplatesDescription: 'Personnalisez les messages par événement.',
+    // API Keys section
     apiKeys: 'Clés API',
     apiKeysDescription: 'Créez des clés pour webhooks et API.',
     createKey: 'Créer une clé',
@@ -1166,6 +1294,7 @@ export default {
     deleteApiKeyTitle: 'Supprimer la clé API',
     deleteApiKeyMessage: 'Les intégrations utilisant cette clé cesseront de fonctionner.',
     deleteKey: 'Supprimer la clé',
+    // Filament tab
     amsDisplayThresholds: 'Seuils d\'affichage AMS',
     amsThresholdsDescription: 'Seuils de couleur pour humidité et température.',
     humidity: 'Humidité',
@@ -1177,10 +1306,11 @@ export default {
     aboveFairHot: 'Au-dessus = rouge (chaud)',
     historyRetention: 'Rétention d\'historique',
     keepSensorHistory: 'Garder l\'historique pendant',
-    historyRetentionDescription: 'Les anciennes données capteurs seront supprimées.',
+    historyRetentionDescription: 'Les anciennes données seront supprimées.',
     printModal: 'Fenêtre d\'impression',
     expandCustomMapping: 'Étendre le mapping personnalisé par défaut',
     expandCustomMappingDescription: 'Affiche le mapping AMS par imprimante étendu.',
+    // User management
     authentication: 'Authentification',
     authEnabledDescription: 'L\'instance est sécurisée',
     authDisabledDescription: 'Activez pour restreindre l\'accès',
@@ -1204,21 +1334,27 @@ export default {
     enterPassword: 'Mot de passe (min 6 char)',
     confirmPassword: 'Confirmer le mot de passe',
     confirmPasswordPlaceholder: 'Confirmez le mot de passe',
+    // Title tooltips
     viewReleaseOnGitHub: 'Voir la version sur GitHub',
     turnAllPlugsOn: 'Tout allumer',
     turnAllPlugsOff: 'Tout éteindre',
-    clearNotificationLogs: 'Effacer les journaux de notification',
+    // Modal: Clear logs
+    clearNotificationLogs: 'Effacer les journaux',
     clearLogsMessage: 'Efface définitivement les logs de plus de 30 jours.',
     clearLogs: 'Effacer les logs',
-    resetUiPreferences: 'Réinitialiser les préférences UI',
-    resetUiPreferencesMessage: 'Réinitialise l\'ordre latéral, thème, widgets, etc. N\'affecte pas vos données.',
+    // Modal: Reset UI
+    resetUiPreferences: 'Réinitialiser l\'UI',
+    resetUiPreferencesMessage: 'Réinitialise l\'ordre, thème, widgets, etc. N\'affecte pas vos données.',
     resetPreferences: 'Réinitialiser',
+    // Modal: Delete group
     deleteGroupTitle: 'Supprimer le groupe',
     deleteGroupMessage: 'Les utilisateurs de ce groupe perdront ces permissions.',
     deleteGroup: 'Supprimer le groupe',
+    // Modal: Disable auth
     disableAuthenticationTitle: 'Désactiver l\'authentification',
     disableAuthenticationMessage: 'Instance accessible sans connexion. Les comptes sont conservés.',
     disableAuthentication: 'Désactiver',
+    // Additional settings
     configureBambuddy: 'Configurer Bambuddy',
     systemDefault: 'Défaut système',
     archiveSettings: 'Réglages Archives',
@@ -1241,6 +1377,7 @@ export default {
     editUser: 'Modifier l\'utilisateur',
     deleteUserTitle: 'Supprimer l\'utilisateur',
     groupName: 'Nom du groupe',
+    // Placeholders
     leaveEmptyForAnonymous: 'Vide pour anonyme',
     leaveEmptyForNoAuth: 'Vide si pas d\'auth',
     enterNewPassword: 'Nouveau mot de passe',
@@ -1278,6 +1415,77 @@ export default {
       cameraConnected: 'Caméra connectée {{resolution}}',
     },
     testConnection: 'Tester la connexion',
+    catalog: {
+      spoolCatalog: 'Catalogue de Bobines',
+      spoolCatalogDescription: 'Poids des bobines vides par marque/type. Utilisé pour le calcul auto du poids restant.',
+      searchCatalog: 'Chercher dans le catalogue...',
+      addNewEntry: 'Nouvelle Entrée',
+      namePlaceholder: 'Nom (ex: Bambu Lab - Plastique)',
+      weight: 'Poids',
+      type: 'Type',
+      default: 'Défaut',
+      custom: 'Perso',
+      noMatch: 'Aucune entrée correspondante',
+      empty: 'Catalogue vide',
+      deleteEntry: 'Supprimer l\'entrée',
+      deleteConfirm: 'Supprimer "{{name}}" ?',
+      resetCatalog: 'Réinitialiser le catalogue',
+      resetConfirm: 'Réinitialiser aux valeurs par défaut ? Vos entrées personnalisées seront supprimées.',
+      loadFailed: 'Échec chargement catalogue',
+      nameWeightRequired: 'Nom et poids requis',
+      entryAdded: 'Entrée ajoutée',
+      addFailed: 'Échec ajout',
+      entryUpdated: 'Entrée mise à jour',
+      updateFailed: 'Échec mise à jour',
+      entryDeleted: 'Entrée supprimée',
+      deleteFailed: 'Échec suppression',
+      resetSuccess: 'Catalogue réinitialisé',
+      resetFailed: 'Échec réinitialisation',
+      exported: '{{count}} entrées exportées',
+      imported: '{{added}} entrées importées ({{skipped}} ignorées)',
+      importFailed: 'Échec import : format JSON invalide',
+      exportTooltip: 'Exporter en JSON',
+      importTooltip: 'Importer depuis JSON',
+      resetTooltip: 'Réinitialiser par défaut',
+    },
+    colorCatalog: {
+      title: 'Catalogue de Couleurs',
+      description: 'Couleurs de filament par fabricant. Utilisé pour la recherche auto lors de l\'ajout de bobines.',
+      searchColors: 'Chercher couleurs...',
+      allManufacturers: 'Tous les fabricants',
+      addNewColor: 'Nouvelle Couleur',
+      manufacturer: 'Fabricant',
+      colorName: 'Nom couleur',
+      hex: 'Hex',
+      materialOptional: 'Matériau (optionnel)',
+      showing: 'Affichage {{filtered}} sur {{total}} couleurs',
+      noMatch: 'Aucune couleur correspondante',
+      empty: 'Catalogue vide',
+      deleteColor: 'Supprimer couleur',
+      deleteConfirm: 'Supprimer "{{name}}" ?',
+      resetCatalog: 'Réinitialiser catalogue couleurs',
+      resetConfirm: 'Réinitialiser aux valeurs par défaut ?',
+      sync: 'Sync',
+      starting: 'Démarrage...',
+      syncTooltip: 'Sync depuis FilamentColors.xyz (2000+ couleurs, peut être long)',
+      loadFailed: 'Échec chargement catalogue couleurs',
+      fieldsRequired: 'Fabricant, nom et code Hex requis',
+      colorAdded: 'Couleur ajoutée',
+      addFailed: 'Échec ajout',
+      colorUpdated: 'Couleur mise à jour',
+      updateFailed: 'Échec mise à jour',
+      colorDeleted: 'Couleur supprimée',
+      deleteFailed: 'Échec suppression',
+      resetSuccess: 'Catalogue réinitialisé',
+      resetFailed: 'Échec réinitialisation',
+      syncUpToDate: 'Déjà à jour ({{count}} couleurs vérifiées)',
+      syncComplete: '{{added}} couleurs ajoutées ({{skipped}} déjà présentes)',
+      syncError: 'Erreur de sync',
+      syncFailed: 'Échec sync FilamentColors.xyz',
+      exported: '{{count}} couleurs exportées',
+      imported: '{{added}} couleurs importées ({{skipped}} ignorées)',
+      importFailed: 'Échec import : format JSON invalide',
+    },
   },
 
   // Notifications (for push notifications)
@@ -1363,7 +1571,7 @@ export default {
     all: 'Tous',
   },
 
-  // Printer File Manager modal
+  // Printer File Manager modal (printer internal storage)
   printerFiles: {
     title: 'Gestionnaire de fichiers',
     storageUsed: 'Utilisé :',
@@ -1380,6 +1588,13 @@ export default {
       filesDeleted: '{{count}} fichier(s) supprimé(s)',
       deleteFailed: 'Échec suppression : {{error}}',
     },
+  },
+
+  // Confirmations
+  confirm: {
+    delete: 'Voulez-vous vraiment supprimer cet élément ?',
+    unsavedChanges: 'Changements non sauvegardés. Voulez-vous quitter ?',
+    clearQueue: 'Voulez-vous vraiment vider la file d\'attente ?',
   },
 
   // Login page
@@ -1735,16 +1950,19 @@ export default {
       customizeSettings: 'Personnalisez vos réglages',
       compareWithBase: 'Comparer avec la base',
       compare: 'Comparer',
+      // CreatePresetModal - Basic Info
       basePreset: 'Preset de base',
       selectBasePreset: 'Choisir preset de base...',
       presetName: 'Nom du preset',
       myCustomPreset: 'Mon preset personnalisé',
       inheritsFrom: 'Hérite de',
       dropJsonToImport: 'Glissez JSON pour importer',
+      // CreatePresetModal - Tabs
       tabs: {
         common: 'Commun',
         allFields: 'Tous les champs',
       },
+      // CreatePresetModal - All Fields Tab
       availableFields: 'Champs disponibles',
       searchFieldsPlaceholder: 'Chercher un champ...',
       noMatchingFields: 'Aucun champ trouvé',
@@ -1762,15 +1980,18 @@ export default {
       refresh: 'Rafraîchir',
       newPreset: 'Nouveau Preset',
       clearFilters: 'Effacer filtres',
+      // Compare mode
       compareMode: 'Mode Comparaison',
       selectAnotherPreset: 'Choisir un autre preset {{type}}',
       clickTwoPresets: 'Choisissez deux presets de même type',
       selectFirst: '1. Sélectionner premier',
       selectSecond: '2. Sélectionner second',
       compareNow: 'Comparer maintenant',
+      // Status row
       lastSynced: 'Synchronisé :',
       showingCount: '{{showing}} sur {{total}} presets',
       noPresetsFound: 'Aucun preset trouvé',
+      // Column headers
       columns: {
         filament: 'Filament',
         process: 'Processus',
@@ -1779,6 +2000,7 @@ export default {
       noFilamentPresets: 'Pas de preset filament',
       noProcessPresets: 'Pas de preset processus',
       noPrinterPresets: 'Pas de preset imprimante',
+      // Filters
       filters: {
         type: 'Type',
         owner: 'Propriétaire',
@@ -1791,6 +2013,7 @@ export default {
         builtIn: 'Inclus',
         process: 'Processus',
       },
+      // Permissions
       noTemplatesPermission: 'Pas d\'autorisation modèles',
       noRefreshPermission: 'Pas d\'autorisation rafraîchissement',
       noCreatePermission: 'Pas d\'autorisation création',
@@ -1978,6 +2201,7 @@ export default {
     addFiles: 'Ajouter fichiers',
     removeFile: 'Retirer fichier',
     viewDetails: 'Détails',
+    // Modal fields
     namePlaceholder: 'ex: Build Voron 2.4',
     descriptionPlaceholder: 'Description optionnelle...',
     color: 'Couleur',
@@ -1995,6 +2219,7 @@ export default {
     priorityNormal: 'Normale',
     priorityHigh: 'Haute',
     priorityUrgent: 'Urgente',
+    // Status
     statusActive: 'Actif',
     statusCompleted: 'Terminé',
     statusArchived: 'Archivé',
@@ -2003,19 +2228,23 @@ export default {
     failed: 'échoué',
     inQueue: 'en file',
     noPrintsYet: 'Aucune impression',
+    // Footer stats
     printJobs: 'Jobs (plateaux)',
     partsPrinted: 'Pièces imprimées',
     failedParts: 'Pièces échouées',
+    // Actions
     import: 'Importer',
     export: 'Exporter',
     importProject: 'Importer projet',
     exportAll: 'Exporter tous les projets',
     loading: 'Chargement des projets...',
+    // Permissions
     noEditPermission: 'Pas d\'autorisation de modification',
     noDeletePermission: 'Pas d\'autorisation de suppression',
     noCreatePermission: 'Pas d\'autorisation de création',
     noImportPermission: 'Pas d\'autorisation d\'import',
     noExportPermission: 'Pas d\'autorisation d\'export',
+    // Toast
     toast: {
       created: 'Projet créé',
       updated: 'Projet mis à jour',
@@ -2186,7 +2415,7 @@ export default {
     enabled: 'Spoolman Activé',
     url: 'URL Spoolman',
     connected: 'Connecté',
-    disconnected: 'Déconnecté',
+    disconnected: 'Non Connecté',
     testConnection: 'Tester connexion',
     sync: 'Synchroniser',
     syncing: 'Sync...',
@@ -2203,9 +2432,156 @@ export default {
     weight: 'Poids',
     remaining: 'Restant',
     disableWeightSync: 'Désactiver Sync poids estimé AMS',
-    disableWeightSyncDesc: 'Ne pas utiliser les estimations AMS. Utile si vous préférez le suivi de consommation Spoolman.',
+    disableWeightSyncDesc: 'Ne pas utiliser les estimations AMS. Utile si vous préférez le suivi Spoolman.',
     reportPartialUsage: 'Rapporter consommation partielle pour échecs',
     reportPartialUsageDesc: 'Si l\'impression échoue, rapporte le filament consommé selon les couches.',
+  },
+
+  // Inventory
+  inventory: {
+    title: 'Inventaire de Bobines',
+    addSpool: 'Ajouter Bobine',
+    editSpool: 'Modifier Bobine',
+    material: 'Matériau',
+    selectMaterial: 'Choisir matériau...',
+    subtype: 'Sous-type',
+    brand: 'Marque',
+    searchBrand: 'Chercher marque...',
+    useCustomBrand: 'Utiliser "{{brand}}"',
+    colorName: 'Nom de couleur',
+    colorNamePlaceholder: 'Jade White, Fire Red...',
+    color: 'Couleur',
+    hexColor: 'Code Hex',
+    pickColor: 'Choisir couleur perso',
+    labelWeight: 'Poids net',
+    coreWeight: 'Poids bobine vide',
+    searchSpoolWeight: 'Chercher poids bobine...',
+    weightUsed: 'Consommé',
+    currentWeight: 'Poids restant',
+    slicerFilament: 'Filament Slicer',
+    slicerFilamentName: 'Nom du Preset Slicer',
+    slicerPreset: 'Preset Slicer',
+    searchPresets: 'Chercher presets...',
+    selectedPreset: 'Sélectionné',
+    noPresetsFound: 'Aucun preset trouvé',
+    tempOverrides: 'Exceptions Température',
+    note: 'Note',
+    notePlaceholder: 'Notes additionnelles sur cette bobine...',
+    archive: 'Archiver',
+    restore: 'Restaurer',
+    noSpools: 'Aucune bobine. Ajoutez votre première bobine pour commencer.',
+    noManualSpools: 'Aucune bobine manuelle disponible. Ajoutez-en une d\'abord.',
+    kProfiles: 'K-Profiles',
+    addKProfile: 'Ajouter K-Profile',
+    assignSpool: 'Assigner Bobine',
+    unassignSpool: 'Désassigner',
+    assignSuccess: 'Bobine assignée et slot AMS configuré',
+    assignFailed: 'Échec assignation',
+    selectSpool: 'Choisir une bobine pour ce slot',
+    assigned: 'Assigné',
+    assigning: 'Assignation...',
+    searchSpools: 'Chercher bobines...',
+    allMaterials: 'Tous Matériaux',
+    filterByBrand: 'Filtrer par marque...',
+    showArchived: 'Afficher archivées',
+    spoolCreated: 'Bobine créée',
+    spoolUpdated: 'Bobine mise à jour',
+    spoolDeleted: 'Bobine supprimée',
+    spoolArchived: 'Bobine archivée',
+    spoolRestored: 'Bobine restaurée',
+    deleteConfirm: 'Supprimer définitivement cette bobine ?',
+    advancedSettings: 'Paramètres Avancés',
+    // Tabs
+    filamentInfoTab: 'Infos Filament',
+    paProfileTab: 'Profil PA',
+    filamentInfo: 'Filament',
+    additional: 'Additionnel',
+    // Cloud
+    loadingPresets: 'Chargement des presets cloud...',
+    cloudConnected: 'Cloud connecté',
+    cloudNotConnected: 'Cloud déconnecté (valeurs par défaut)',
+    // Colors
+    recentColors: 'Récentes',
+    searchColors: 'Chercher couleurs...',
+    searchResults: 'Résultats',
+    allColors: 'Toutes',
+    commonColors: 'Communes',
+    showLess: 'Moins',
+    showAll: 'Toutes',
+    noColorsFound: 'Aucune couleur correspondante',
+    noResults: 'Aucun résultat',
+    // PA Profiles
+    selectMaterialFirst: 'Veuillez choisir un matériau dans l\'onglet Infos Filament.',
+    noPrintersConfigured: 'Ajoutez une imprimante pour utiliser les profils PA.',
+    matchingFilter: 'Correspondant',
+    anyBrand: 'Toute marque',
+    anyVariant: 'Toute variante',
+    autoSelect: 'Auto-sélection',
+    matches: 'correspondances',
+    match: 'correspondance',
+    noMatches: 'Aucune correspondance',
+    connected: 'Connecté',
+    offline: 'Hors ligne',
+    printerOffline: 'Imprimante hors ligne. Connectez-vous pour voir les profils.',
+    noKProfilesMatch: 'Aucun profil K ne correspond au filament.',
+    leftNozzle: 'Buse Gauche',
+    rightNozzle: 'Buse Droite',
+    profilesSelected: 'profil(s) de calibration sélectionné(s)',
+    // Stats & enhanced table
+    totalInventory: 'Total Inventaire',
+    totalConsumed: 'Total Consommé',
+    byMaterial: 'Par Matériau',
+    inPrinter: 'Dans Imprimante',
+    lowStock: 'Stock Bas',
+    sinceTracking: 'Depuis le début du suivi',
+    loadedInAms: 'Chargé dans AMS/Ext',
+    remaining: 'Restant',
+    lowStockThreshold: '<20% restant',
+    search: 'Chercher bobines...',
+    showing: 'Affichage',
+    to: 'à',
+    of: 'sur',
+    show: 'Voir',
+    spools: 'bobines',
+    spool: 'bobine',
+    page: 'Page',
+    noSpoolsMatch: 'Aucun résultat trouvé',
+    noSpoolsMatchDesc: 'Ajustez votre recherche ou vos filtres.',
+    active: 'Actif',
+    archived: 'Archivé',
+    all: 'Tous',
+    used: 'Occasion',
+    new: 'Neuf',
+    clearFilters: 'Effacer filtres',
+    table: 'Tableau',
+    cards: 'Cartes',
+    net: 'Net',
+    // Column config
+    columns: 'Colonnes',
+    configureColumns: 'Configurer Colonnes',
+    configureColumnsDesc: 'Glissez pour ordonner ou utilisez les flèches. Cliquez sur l\'œil pour masquer.',
+    visible: 'visible',
+    reset: 'Reset',
+    cancel: 'Annuler',
+    applyChanges: 'Appliquer',
+    moveUp: 'Monter',
+    moveDown: 'Descendre',
+    hideColumn: 'Masquer',
+    showColumn: 'Afficher',
+    // Tag linking
+    linkToSpool: 'Lier à une Bobine',
+    tagLinked: 'Tag lié à la bobine',
+    tagLinkFailed: 'Échec lien tag',
+    tagAlreadyLinked: 'Tag déjà lié à une autre bobine',
+    unknownTag: 'Tag RFID inconnu détecté',
+    // Usage history
+    usageHistory: 'Historique de Consommation',
+    noUsageHistory: 'Aucune consommation enregistrée',
+    printName: 'Nom Impression',
+    weightConsumed: 'Poids consommé',
+    clearHistory: 'Effacer',
+    historyCleared: 'Historique effacé',
+    fillSourceLabel: '(Inv)',
   },
 
   // Timelapse
@@ -2264,6 +2640,10 @@ export default {
     sameTypeDifferentColor: 'Même type, couleur différente',
     filamentTypeNotLoaded: 'Type de filament non chargé',
     openCalendar: 'Ouvrir calendrier',
+    leftNozzle: 'G',
+    rightNozzle: 'D',
+    leftNozzleTooltip: 'Buse gauche',
+    rightNozzleTooltip: 'Buse droite',
   },
 
   // Backup
@@ -2315,6 +2695,7 @@ export default {
     uploadFailed: 'Échec du téléversement',
   },
 
+  // Edit archive modal
   // Edit Archive Modal
   editArchive: {
     title: 'Modifier l\'archive',
@@ -2344,6 +2725,7 @@ export default {
     photosHelp: 'Cliquez sur + pour ajouter des photos',
     printResult: 'Résultat d\'impression',
     saving: 'Enregistrement...',
+    // Failure reasons
     failureReasons: {
       adhesionFailure: 'Défaut d\'adhésion',
       spaghettiDetached: 'Spaghetti / Détaché',
@@ -2357,6 +2739,7 @@ export default {
       userCancelled: 'Annulé par l\'utilisateur',
       other: 'Autre',
     },
+    // Archive statuses
     statuses: {
       completed: 'Réussie',
       failed: 'Échouée',
@@ -2380,6 +2763,7 @@ export default {
     noKProfiles: 'Aucun K-Profile',
     noKProfilesDesc: 'Aucun profil trouvé pour une buse de {{diameter}}mm',
     createFirstProfile: 'Créer le premier profil',
+    // Controls
     printer: 'Imprimante',
     nozzle: 'Buse',
     refresh: 'Rafraîchir',
@@ -2389,6 +2773,7 @@ export default {
     select: 'Choisir',
     selectAll: 'Tout sélectionner',
     delete: 'Supprimer',
+    // Filters
     searchPlaceholder: 'Nom ou filament...',
     allExtruders: 'Tous les extrudeurs',
     leftOnly: 'Gauche uniquement',
@@ -2399,8 +2784,10 @@ export default {
     sortName: 'Tri : Nom',
     sortKValue: 'Tri : Valeur K',
     sortFilament: 'Tri : Filament',
+    // Dual extruder labels
     leftExtruder: 'Extrudeur gauche',
     rightExtruder: 'Extrudeur droit',
+    // Modal
     modal: {
       addTitle: 'Ajouter K-Profile',
       editTitle: 'Modifier K-Profile',
@@ -2427,16 +2814,19 @@ export default {
       savingExtruder: 'Sauvegarde extrudeur {{current}}/{{total}}...',
       pleaseWait: 'Patientez...',
     },
+    // Delete confirmation
     deleteConfirm: {
       title: 'Supprimer profil',
       cannotUndo: 'Action irréversible',
       message: 'Supprimer "{{name}}" de l\'imprimante ?',
     },
+    // Bulk delete
     bulkDelete: {
       title: 'Supprimer les profils',
       cannotUndo: 'Action irréversible',
       message: 'Supprimer les {{count}} profils de l\'imprimante ?',
     },
+    // Toast
     toast: {
       profileSaved: 'Profil K enregistré',
       profilesSaved: 'Profil K enregistré sur {{count}} extrudeur(s)',
@@ -2452,6 +2842,7 @@ export default {
       noteSaved: 'Note enregistrée',
       failedToSaveNote: 'Échec note',
     },
+    // Permissions
     permission: {
       noRead: 'Pas d\'autorisation lecture',
       noCreate: 'Pas d\'autorisation création',
@@ -2468,8 +2859,8 @@ export default {
     running: 'En cours',
     stopped: 'Arrêtée',
     description: {
-      default: 'Apparaît dans le Slicer. Les fichiers envoyés sont archivés sans impression.',
-      proxy: 'Relais vers une vraie imprimante pour impression à distance sécurisée.',
+      default: 'Active une imprimante qui apparaît dans Bambu Studio. Les fichiers envoyés sont archivés sans impression.',
+      proxy: 'Active un proxy qui relaie le trafic vers une imprimante réelle, permettant l\'impression à distance.',
     },
     enable: {
       title: 'Activer l\'imprimante virtuelle',
@@ -2593,20 +2984,22 @@ export default {
     },
   },
 
-  // Maintenance type descriptions
+  // Maintenance type descriptions (built-in)
   maintenanceDescriptions: {
-    lubricateRails: 'Lubrifier les rails pour un mouvement fluide',
+    lubricateCarbonRods: 'Appliquer du lubrifiant sur les tiges carbone pour un mouvement fluide',
+    lubricateRails: 'Appliquer du lubrifiant sur les rails linéaires',
     cleanNozzle: 'Nettoyer buse et hotend anti-bouchage',
     checkBelts: 'Tension des courroies pour la précision',
     cleanBuildPlate: 'Nettoyage plateau pour l\'adhésion',
     checkExtruder: 'Usure des engrenages de l\'extrudeur',
     checkCooling: 'Bon fonctionnement des ventilateurs',
     generalInspection: 'Inspection générale de la machine',
-    cleanCarbonRods: 'Tiges carbone sans frottement',
+    cleanCarbonRods: 'Nettoyer les tiges carbone (friction)',
+    cleanLinearRails: 'Essuyer les rails linéaires (poussière/débris)',
     checkPtfeTube: 'Usure ou dommage du tube PTFE',
     replaceHepaFilter: 'Filtre HEPA pour la qualité de l\'air',
     replaceCarbonFilter: 'Filtre charbon actif (odeurs)',
-    lubricateLeftNozzleRail: 'Rail gauche (Série H2)',
+    lubricateLeftNozzleRail: 'Lubrifier le rail de buse gauche (Série H2)',
   },
 
   // Smart Plugs
@@ -2653,6 +3046,7 @@ export default {
     noLinksConfigured: 'Aucun lien externe configuré',
     deleteLink: 'Supprimer lien',
     removeCustomIcon: 'Retirer icône personnalisée',
+    openInNewTab: 'Ouvrir dans un nouvel onglet',
     placeholders: {
       linkName: 'Mon Lien',
     },
@@ -2815,6 +3209,7 @@ export default {
     noCloudPresets: 'Profils Cloud absents. Connectez-vous.',
     noMatchingPresets: 'Aucun profil trouvé.',
     custom: 'Perso',
+    builtin: 'Inclus',
     settingsSentToPrinter: 'Réglages envoyés',
     filamentProfile: 'Profil Filament',
   },
