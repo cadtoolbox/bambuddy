@@ -217,6 +217,7 @@ from backend.app.services.bambu_mqtt import PrinterState
 from backend.app.services.github_backup import github_backup_service
 from backend.app.services.homeassistant import homeassistant_service
 from backend.app.services.mqtt_relay import mqtt_relay
+from backend.app.services.mqtt_smart_plug import mqtt_smart_plug_service
 from backend.app.services.notification_service import notification_service
 from backend.app.services.print_scheduler import scheduler as print_scheduler
 from backend.app.services.printer_manager import (
@@ -3032,6 +3033,10 @@ async def lifespan(app: FastAPI):
     # Stop virtual printer if running
     if virtual_printer_manager.is_enabled:
         await virtual_printer_manager.configure(enabled=False)
+
+    await mqtt_smart_plug_service.disconnect(timeout=2)
+
+    await mqtt_relay.disconnect(timeout=2)
 
 
 app = FastAPI(

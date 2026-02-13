@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import ssl
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -279,6 +280,7 @@ class BambuMQTTClient:
         self._message_log: deque[MQTTLogEntry] = deque(maxlen=100)
         self._logging_enabled: bool = False
         self._last_message_time: float = 0.0  # Track when we last received a message
+        self._disconnection_event: threading.Event | None = None
         self._previous_ams_hash: str | None = None  # Track AMS changes
 
         # K-profile command tracking
@@ -357,6 +359,8 @@ class BambuMQTTClient:
         self.state.connected = False
         if self.on_state_change:
             self.on_state_change(self.state)
+        if self._disconnection_event:
+            self._disconnection_event.set()
 
     def _on_message(self, client, userdata, msg):
         try:
@@ -2374,11 +2378,13 @@ class BambuMQTTClient:
 
         return True
 
-    def disconnect(self):
+    def disconnect(self, timeout: float = 0):
         """Disconnect from the printer."""
         if self._client:
-            self._client.loop_stop()
+            self._disconnection_event = threading.Event()
             self._client.disconnect()
+            self._disconnection_event.wait(timeout=timeout)
+            self._client.loop_stop()
             self._client = None
             self.state.connected = False
 

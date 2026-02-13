@@ -223,18 +223,18 @@ class PrinterManager:
         await asyncio.sleep(1)
         return client.state.connected
 
-    def disconnect_printer(self, printer_id: int):
+    def disconnect_printer(self, printer_id: int, timeout: float = 0):
         """Disconnect from a printer."""
         if printer_id in self._clients:
-            self._clients[printer_id].disconnect()
+            self._clients[printer_id].disconnect(timeout=timeout)
             del self._clients[printer_id]
         self._models.pop(printer_id, None)  # Clean up model cache
         self._printer_info.pop(printer_id, None)  # Clean up printer info cache
 
-    def disconnect_all(self):
+    def disconnect_all(self, timeout: float = 0):
         """Disconnect from all printers."""
         for printer_id in list(self._clients.keys()):
-            self.disconnect_printer(printer_id)
+            self.disconnect_printer(printer_id, timeout=timeout)
 
     def get_status(self, printer_id: int) -> PrinterState | None:
         """Get the current status of a printer (checks for stale connections)."""
