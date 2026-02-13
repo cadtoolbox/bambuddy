@@ -124,6 +124,7 @@ export default {
     nozzleCount: 'Düsenanzahl',
     autoArchive: 'Automatische Archivierung',
     status: {
+      available: 'Verfügbar',
       idle: 'Bereit',
       printing: 'Druckt',
       paused: 'Pausiert',
@@ -163,6 +164,7 @@ export default {
     },
     // Controls
     hideOffline: 'Offline ausblenden',
+    nextAvailable: 'Nächster verfügbar',
     powerOn: 'Einschalten',
     offlinePrintersWithPlugs: 'Offline-Drucker mit Smart-Plugs',
     noPrintersConfigured: 'Noch keine Drucker konfiguriert',

@@ -1236,39 +1236,16 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const counts = useMemo(() => {
-    let printing = 0;
-    let idle = 0;
-    let offline = 0;
-    let loading = 0;
-
-    printers?.forEach((printer) => {
-      const status = queryClient.getQueryData<{ connected: boolean; state: string | null }>(['printerStatus', printer.id]);
-      if (status === undefined) {
-        // Status not yet loaded - don't count as offline yet
-        loading++;
-      } else if (!status.connected) {
-        offline++;
-      } else if (status.state === 'RUNNING') {
-        printing++;
-      } else {
-        idle++;
-      }
-    });
-
-    return { printing, idle, offline, loading, total: (printers?.length || 0) };
-  }, [printers, queryClient]);
-
   // Subscribe to query cache changes to re-render when status updates
   // Throttled to prevent rapid re-renders from causing tab crashes
-  const [, setTick] = useState(0);
+  const [cacheTick, setCacheTick] = useState(0);
   useEffect(() => {
     let pending = false;
     const unsubscribe = queryClient.getQueryCache().subscribe(() => {
       if (!pending) {
         pending = true;
         requestAnimationFrame(() => {
-          setTick(t => t + 1);
+          setCacheTick(t => t + 1);
           pending = false;
         });
       }
@@ -1276,23 +1253,58 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
     return () => unsubscribe();
   }, [queryClient]);
 
+  const { counts, nextFinish } = useMemo(() => {
+    let printing = 0;
+    let idle = 0;
+    let offline = 0;
+    let loading = 0;
+    let nextPrinterName: string | null = null;
+    let nextRemainingMin: number | null = null;
+    let nextProgress: number = 0;
+
+    printers?.forEach((printer) => {
+      const status = queryClient.getQueryData<{ connected: boolean; state: string | null; remaining_time: number | null; progress: number | null }>(['printerStatus', printer.id]);
+      if (status === undefined) {
+        // Status not yet loaded - don't count as offline yet
+        loading++;
+      } else if (!status.connected) {
+        offline++;
+      } else if (status.state === 'RUNNING') {
+        printing++;
+        if (status.remaining_time != null && status.remaining_time > 0) {
+          if (nextRemainingMin === null || status.remaining_time < nextRemainingMin) {
+            nextRemainingMin = status.remaining_time;
+            nextPrinterName = printer.name;
+            nextProgress = status.progress || 0;
+          }
+        }
+      } else {
+        idle++;
+      }
+    });
+
+    return {
+      counts: { printing, idle, offline, loading, total: (printers?.length || 0) },
+      nextFinish: nextPrinterName && nextRemainingMin ? { name: nextPrinterName, remainingMin: nextRemainingMin, progress: nextProgress } : null,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printers, queryClient, cacheTick]);
+
   if (!printers?.length) return null;
 
   return (
     <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-1.5">
+        <div className={`w-2 h-2 rounded-full ${counts.idle > 0 ? 'bg-bambu-green' : 'bg-gray-500'}`} />
+        <span className="text-bambu-gray">
+          <span className="text-white font-medium">{counts.idle}</span> {t('printers.status.available').toLowerCase()}
+        </span>
+      </div>
       {counts.printing > 0 && (
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-bambu-green animate-pulse" />
           <span className="text-bambu-gray">
             <span className="text-white font-medium">{counts.printing}</span> {t('printers.status.printing').toLowerCase()}
-          </span>
-        </div>
-      )}
-      {counts.idle > 0 && (
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-blue-400" />
-          <span className="text-bambu-gray">
-            <span className="text-white font-medium">{counts.idle}</span> {t('printers.status.idle').toLowerCase()}
           </span>
         </div>
       )}
@@ -1303,6 +1315,23 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
             <span className="text-white font-medium">{counts.offline}</span> {t('printers.status.offline').toLowerCase()}
           </span>
         </div>
+      )}
+      {nextFinish && (
+        <>
+          <div className="w-px h-4 bg-bambu-dark-tertiary" />
+          <div className="flex items-center gap-2">
+            <span className="text-bambu-green font-medium">{t('printers.nextAvailable')}:</span>
+            <span className="text-white font-medium">{nextFinish.name}</span>
+            <div className="w-16 bg-bambu-dark-tertiary rounded-full h-1.5">
+              <div
+                className="bg-bambu-green h-1.5 rounded-full transition-all"
+                style={{ width: `${nextFinish.progress}%` }}
+              />
+            </div>
+            <span className="text-white font-medium">{Math.round(nextFinish.progress)}%</span>
+            <span className="text-bambu-gray">({formatTime(nextFinish.remainingMin * 60)})</span>
+          </div>
+        </>
       )}
     </div>
   );

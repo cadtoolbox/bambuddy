@@ -121,6 +121,7 @@ export default {
     nozzleCount: 'Numero Ugelli',
     autoArchive: 'Auto Archiviazione',
     status: {
+      available: 'Disponibile',
       idle: 'Inattiva',
       printing: 'In stampa',
       paused: 'In pausa',
@@ -160,6 +161,7 @@ export default {
     },
     // Controls
     hideOffline: 'Nascondi offline',
+    nextAvailable: 'Prossima disponibile',
     powerOn: 'Accendi',
     offlinePrintersWithPlugs: 'Stampanti offline con smart plug',
     noPrintersConfigured: 'Nessuna stampante configurata',

@@ -124,6 +124,7 @@ export default {
     nozzleCount: 'Nozzle Count',
     autoArchive: 'Auto Archive',
     status: {
+      available: 'Available',
       idle: 'Idle',
       printing: 'Printing',
       paused: 'Paused',
@@ -163,6 +164,7 @@ export default {
     },
     // Controls
     hideOffline: 'Hide offline',
+    nextAvailable: 'Next available',
     powerOn: 'Power On',
     offlinePrintersWithPlugs: 'Offline printers with smart plugs',
     noPrintersConfigured: 'No printers configured yet',

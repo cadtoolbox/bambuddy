@@ -133,6 +133,7 @@ export default {
     nozzleCount: 'ノズル数',
     autoArchive: '自動アーカイブ',
     status: {
+      available: '利用可能',
       idle: '待機中',
       printing: '印刷中',
       paused: '一時停止',
@@ -167,6 +168,7 @@ export default {
       extraLarge: '特大',
     },
     hideOffline: 'オフラインを非表示',
+    nextAvailable: '次に完了',
     powerOn: '電源オン',
     noPrintersConfigured: 'プリンターが設定されていません',
     readyToPrint: '印刷可能',
