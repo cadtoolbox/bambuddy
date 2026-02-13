@@ -2306,6 +2306,10 @@ export default {
     noPrintersAvailable: 'Nessuna stampante disponibile',
     printerBusy: 'Stampante occupata',
     printerOffline: 'Stampante offline',
+    leftNozzle: 'L',
+    rightNozzle: 'R',
+    leftNozzleTooltip: 'Ugello sinistro',
+    rightNozzleTooltip: 'Ugello destro',
   },
 
   // Backup

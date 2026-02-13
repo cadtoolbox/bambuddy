@@ -1,13 +1,29 @@
+from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from backend.app.core.config import settings
 
+
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    """Set SQLite pragmas on each new connection for concurrency and performance."""
+    cursor = dbapi_conn.cursor()
+    # WAL mode allows concurrent readers + one writer (vs default DELETE mode which locks entirely)
+    cursor.execute("PRAGMA journal_mode = WAL")
+    # Wait up to 5 seconds when the database is locked instead of failing immediately
+    cursor.execute("PRAGMA busy_timeout = 5000")
+    cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.close()
+
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
 )
+
+# Register the pragma listener on the underlying sync engine
+event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
 
 async_session = async_sessionmaker(
     engine,
@@ -29,6 +45,7 @@ async def reinitialize_database():
         settings.database_url,
         echo=settings.debug,
     )
+    event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
     async_session = async_sessionmaker(
         engine,
         class_=AsyncSession,

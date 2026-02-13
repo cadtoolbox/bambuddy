@@ -1137,20 +1137,16 @@ function getWifiStrength(rssi: number): { labelKey: string; color: string; bars:
 }
 
 /**
- * Check if a tray contains a Bambu Lab spool.
- * Uses same logic as backend: tray_info_idx (GF*), tray_uuid, or tag_uid.
+ * Check if a tray contains a Bambu Lab spool (RFID-tagged).
+ * Only checks hardware identifiers (tray_uuid, tag_uid) — NOT tray_info_idx,
+ * which is a filament profile/preset ID that third-party spools also get when
+ * the user selects a generic Bambu preset (e.g. "GFA00" for Generic PLA).
  */
 function isBambuLabSpool(tray: {
   tray_uuid?: string | null;
   tag_uid?: string | null;
-  tray_info_idx?: string | null;
 } | null | undefined): boolean {
   if (!tray) return false;
-
-  // Check tray_info_idx first (most reliable - Bambu preset IDs start with "GF")
-  if (tray.tray_info_idx && tray.tray_info_idx.startsWith('GF')) {
-    return true;
-  }
 
   // Check tray_uuid (32 hex chars, non-zero)
   if (tray.tray_uuid && tray.tray_uuid !== '00000000000000000000000000000000') {

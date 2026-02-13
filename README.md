@@ -72,7 +72,7 @@ Perfect for remote print farms, traveling makers, or accessing your home printer
 - Duplicate detection & full-text search
 - Photo attachments & failure analysis
 - Timelapse editor (trim, speed, music)
-- Re-print to any connected printer with AMS mapping (auto-match or manual slot selection, multi-plate support)
+- Re-print to any connected printer with AMS mapping (auto-match or manual slot selection, multi-plate support, nozzle-aware matching for dual-nozzle H2D/H2D Pro)
 - Plate thumbnail browsing for multi-plate archives (hover to navigate between plates)
 - Archive comparison (side-by-side diff)
 - Tag management (rename/delete across all archives)
@@ -200,7 +200,7 @@ Perfect for remote print farms, traveling makers, or accessing your home printer
 </tr>
 </table>
 
-**Plus:** Configurable slicer (Bambu Studio / OrcaSlicer) • Customizable themes (style, background, accent) • Mobile responsive • Keyboard shortcuts • Multi-language (EN/DE) • Auto updates • Database backup/restore • System info dashboard
+**Plus:** Configurable slicer (Bambu Studio / OrcaSlicer) • Customizable themes (style, background, accent) • Mobile responsive • Keyboard shortcuts • Multi-language (EN/DE/JA/IT) • Auto updates • Database backup/restore • System info dashboard
 
 ---
 

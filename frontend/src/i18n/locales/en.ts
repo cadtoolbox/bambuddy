@@ -2636,6 +2636,10 @@ export default {
     sameTypeDifferentColor: 'Same type, different color',
     filamentTypeNotLoaded: 'Filament type not loaded',
     openCalendar: 'Open calendar',
+    leftNozzle: 'L',
+    rightNozzle: 'R',
+    leftNozzleTooltip: 'Left nozzle',
+    rightNozzleTooltip: 'Right nozzle',
   },
 
   // Backup

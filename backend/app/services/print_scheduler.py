@@ -23,6 +23,7 @@ from backend.app.services.notification_service import notification_service
 from backend.app.services.printer_manager import printer_manager
 from backend.app.services.smart_plug_manager import smart_plug_manager
 from backend.app.utils.printer_models import normalize_printer_model
+from backend.app.utils.threemf_tools import extract_nozzle_mapping_from_3mf
 
 logger = logging.getLogger(__name__)
 
@@ -477,6 +478,12 @@ class PrintScheduler:
                             pass  # Skip filament entry with unparseable usage data
 
                 filaments.sort(key=lambda x: x["slot_id"])
+
+                # Enrich with nozzle mapping for dual-nozzle printers
+                nozzle_mapping = extract_nozzle_mapping_from_3mf(zf)
+                if nozzle_mapping:
+                    for filament in filaments:
+                        filament["nozzle_id"] = nozzle_mapping.get(filament["slot_id"])
         except Exception as e:
             logger.warning("Failed to parse filament requirements: %s", e)
             return None
@@ -493,6 +500,9 @@ class PrintScheduler:
             List of loaded filament dicts with type, color, ams_id, tray_id, global_tray_id
         """
         filaments = []
+
+        # Get ams_extruder_map for dual-nozzle printers (H2D, H2D Pro)
+        ams_extruder_map = status.raw_data.get("ams_extruder_map", {})
 
         # Parse AMS units from raw_data
         ams_data = status.raw_data.get("ams", [])
@@ -524,6 +534,7 @@ class PrintScheduler:
                             "is_ht": is_ht,
                             "is_external": False,
                             "global_tray_id": global_tray_id,
+                            "extruder_id": ams_extruder_map.get(str(ams_id)),
                         }
                     )
 
@@ -541,6 +552,7 @@ class PrintScheduler:
                     "is_ht": False,
                     "is_external": True,
                     "global_tray_id": 254,
+                    "extruder_id": 0 if ams_extruder_map else None,
                 }
             )
 
@@ -615,6 +627,13 @@ class PrintScheduler:
 
             # Get available trays (not already used)
             available = [f for f in loaded if f["global_tray_id"] not in used_tray_ids]
+
+            # Nozzle-aware filtering: restrict to trays on the correct nozzle
+            req_nozzle_id = req.get("nozzle_id")
+            if req_nozzle_id is not None:
+                nozzle_filtered = [f for f in available if f.get("extruder_id") == req_nozzle_id]
+                if nozzle_filtered:
+                    available = nozzle_filtered
 
             # Check if tray_info_idx is unique among available trays
             if req_tray_info_idx:

@@ -2552,6 +2552,10 @@ export default {
     printerBusy: 'プリンターは使用中です',
     printerOffline: 'プリンターはオフラインです',
     cancel: 'キャンセル',
+    leftNozzle: 'L',
+    rightNozzle: 'R',
+    leftNozzleTooltip: '左ノズル',
+    rightNozzleTooltip: '右ノズル',
   },
   backup: {
     restoreBackup: 'バックアップの復元',

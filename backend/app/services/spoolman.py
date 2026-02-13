@@ -693,31 +693,22 @@ class SpoolmanClient:
     def is_bambu_lab_spool(self, tray_uuid: str, tag_uid: str = "", tray_info_idx: str = "") -> bool:
         """Check if a tray has a valid Bambu Lab spool.
 
-        Bambu Lab spools can be identified by:
+        Bambu Lab spools are identified by hardware RFID identifiers only:
         1. tray_uuid: 32-character hex string (preferred, consistent across printers)
         2. tag_uid: 16-character hex string (RFID tag, varies between readers)
-        3. tray_info_idx: Bambu filament preset ID like "GFA00" (most reliable)
 
-        Non-Bambu Lab spools (SpoolEase, third-party) won't have these identifiers.
+        Note: tray_info_idx (e.g. "GFA00") is NOT a reliable indicator — third-party
+        spools using Bambu generic presets also have GF-prefixed tray_info_idx values.
+        The tray_info_idx parameter is kept for API compatibility but ignored.
 
         Args:
             tray_uuid: The tray UUID to check (32 hex chars)
             tag_uid: The RFID tag UID to check as fallback (16 hex chars)
-            tray_info_idx: Bambu filament preset ID like "GFA00", "GFB00"
+            tray_info_idx: Ignored (kept for API compatibility)
 
         Returns:
-            True if the spool has valid Bambu Lab identifiers, False otherwise.
+            True if the spool has valid Bambu Lab RFID identifiers, False otherwise.
         """
-        # Check tray_info_idx first - Bambu filament preset IDs like "GFA00", "GFB00", etc.
-        # This is the most reliable indicator as it's set when the spool is recognized
-        if tray_info_idx:
-            idx = tray_info_idx.strip()
-            # Bambu Lab preset IDs start with "GF" followed by letter and digits
-            # e.g., GFA00, GFB00, GFL00, GFN00, GFG00, GFS00, GFU00
-            if idx and len(idx) >= 3 and idx.startswith("GF"):
-                logger.debug("Identified Bambu Lab spool via tray_info_idx: %s", idx)
-                return True
-
         # Check tray_uuid (preferred - consistent across printer models)
         if tray_uuid:
             uuid = tray_uuid.strip()

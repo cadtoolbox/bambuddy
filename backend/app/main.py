@@ -551,13 +551,45 @@ async def on_ams_change(printer_id: int, ams_data: list):
                     )
                     stale.append(assignment)  # Slot empty
                 elif _is_bambu_uuid(current_tray.get("tray_uuid", "")):
-                    # A Bambu Lab spool was inserted — always unlink manual assignments
+                    # A Bambu Lab spool is in this slot — check if it's the same spool
+                    # that's currently assigned. If yes, keep the assignment (avoids
+                    # unnecessary unlink/re-assign/ams_filament_setting cycle that clears
+                    # the printer's filament preset on every startup).
+                    tray_uuid = current_tray.get("tray_uuid", "")
+                    tag_uid = current_tray.get("tag_uid", "")
+                    spool = assignment.spool
+                    spool_matches = False
+                    if spool:
+                        if (spool.tray_uuid and spool.tray_uuid.upper() == tray_uuid.upper()) or (
+                            spool.tag_uid
+                            and tag_uid
+                            and tag_uid != "0000000000000000"
+                            and spool.tag_uid.upper() == tag_uid.upper()
+                        ):
+                            spool_matches = True
+                    if spool_matches:
+                        # Same BL spool still in slot — keep assignment, update fingerprint if needed
+                        cur_color = current_tray.get("tray_color", "")
+                        cur_type = current_tray.get("tray_type", "")
+                        fp_color = assignment.fingerprint_color or ""
+                        fp_type = assignment.fingerprint_type or ""
+                        if cur_color.upper() != fp_color.upper() or cur_type.upper() != fp_type.upper():
+                            assignment.fingerprint_color = cur_color
+                            assignment.fingerprint_type = cur_type
+                            logger.debug(
+                                "Auto-unlink: spool %d AMS%d-T%d — same BL spool, updated fingerprint",
+                                assignment.spool_id,
+                                assignment.ams_id,
+                                assignment.tray_id,
+                            )
+                        continue
+                    # Different BL spool or unrecognized — unlink so auto-assign can match
                     logger.info(
-                        "Auto-unlink: spool %d AMS%d-T%d — Bambu Lab spool detected (uuid=%s)",
+                        "Auto-unlink: spool %d AMS%d-T%d — different Bambu Lab spool detected (uuid=%s)",
                         assignment.spool_id,
                         assignment.ams_id,
                         assignment.tray_id,
-                        current_tray.get("tray_uuid", ""),
+                        tray_uuid,
                     )
                     stale.append(assignment)
                 else:

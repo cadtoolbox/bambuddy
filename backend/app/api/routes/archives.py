@@ -21,6 +21,7 @@ from backend.app.models.filament import Filament
 from backend.app.models.user import User
 from backend.app.schemas.archive import ArchiveResponse, ArchiveStats, ArchiveUpdate, ReprintRequest
 from backend.app.services.archive import ArchiveService
+from backend.app.utils.threemf_tools import extract_nozzle_mapping_from_3mf
 
 logger = logging.getLogger(__name__)
 
@@ -2668,6 +2669,12 @@ async def get_filament_requirements(
 
             # Sort by slot ID
             filaments.sort(key=lambda x: x["slot_id"])
+
+            # Enrich with nozzle mapping for dual-nozzle printers
+            nozzle_mapping = extract_nozzle_mapping_from_3mf(zf)
+            if nozzle_mapping:
+                for filament in filaments:
+                    filament["nozzle_id"] = nozzle_mapping.get(filament["slot_id"])
 
     except Exception as e:
         logger.warning("Failed to parse filament requirements from archive %s: %s", archive_id, e)
