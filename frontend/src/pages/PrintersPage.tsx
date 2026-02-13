@@ -636,10 +636,11 @@ function NozzleSlotHoverCard({ slot, index, activeStatus, filamentName, children
 }
 
 // Dual-nozzle hover card showing L and R nozzle details side by side
-function DualNozzleHoverCard({ leftSlot, rightSlot, activeNozzle, children }: {
+function DualNozzleHoverCard({ leftSlot, rightSlot, activeNozzle, filamentInfo, children }: {
   leftSlot?: import('../api/client').NozzleRackSlot;
   rightSlot?: import('../api/client').NozzleRackSlot;
   activeNozzle: 'L' | 'R';
+  filamentInfo?: Record<string, { name: string; k: number | null }>;
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -684,6 +685,8 @@ function DualNozzleHoverCard({ leftSlot, rightSlot, activeNozzle, children }: {
     const isActive = activeNozzle === side;
     const typeFull = nozzleTypeName(slot.nozzle_type, t);
     const flowFull = nozzleFlowName(slot.nozzle_type, t);
+    const filamentCss = parseFilamentColor(slot.filament_color);
+    const filamentName = slot.filament_id ? filamentInfo?.[slot.filament_id]?.name : undefined;
     return (
       <div className="flex-1 space-y-1.5">
         <div className={`text-[10px] font-bold pb-1 border-b border-bambu-dark-tertiary/50 ${isActive ? 'text-amber-400' : 'text-bambu-gray'}`}>
@@ -734,6 +737,19 @@ function DualNozzleHoverCard({ leftSlot, rightSlot, activeNozzle, children }: {
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-bambu-gray">{t('printers.nozzleSerial')}</span>
             <span className="text-[10px] text-white font-mono">{slot.serial_number}</span>
+          </div>
+        )}
+        {(filamentCss || slot.filament_type || slot.filament_id) && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-bambu-gray">{t('printers.nozzleFilament')}</span>
+            <div className="flex items-center gap-1">
+              {filamentCss && (
+                <div className="w-3 h-3 rounded-sm border border-white/20" style={{ backgroundColor: filamentCss }} />
+              )}
+              <span className="text-[10px] text-white font-semibold truncate max-w-[100px]">
+                {filamentName || slot.filament_type || slot.filament_id || ''}
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -2508,7 +2524,12 @@ function PrinterCard({
                   )}
                   {/* Active nozzle indicator for dual-nozzle printers */}
                   {isDualNozzle && (
-                    <DualNozzleHoverCard leftSlot={leftNozzleSlot} rightSlot={rightNozzleSlot} activeNozzle={activeNozzle}>
+                    <DualNozzleHoverCard
+                      leftSlot={leftNozzleSlot}
+                      rightSlot={rightNozzleSlot}
+                      activeNozzle={activeNozzle}
+                      filamentInfo={filamentInfo}
+                    >
                       <div className="text-center px-3 py-1.5 bg-bambu-dark rounded-lg h-full flex flex-col justify-center items-center cursor-default" title={t('printers.activeNozzle', { nozzle: activeNozzle === 'L' ? t('common.left') : t('common.right') })}>
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[11px] font-bold ${activeNozzle === 'L' ? 'text-amber-400' : 'text-gray-500'}`}>
