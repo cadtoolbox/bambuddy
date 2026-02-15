@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const MOBILE_BREAKPOINT = 1144; // hide sidebar below this width
+const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() =>

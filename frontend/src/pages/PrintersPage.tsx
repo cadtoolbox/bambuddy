@@ -2626,9 +2626,9 @@ function PrinterCard({
                     <div className="flex-1 h-px bg-bambu-dark-tertiary/30" />
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 max-[480px]:items-start">
+                  <div className="flex items-center justify-between gap-2 max-[550px]:items-start">
                     {/* Left: Fan Status - always visible, dynamic coloring */}
-                    <div className="flex items-center gap-2 min-w-0 max-[480px]:flex-wrap max-[480px]:items-start max-[480px]:gap-1.5">
+                    <div className="flex items-center gap-2 min-w-0 max-[550px]:flex-wrap max-[550px]:items-start max-[550px]:gap-1.5">
                       {/* Part Cooling Fan */}
                       <div
                         className={`flex items-center gap-1 px-1.5 py-1 rounded ${partFan && partFan > 0 ? 'bg-cyan-500/10' : 'bg-bambu-dark'}`}
@@ -2664,7 +2664,7 @@ function PrinterCard({
                     </div>
 
                     {/* Right: Print Control Buttons */}
-                    <div className="flex items-center gap-2 flex-shrink-0 max-[480px]:self-start">
+                    <div className="flex items-center gap-2 flex-shrink-0 max-[550px]:self-start">
                       {/* Stop button */}
                       <button
                         onClick={() => setShowStopConfirm(true)}
@@ -2750,7 +2750,7 @@ function PrinterCard({
                                 )}
                               </div>
                               {(ams.humidity != null || ams.temp != null) && (
-                                <div className="flex items-center gap-1.5 max-[480px]:flex-col max-[480px]:items-start">
+                                <div className="flex items-center gap-1.5 max-[550px]:flex-col max-[550px]:items-start">
                                   {ams.humidity != null && (
                                     <HumidityIndicator
                                       humidity={ams.humidity}
@@ -3104,9 +3104,9 @@ function PrinterCard({
                               )}
                             </div>
                             {/* Row 2: Slot (left) + Stats (right stacked) */}
-                            <div className="flex gap-1.5 max-[480px]:flex-col max-[480px]:items-start">
+                            <div className="flex gap-1.5 max-[550px]:flex-col max-[550px]:items-start">
                               {/* Slot wrapper with menu button, dropdown, and loading overlay */}
-                              <div className="relative group flex-1 max-[480px]:w-full">
+                              <div className="relative group flex-1 max-[550px]:w-full">
                                 {/* Loading overlay during RFID re-read */}
                                 {isHtRefreshing && (
                                   <div className="absolute inset-0 bg-bambu-dark-tertiary/80 rounded flex items-center justify-center z-20">
@@ -3230,7 +3230,7 @@ function PrinterCard({
                               </div>
                               {/* Stats stacked vertically: Temp on top, Humidity below */}
                               {(ams.humidity != null || ams.temp != null) && (
-                                <div className="flex flex-col justify-center gap-1 shrink-0 max-[480px]:w-full">
+                                <div className="flex flex-col justify-center gap-1 shrink-0 max-[550px]:w-full">
                                   {ams.temp != null && (
                                     <TemperatureIndicator
                                       temp={ams.temp}

@@ -187,7 +187,7 @@ export function AMSHistoryModal({
         {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           {/* Time Range & Mode Selector */}
-          <div className="flex items-center justify-between max-[511px]:flex-col max-[511px]:items-start max-[511px]:gap-3">
+          <div className="flex items-center justify-between max-[550px]:flex-col max-[550px]:items-start max-[550px]:gap-3">
             <div className="inline-flex gap-1 rounded-lg p-1 max-w-full flex-wrap w-fit" style={{ backgroundColor: cardBg }}>
               <button
                 onClick={() => setMode('humidity')}
@@ -228,10 +228,10 @@ export function AMSHistoryModal({
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-4 gap-4 max-[511px]:grid-cols-2">
+          <div className="grid grid-cols-4 gap-4 max-[550px]:grid-cols-2">
             {mode === 'humidity' ? (
               <>
-                <div className="rounded-lg p-4 max-[511px]:order-2" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-2" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.current', 'Current')}</p>
                   <div className="flex items-center gap-2">
                     <p className="text-2xl font-bold" style={{ color: getHumidityColor(currentHumidity) }}>
@@ -240,19 +240,19 @@ export function AMSHistoryModal({
                     <TrendIcon trend={humidityTrend} />
                   </div>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-4" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-4" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.average', 'Average')}</p>
                   <p className="text-2xl font-bold" style={{ color: textPrimary }}>
                     {data?.avg_humidity != null ? `${data.avg_humidity}%` : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-1" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-1" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.min', 'Min')}</p>
                   <p className="text-2xl font-bold text-green-500">
                     {data?.min_humidity != null ? `${data.min_humidity}%` : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-3" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-3" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.max', 'Max')}</p>
                   <p className="text-2xl font-bold text-red-500">
                     {data?.max_humidity != null ? `${data.max_humidity}%` : '—'}
@@ -261,7 +261,7 @@ export function AMSHistoryModal({
               </>
             ) : (
               <>
-                <div className="rounded-lg p-4 max-[511px]:order-2" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-2" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.current', 'Current')}</p>
                   <div className="flex items-center gap-2">
                     <p className="text-2xl font-bold" style={{ color: getTempColor(currentTemp) }}>
@@ -270,19 +270,19 @@ export function AMSHistoryModal({
                     <TrendIcon trend={tempTrend} />
                   </div>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-4" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-4" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.average', 'Average')}</p>
                   <p className="text-2xl font-bold" style={{ color: textPrimary }}>
                     {data?.avg_temperature != null ? `${data.avg_temperature}°C` : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-1" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-1" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.min', 'Min')}</p>
                   <p className="text-2xl font-bold text-blue-500">
                     {data?.min_temperature != null ? `${data.min_temperature}°C` : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg p-4 max-[511px]:order-3" style={{ backgroundColor: cardBg }}>
+                <div className="rounded-lg p-4 max-[550px]:order-3" style={{ backgroundColor: cardBg }}>
                   <p className="text-xs" style={{ color: textSecondary }}>{t('common.max', 'Max')}</p>
                   <p className="text-2xl font-bold text-red-500">
                     {data?.max_temperature != null ? `${data.max_temperature}°C` : '—'}

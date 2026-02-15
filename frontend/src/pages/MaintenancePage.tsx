@@ -351,7 +351,7 @@ function MaintenanceCard({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0 max-[550px]:w-full max-[550px]:justify-end max-[550px]:mt+1">
+        <div className="flex items-center gap-2 shrink-0 max-[550px]:w-full max-[550px]:justify-end max-[550px]:mt-1">
           <span title={!hasPermission('maintenance:update') ? t('maintenance.noPermissionUpdate') : undefined}>
             <Toggle
               checked={item.enabled}

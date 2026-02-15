@@ -178,7 +178,7 @@ export function Dashboard({ widgets, storageKey, columns = 4, stackBelow, hideCo
     if (!stackBelow) return undefined;
     const mediaQuery = window.matchMedia(`(max-width: ${stackBelow}px)`);
     const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
-      setIsStacked('matches' in event ? event.matches : event.matches);
+      setIsStacked(event.matches);
     };
     handleChange(mediaQuery);
     const onChange = (event: MediaQueryListEvent) => handleChange(event);
@@ -355,25 +355,23 @@ export function Dashboard({ widgets, storageKey, columns = 4, stackBelow, hideCo
               gridTemplateColumns: `repeat(${effectiveColumns}, minmax(0, 1fr))`,
             }}
           >
-            {visibleWidgets.map((widget) => (
-              (() => {
-                const size = layout.sizes[widget.id] || 2;
-                const columnSpan = Math.min(size, effectiveColumns);
-                return (
-              <SortableWidget
-                key={widget.id}
-                id={widget.id}
-                title={widget.title}
-                component={widget.component}
-                isHidden={layout.hidden.includes(widget.id)}
-                size={size}
-                columnSpan={columnSpan}
-                onToggleVisibility={() => toggleVisibility(widget.id)}
-                onToggleSize={() => toggleSize(widget.id)}
-              />
-                );
-              })()
-            ))}
+            {visibleWidgets.map((widget) => {
+              const size = layout.sizes[widget.id] || 2;
+              const columnSpan = Math.min(size, effectiveColumns);
+              return (
+                <SortableWidget
+                  key={widget.id}
+                  id={widget.id}
+                  title={widget.title}
+                  component={widget.component}
+                  isHidden={layout.hidden.includes(widget.id)}
+                  size={size}
+                  columnSpan={columnSpan}
+                  onToggleVisibility={() => toggleVisibility(widget.id)}
+                  onToggleSize={() => toggleSize(widget.id)}
+                />
+              );
+            })}
           </div>
         </SortableContext>
       </DndContext>

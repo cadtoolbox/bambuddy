@@ -157,7 +157,7 @@ export function FilamentTrends({ archives, currency = '$' }: FilamentTrendsProps
   return (
     <div className="space-y-6">
       {/* Time Range Selector */}
-      <div className="flex items-center justify-between max-[546px]:flex-col max-[546px]:items-start max-[546px]:gap-2">
+      <div className="flex items-center justify-between max-[550px]:flex-col max-[550px]:items-start max-[550px]:gap-2">
         <h3 className="text-lg font-semibold text-white">Filament Usage Trends</h3>
         <div className="flex gap-1 bg-bambu-dark rounded-lg p-1">
           {(['7d', '30d', '90d', '365d', 'all'] as TimeRange[]).map((range) => (
@@ -177,7 +177,7 @@ export function FilamentTrends({ archives, currency = '$' }: FilamentTrendsProps
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 max-[600px]:grid-cols-1">
+      <div className="grid grid-cols-3 gap-4 max-[640px]:grid-cols-1">
         <div className="bg-bambu-dark rounded-lg p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-bambu-gray leading-none">Period Filament</p>
