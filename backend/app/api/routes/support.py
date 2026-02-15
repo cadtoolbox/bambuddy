@@ -106,10 +106,12 @@ def _apply_log_level(debug: bool):
         logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
         logging.getLogger("httpcore").setLevel(logging.DEBUG)
         logging.getLogger("httpx").setLevel(logging.DEBUG)
+        logging.getLogger("paho.mqtt").setLevel(logging.DEBUG)
     else:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("paho.mqtt").setLevel(logging.WARNING)
 
     logger.info("Log level changed to %s", "DEBUG" if debug else "INFO")
 
