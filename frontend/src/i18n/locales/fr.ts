@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   // Navigation
   nav: {
     printers: 'Imprimantes',
@@ -1375,6 +1375,12 @@ export default {
     dataManagement: 'Gestion des données',
     storageUsage: 'Utilisation du stockage',
     storageUsageDescription: 'Répartition de l’utilisation des données par catégorie',
+    storageUsageTotal: 'Total',
+    storageUsageErrors: 'Erreurs',
+    storageUsageOtherBreakdown: 'Autre (inclut ressources statiques, scripts et fichiers de configuration)',
+    storageUsageSystem: 'Système',
+    storageUsageData: 'Données',
+    storageUsageUnavailable: 'Informations d\'utilisation du stockage non disponibles',
     clearNotificationLogsDescription: 'Supprimer logs de plus de 30 jours',
     resetUiPreferencesDescription: 'Réinitialise thèmes et affichage sans toucher aux données.',
     enableHomeAssistant: 'Activer Home Assistant',

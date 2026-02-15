@@ -202,7 +202,7 @@ export function SettingsPage() {
     isFetching: storageUsageFetching,
   } = useQuery<StorageUsageResponse>({
     queryKey: ['storage-usage'],
-    queryFn: api.getStorageUsage,
+    queryFn: () => api.getStorageUsage(),
     enabled: activeTab === 'general',
     staleTime: Infinity,
     refetchInterval: false,
