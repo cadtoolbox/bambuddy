@@ -1114,6 +1114,8 @@ export default {
     // Notifications
     notificationLanguage: 'Langue des notifications',
     notificationLanguageDescription: 'Langue pour les notifications push',
+    bedCooledThreshold: 'Seuil de refroidissement du plateau',
+    bedCooledThresholdDescription: 'Température en dessous de laquelle le plateau est considéré comme refroidi',
     notificationProviders: 'Fournisseurs de notifications',
     addProvider: 'Ajouter un fournisseur',
     editProvider: 'Modifier le fournisseur',

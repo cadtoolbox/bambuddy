@@ -791,6 +791,8 @@ export interface AppSettings {
   // Prometheus metrics
   prometheus_enabled: boolean;
   prometheus_token: string;
+  // Bed cooled threshold
+  bed_cooled_threshold: number;
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>;
@@ -1402,6 +1404,8 @@ export interface NotificationProvider {
   on_ams_ht_temperature_high: boolean;
   // Build plate detection
   on_plate_not_empty: boolean;
+  // Bed cooled
+  on_bed_cooled: boolean;
   // Print queue events
   on_queue_job_added: boolean;
   on_queue_job_assigned: boolean;
@@ -1452,6 +1456,8 @@ export interface NotificationProviderCreate {
   on_ams_ht_temperature_high?: boolean;
   // Build plate detection
   on_plate_not_empty?: boolean;
+  // Bed cooled
+  on_bed_cooled?: boolean;
   // Print queue events
   on_queue_job_added?: boolean;
   on_queue_job_assigned?: boolean;
@@ -1495,6 +1501,8 @@ export interface NotificationProviderUpdate {
   on_ams_ht_temperature_high?: boolean;
   // Build plate detection
   on_plate_not_empty?: boolean;
+  // Bed cooled
+  on_bed_cooled?: boolean;
   // Print queue events
   on_queue_job_added?: boolean;
   on_queue_job_assigned?: boolean;

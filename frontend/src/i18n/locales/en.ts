@@ -1118,6 +1118,8 @@ export default {
     // Notifications
     notificationLanguage: 'Notification Language',
     notificationLanguageDescription: 'Language for push notifications',
+    bedCooledThreshold: 'Bed Cooled Threshold',
+    bedCooledThresholdDescription: 'Temperature below which the bed is considered cooled after a print',
     notificationProviders: 'Notification Providers',
     addProvider: 'Add Provider',
     editProvider: 'Edit Provider',

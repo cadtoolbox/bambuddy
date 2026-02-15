@@ -1108,6 +1108,8 @@ export default {
     updateAvailable: 'アップデートあり',
     notificationLanguage: '通知の言語',
     notificationLanguageDescription: 'プッシュ通知の言語',
+    bedCooledThreshold: 'ベッド冷却しきい値',
+    bedCooledThresholdDescription: '印刷後にベッドが冷却されたと見なす温度',
     notificationProviders: '通知プロバイダー',
     addProvider: 'プロバイダーを追加',
     editProvider: 'プロバイダーを編集',

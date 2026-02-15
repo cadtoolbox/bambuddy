@@ -1118,6 +1118,8 @@ export default {
     // Notifications
     notificationLanguage: 'Benachrichtigungssprache',
     notificationLanguageDescription: 'Sprache für Push-Benachrichtigungen',
+    bedCooledThreshold: 'Bett-Abkühlung Schwellenwert',
+    bedCooledThresholdDescription: 'Temperatur, unter der das Bett nach einem Druck als abgekühlt gilt',
     notificationProviders: 'Benachrichtigungsanbieter',
     addProvider: 'Anbieter hinzufügen',
     editProvider: 'Anbieter bearbeiten',

@@ -1051,6 +1051,8 @@ export default {
     // Notifications
     notificationLanguage: 'Lingua notifiche',
     notificationLanguageDescription: 'Lingua per notifiche push',
+    bedCooledThreshold: 'Soglia raffreddamento piatto',
+    bedCooledThresholdDescription: 'Temperatura sotto la quale il piatto è considerato raffreddato dopo una stampa',
     notificationProviders: 'Provider notifiche',
     addProvider: 'Aggiungi provider',
     editProvider: 'Modifica provider',
