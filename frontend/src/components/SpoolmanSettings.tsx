@@ -91,6 +91,7 @@ export function SpoolmanSettings() {
       queryClient.invalidateQueries({ queryKey: ['spoolman-settings'] });
       queryClient.invalidateQueries({ queryKey: ['spoolman-status'] });
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['spool-assignments'] });
       showToast(t('settings.toast.settingsSaved'));
     },
   });

@@ -2926,7 +2926,7 @@ function PrinterCard({
                                             });
                                           } : undefined,
                                         }}
-                                        inventory={(() => {
+                                        inventory={spoolmanEnabled ? undefined : (() => {
                                           const assignment = onGetAssignment?.(printer.id, ams.id, slotIdx);
                                           return {
                                             assignedSpool: assignment?.spool ? {
@@ -3164,7 +3164,7 @@ function PrinterCard({
                                         });
                                       } : undefined,
                                     }}
-                                    inventory={(() => {
+                                    inventory={spoolmanEnabled ? undefined : (() => {
                                       const assignment = onGetAssignment?.(printer.id, ams.id, htSlotId);
                                       return {
                                         assignedSpool: assignment?.spool ? {
@@ -3350,7 +3350,7 @@ function PrinterCard({
                                           });
                                         } : undefined,
                                       }}
-                                      inventory={(() => {
+                                      inventory={spoolmanEnabled ? undefined : (() => {
                                         const assignment = onGetAssignment?.(printer.id, 255, slotTrayId);
                                         return {
                                           assignedSpool: assignment?.spool ? {
