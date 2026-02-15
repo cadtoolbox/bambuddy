@@ -20,15 +20,17 @@ REM    start_bambuddy.bat reset      Clean all & fresh start
 REM    set PORT=9000 & start_bambuddy.bat   Change port
 REM ============================================
 
-REM If launched from the "install" folder, go up one level; otherwise use current directory.
-for %%I in ("%CD%") do set "CURRENT_DIR_NAME=%%~nxI"
-if /I "%CURRENT_DIR_NAME%"=="install" (
-    set "ROOT=%CD%\.."
-    cd ..
+REM Resolve ROOT based on the script location (more reliable than %CD%).
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+for %%I in ("%SCRIPT_DIR%") do set "SCRIPT_DIR_NAME=%%~nxI"
+if /I "%SCRIPT_DIR_NAME%"=="install" (
+    set "ROOT=%SCRIPT_DIR%\.."
 ) else (
-    set "ROOT=%CD%"
+    set "ROOT=%SCRIPT_DIR%"
 )
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+cd /d "%ROOT%"
 
 set "PORTABLE=%ROOT%\.portable"
 set "PYTHON_DIR=%PORTABLE%\python"
