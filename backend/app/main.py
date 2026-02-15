@@ -1274,7 +1274,17 @@ async def on_print_start(printer_id: int, data: dict):
             select(PrintArchive)
             .where(PrintArchive.printer_id == printer_id)
             .where(PrintArchive.status == "printing")
-            .where(PrintArchive.print_name.ilike(f"%{check_name}%"))
+            .where(
+                or_(
+                    PrintArchive.print_name == check_name,
+                    PrintArchive.filename.in_(
+                        [
+                            f"{check_name}.3mf",
+                            f"{check_name}.gcode.3mf",
+                        ]
+                    ),
+                )
+            )
             .order_by(PrintArchive.created_at.desc())
             .limit(1)
         )
@@ -2633,7 +2643,14 @@ async def on_print_complete(printer_id: int, data: dict):
                 .where(PrintQueueItem.printer_id == printer_id)
                 .where(PrintQueueItem.status == "printing")
             )
-            queue_item = result.scalar_one_or_none()
+            printing_items = list(result.scalars().all())
+            if len(printing_items) > 1:
+                logger.warning(
+                    "BUG: Multiple queue items in 'printing' status for printer %s: %s",
+                    printer_id,
+                    [(i.id, i.archive_id, i.library_file_id) for i in printing_items],
+                )
+            queue_item = printing_items[0] if printing_items else None
             if queue_item:
                 status = data.get("status", "completed")
                 queue_item.status = status
