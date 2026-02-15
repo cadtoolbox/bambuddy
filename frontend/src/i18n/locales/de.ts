@@ -2656,8 +2656,8 @@ export default {
     leftNozzleTooltip: 'Linke Düse',
     rightNozzleTooltip: 'Rechte Düse',
     insufficientFilamentTitle: 'Nicht genug Filament',
-    insufficientFilamentMessage: 'Einige zugewiesene Spulen haben weniger Filament als dieser Druck benoetigt:',
-    insufficientFilamentLine: '{{printer}} - {{slot}}: benoetigt {{required}}g, verbleibend {{remaining}}g',
+    insufficientFilamentMessage: 'Einige zugewiesene Spulen haben weniger Filament als dieser Druck benötigt:',
+    insufficientFilamentLine: '{{printer}} - {{slot}}: benötigt {{required}}g, verbleibend {{remaining}}g',
     printAnyway: 'Trotzdem drucken',
   },
 
