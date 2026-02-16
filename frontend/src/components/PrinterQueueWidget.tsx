@@ -66,7 +66,7 @@ export function PrinterQueueWidget({ printerId, printerState }: PrinterQueueWidg
           <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
             <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || `Archive #${nextItem?.archive_id}`}
+              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
           </div>
           {totalPending > 1 && (
@@ -109,7 +109,7 @@ export function PrinterQueueWidget({ printerId, printerState }: PrinterQueueWidg
           <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
             <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || `Archive #${nextItem?.archive_id}`}
+              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
           </div>
         </div>
