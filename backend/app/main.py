@@ -2759,6 +2759,31 @@ async def on_print_complete(printer_id: int, data: dict):
         logging.getLogger(__name__).warning(f"Queue item update failed: {e}")
 
     log_timing("Queue item update")
+
+    # Cleanup: delete uploaded file from printer SD card to prevent phantom prints (Issue #374)
+    # The print scheduler uploads .3mf files to the SD card root (/). Some printers (e.g. P1S)
+    # auto-start files found in root on power cycle, causing ghost prints.
+    try:
+        printer_info = printer_manager.get_printer(printer_id)
+        if printer_info and subtask_name:
+            from backend.app.services.bambu_ftp import delete_file_async
+
+            remote_path = f"/{subtask_name}.3mf"
+            logger.info("Cleaning up uploaded file from printer SD card: %s", remote_path)
+            delete_result = await delete_file_async(
+                printer_info.ip_address,
+                printer_info.access_code,
+                remote_path,
+                printer_model=printer_info.model,
+            )
+            if delete_result:
+                logger.info("Deleted %s from printer %s SD card", remote_path, printer_info.name)
+            else:
+                logger.debug("File delete returned False for %s (may not exist)", remote_path)
+    except Exception as e:
+        logger.debug("SD card file cleanup failed for printer %s: %s (non-critical)", printer_id, e)
+
+    log_timing("SD card cleanup")
     logger.info("[CALLBACK] on_print_complete finished for printer %s, archive %s", printer_id, archive_id)
 
 
