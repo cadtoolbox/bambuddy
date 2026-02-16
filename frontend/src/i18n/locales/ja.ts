@@ -811,6 +811,7 @@ export default {
     clearPlate: 'プレートをクリアして次を開始',
     clearPlateSuccess: 'プレートをクリアしました — 次の印刷の準備完了',
     plateReady: 'プレートをクリアしました — 次の印刷の準備完了',
+    plateNumber: 'プレート {{index}}',
     sections: {
       currentlyPrinting: '印刷中',
       queued: 'キュー中',

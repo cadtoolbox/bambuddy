@@ -741,6 +741,7 @@ export default {
     clearPlate: 'Druckplatte freigeben & Nächsten starten',
     clearPlateSuccess: 'Druckplatte freigegeben — bereit für nächsten Druck',
     plateReady: 'Druckplatte freigegeben — bereit für nächsten Druck',
+    plateNumber: 'Platte {{index}}',
     // Sections
     sections: {
       currentlyPrinting: 'Aktuell druckend',

@@ -314,12 +314,34 @@ function SortableQueueItem({
   printerState?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  // Fetch printer status every 30 seconds while printing to monitor progress
   const { data: status } = useQuery({
     queryKey: ['printerStatus', item.printer_id],
     queryFn: () => api.getPrinterStatus(item.printer_id!),
     refetchInterval: 30000,
     enabled: item.printer_id != null && printerState === 'printing',
   });
+
+  // Determine if we're printing a library file
+  const isLibraryFile = !!item.library_file_id && !item.archive_id;
+  // Fetch archive plate details
+  const { data: archivePlatesData } = useQuery({
+    queryKey: ['archive', item.archive_id],
+    queryFn: () => api.getArchivePlates(item.archive_id!),
+    enabled: !!item.archive_id && !isLibraryFile,
+  });
+
+  // Fetch library file plate details
+  const { data: libraryPlatesData } = useQuery({
+    queryKey: ['library-file', item.library_file_id],
+    queryFn: () => api.getLibraryFilePlates(item.library_file_id!),
+    enabled: isLibraryFile && !!item.library_file_id,
+  });
+
+  // Combine plates data from either source
+  const platesData = isLibraryFile ? libraryPlatesData : archivePlatesData;
+  const plates = platesData?.plates ?? [];
+
   const canReorder = hasPermission('queue:reorder');
   const {
     attributes,
@@ -419,6 +441,7 @@ function SortableQueueItem({
           <div className="flex items-center gap-2 mb-1">
             <p className="text-white font-medium truncate">
               {item.archive_name || item.library_file_name || `File #${item.archive_id || item.library_file_id}`}
+              {(platesData?.is_multi_plate ?? false) && item.plate_id !== undefined && item.plate_id !== null && ` • ${plates.find(plate => plate.index === item.plate_id)?.name || t('queue.plateNumber', { index: item.plate_id })}`}
             </p>
             {item.archive_id ? (
               <Link

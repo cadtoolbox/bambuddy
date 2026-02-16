@@ -741,6 +741,7 @@ export default {
     clearPlate: 'Vider plateau & lancer suivant',
     clearPlateSuccess: 'Plateau vidé — prêt pour l\'impression suivante',
     plateReady: 'Plateau vidé — prêt pour l\'impression suivante',
+    plateNumber: 'Plateau {{index}}',
     // Sections
     sections: {
       currentlyPrinting: 'En cours',
