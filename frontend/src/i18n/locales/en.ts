@@ -3438,4 +3438,18 @@ export default {
 
   // Spoolman Settings
   spoolmanSettings: {},
+
+  // Time
+  time: {
+    unknown: '-',
+    waiting:'Waiting',
+    justNow: 'Just now',
+    now: 'Now',
+    minsAgo: '{{count}}m ago',
+    inMins: 'in {{count}}m',
+    hoursAgo: '{{count}}h ago',
+    inHours: 'in {{count}}h',
+    daysAgo: '{{count}}d ago',
+    inDays: '{{count}}d',
+  },
 };

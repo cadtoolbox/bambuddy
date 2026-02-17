@@ -29,6 +29,7 @@ import { ModelViewer } from './ModelViewer';
 import { GcodeViewer } from './GcodeViewer';
 import type { PlateMetadata } from '../types/plates';
 import { useToast } from '../contexts/ToastContext';
+import { formatFileSize } from '../utils/file';
 
 interface FileManagerModalProps {
   printerId: number;
@@ -235,24 +236,6 @@ function PrinterFileViewerModal({ printerId, filePath, filename, onClose }: Prin
   );
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-function formatStorageSize(bytes: number): string {
-  if (bytes === 0) return '0 GB';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) {
-    return `${gb.toFixed(1)} GB`;
-  }
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)} MB`;
-}
-
 function getFileIcon(filename: string, isDirectory: boolean) {
   if (isDirectory) return Folder;
 
@@ -444,13 +427,13 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
               {storageData && (storageData.used_bytes != null || storageData.free_bytes != null) && (
                 <div className="text-sm text-bambu-gray flex items-center gap-2">
                   {storageData.used_bytes != null && (
-                    <span>{t('printerFiles.storageUsed')} {formatStorageSize(storageData.used_bytes)}</span>
+                    <span>{t('printerFiles.storageUsed')} {formatFileSize(storageData.used_bytes)}</span>
                   )}
                   {storageData.used_bytes != null && storageData.free_bytes != null && (
                     <span className="text-bambu-dark-tertiary">|</span>
                   )}
                   {storageData.free_bytes != null && (
-                    <span>{t('printerFiles.storageFree')} {formatStorageSize(storageData.free_bytes)}</span>
+                    <span>{t('printerFiles.storageFree')} {formatFileSize(storageData.free_bytes)}</span>
                   )}
                 </div>
               )}

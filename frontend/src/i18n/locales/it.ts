@@ -2814,4 +2814,18 @@ export default {
     configuring: 'Configurazione...',
     configureSlot: 'Configura slot',
   },
+
+  // Time
+  time: {
+    unknown: '-',
+    waiting:'In attesa',
+    justNow: 'Adesso',
+    now: 'Proprio ora',
+    minsAgo: '{{count}}m fa',
+    inMins: 'tra {{count}}m',
+    hoursAgo: '{{count}}h fa',
+    inHours: 'tra {{count}}h',
+    daysAgo: '{{count}}g fa',
+    inDays: 'tra {{count}}g',
+  },
 };

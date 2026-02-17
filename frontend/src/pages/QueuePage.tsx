@@ -50,7 +50,7 @@ import {
   Weight,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { parseUTCDate, formatDateTime, type TimeFormat, formatETA, formatDuration } from '../utils/date';
+import { parseUTCDate, formatDateTime, type TimeFormat, formatETA, formatDuration, formatRelativeTime } from '../utils/date';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -62,21 +62,6 @@ import { useAuth } from '../contexts/AuthContext';
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
   return `${Math.round(g)}g`;
-}
-
-function formatRelativeTime(dateString: string | null, timeFormat: TimeFormat = 'system', t?: (key: string, options?: Record<string, unknown>) => string): string {
-  if (!dateString) return t?.('queue.time.asap') ?? 'ASAP';
-  const date = parseUTCDate(dateString);
-  if (!date) return t?.('queue.time.asap') ?? 'ASAP';
-  const now = new Date();
-  const diff = date.getTime() - now.getTime();
-
-  if (diff < -60000) return t?.('queue.time.overdue') ?? 'Overdue';
-  if (diff < 0) return t?.('queue.time.now') ?? 'Now';
-  if (diff < 60000) return t?.('queue.time.lessThanMinute') ?? 'In less than a minute';
-  if (diff < 3600000) return t?.('queue.time.inMinutes', { count: Math.round(diff / 60000) }) ?? `In ${Math.round(diff / 60000)} min`;
-  if (diff < 86400000) return t?.('queue.time.inHours', { count: Math.round(diff / 3600000) }) ?? `In ${Math.round(diff / 3600000)} hours`;
-  return formatDateTime(dateString, timeFormat);
 }
 
 function StatusBadge({ status, waitingReason, printerState, t }: { status: PrintQueueItem['status']; waitingReason?: string | null; printerState?: string | null; t: (key: string) => string }) {
@@ -492,7 +477,7 @@ function SortableQueueItem({
             {isPending && !item.manual_start && (
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
-                {formatRelativeTime(item.scheduled_time, timeFormat, t)}
+                {item.scheduled_time ? formatRelativeTime(item.scheduled_time, timeFormat, t) : t?.('queue.time.asap') ?? 'ASAP'}
               </span>
             )}
           </div>
