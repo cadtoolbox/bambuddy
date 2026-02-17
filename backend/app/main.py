@@ -261,7 +261,7 @@ _last_progress_milestone: dict[int, int] = {}
 # This prevents sending duplicate notifications for the same error
 _notified_hms_errors: dict[int, set[str]] = {}
 
-# Track timelapse file baselines at print start: {printer_id: set of MP4 filenames}
+# Track timelapse file baselines at print start: {printer_id: set of video filenames}
 # Used for snapshot-diff detection at print completion
 _timelapse_baselines: dict[int, set[str]] = {}
 
@@ -1712,10 +1712,10 @@ async def on_print_start(printer_id: int, data: dict):
 
                 # Capture timelapse file baseline for snapshot-diff on completion
                 try:
-                    baseline_files, _ = await _list_timelapse_mp4s(printer)
+                    baseline_files, _ = await _list_timelapse_videos(printer)
                     _timelapse_baselines[printer_id] = {f.get("name", "") for f in baseline_files}
                     logger.info(
-                        "[TIMELAPSE] Baseline at print start: %s MP4 files for printer %s",
+                        "[TIMELAPSE] Baseline at print start: %s video files for printer %s",
                         len(_timelapse_baselines[printer_id]),
                         printer_id,
                     )
@@ -1726,10 +1726,14 @@ async def on_print_start(printer_id: int, data: dict):
                 temp_path.unlink()
 
 
-async def _list_timelapse_mp4s(printer) -> tuple[list[dict], str | None]:
-    """List MP4 files from printer's timelapse directory.
+_TIMELAPSE_VIDEO_EXTENSIONS = (".mp4", ".avi")
 
-    Returns (mp4_files, found_path) where mp4_files is a list of file dicts
+
+async def _list_timelapse_videos(printer) -> tuple[list[dict], str | None]:
+    """List video files from printer's timelapse directory.
+
+    Finds MP4 (X1/A1 series) and AVI (P1 series) timelapse files.
+    Returns (video_files, found_path) where video_files is a list of file dicts
     and found_path is the directory where they were found, or ([], None).
     """
     from backend.app.services.bambu_ftp import list_files_async
@@ -1742,9 +1746,13 @@ async def _list_timelapse_mp4s(printer) -> tuple[list[dict], str | None]:
                 printer.ip_address, printer.access_code, timelapse_path, printer_model=printer.model
             )
             if found_files:
-                mp4_files = [f for f in found_files if not f.get("is_directory") and f.get("name", "").endswith(".mp4")]
-                if mp4_files:
-                    return mp4_files, timelapse_path
+                video_files = [
+                    f
+                    for f in found_files
+                    if not f.get("is_directory") and f.get("name", "").lower().endswith(_TIMELAPSE_VIDEO_EXTENSIONS)
+                ]
+                if video_files:
+                    return video_files, timelapse_path
         except Exception as e:
             logger.debug("[TIMELAPSE] Path %s failed: %s", timelapse_path, e)
             continue
@@ -1792,7 +1800,7 @@ async def _scan_for_timelapse_with_retries(archive_id: int, baseline_names: set[
             if baseline_names is not None:
                 # Use pre-captured baseline from print start (no race condition)
                 logger.info(
-                    "[TIMELAPSE] Using print-start baseline: %s existing MP4 files for archive %s",
+                    "[TIMELAPSE] Using print-start baseline: %s existing video files for archive %s",
                     len(baseline_names),
                     archive_id,
                 )
@@ -1804,10 +1812,10 @@ async def _scan_for_timelapse_with_retries(archive_id: int, baseline_names: set[
                     logger.warning("[TIMELAPSE] Printer not found for archive %s, aborting", archive_id)
                     return
 
-                baseline_files, _ = await _list_timelapse_mp4s(printer)
+                baseline_files, _ = await _list_timelapse_videos(printer)
                 baseline_names = {f.get("name", "") for f in baseline_files}
                 logger.info(
-                    "[TIMELAPSE] Baseline snapshot (fallback): %s existing MP4 files for archive %s",
+                    "[TIMELAPSE] Baseline snapshot (fallback): %s existing video files for archive %s",
                     len(baseline_names),
                     archive_id,
                 )
@@ -1855,18 +1863,18 @@ async def _scan_for_timelapse_with_retries(archive_id: int, baseline_names: set[
                     logger.warning("[TIMELAPSE] Printer not found for archive %s, stopping retries", archive_id)
                     return
 
-                mp4_files, found_path = await _list_timelapse_mp4s(printer)
+                video_files, found_path = await _list_timelapse_videos(printer)
 
-                if not mp4_files:
-                    logger.info("[TIMELAPSE] Attempt %s: No MP4 files found, will retry", attempt)
+                if not video_files:
+                    logger.info("[TIMELAPSE] Attempt %s: No video files found, will retry", attempt)
                     continue
 
-                logger.info("[TIMELAPSE] Attempt %s: Found %s MP4 files in %s", attempt, len(mp4_files), found_path)
-                for f in mp4_files[:5]:
+                logger.info("[TIMELAPSE] Attempt %s: Found %s video files in %s", attempt, len(video_files), found_path)
+                for f in video_files[:5]:
                     logger.info("[TIMELAPSE]   - %s", f.get("name"))
 
                 # Find files that are NEW (not in baseline snapshot)
-                new_files = [f for f in mp4_files if f.get("name", "") not in baseline_names]
+                new_files = [f for f in video_files if f.get("name", "") not in baseline_names]
 
                 if new_files:
                     # Pick the first new file (there should typically be exactly one)
@@ -1917,8 +1925,8 @@ async def _scan_for_timelapse_with_retries(archive_id: int, baseline_names: set[
                 if not printer:
                     return
 
-                mp4_files, found_path = await _list_timelapse_mp4s(printer)
-                for f in mp4_files:
+                video_files, found_path = await _list_timelapse_videos(printer)
+                for f in video_files:
                     fname = f.get("name", "")
                     if base_name.lower() in fname.lower():
                         remote_path = f.get("path") or f"/timelapse/{fname}"

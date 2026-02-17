@@ -1143,9 +1143,9 @@ function ArchiveCard({
           <div className="bg-card-dark rounded-lg max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <div>
-                <h3 className="text-lg font-semibold text-white">Select Timelapse</h3>
+                <h3 className="text-lg font-semibold text-white">{t('archives.modal.selectTimelapse')}</h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  No auto-match found. Select the timelapse for this print:
+                  {t('archives.modal.selectTimelapseDesc')}
                 </p>
               </div>
               <button
@@ -1958,9 +1958,9 @@ function ArchiveListRow({
           <div className="bg-card-dark rounded-lg max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <div>
-                <h3 className="text-lg font-semibold text-white">Select Timelapse</h3>
+                <h3 className="text-lg font-semibold text-white">{t('archives.modal.selectTimelapse')}</h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  No auto-match found. Select the timelapse for this print:
+                  {t('archives.modal.selectTimelapseDesc')}
                 </p>
               </div>
               <button
