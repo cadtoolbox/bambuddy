@@ -2604,6 +2604,8 @@ export default {
     kFactor: 'K値',
     fill: '充填率',
     configure: '設定',
+    used: '使用済み',
+    remainingUnit: '残り',
   },
   printModal: {
     flowCalibration: 'フローキャリブレーション',

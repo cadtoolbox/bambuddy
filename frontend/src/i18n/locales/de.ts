@@ -2682,6 +2682,8 @@ export default {
     kFactor: 'K-Faktor',
     fill: 'Füllstand',
     configure: 'Konfigurieren',
+    used: 'verwendet',
+    remainingUnit: 'verbleibend',
   },
 
   // Print modal

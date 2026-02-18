@@ -2347,7 +2347,7 @@ export default {
     kProfiles: 'K-Profiles',
     addKProfile: 'Aggiungi K-Profile',
     assignSpool: 'Assegna Bobina',
-    unassignSpool: 'Deassegna',
+    unassignSpool: 'Scollega',
     assignSuccess: 'Bobina assegnata e slot AMS configurato',
     assignFailed: 'Assegnazione bobina fallita',
     selectSpool: 'Seleziona una bobina da assegnare a questo slot',
@@ -2397,8 +2397,10 @@ export default {
     externalSpool: 'Bobina esterna',
     profile: 'Profilo',
     kFactor: 'K Factor',
-    fill: 'Riempi',
+    fill: 'Livello',
     configure: 'Configura',
+    used: 'utilizzato',
+    remainingUnit: 'rimanente',
   },
 
   // Print modal
