@@ -108,7 +108,8 @@ if [ -z "$BRANCH" ]; then
   [ "$BRANCH" = "HEAD" ] && BRANCH="main"
 fi
 
-if ! systemctl list-unit-files --type=service | grep -q "^${SERVICE_NAME}\.service"; then
+load_state="$(systemctl show "$SERVICE_NAME" --property=LoadState --value 2>/dev/null || true)"
+if [ -z "$load_state" ] || [ "$load_state" = "not-found" ]; then
   die "Service not found: ${SERVICE_NAME}.service"
 fi
 
