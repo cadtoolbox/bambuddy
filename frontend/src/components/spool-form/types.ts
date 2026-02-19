@@ -13,6 +13,7 @@ export interface SpoolFormData {
   weight_used: number;
   slicer_filament: string;
   note: string;
+  cost_per_kg: number | null;
 }
 
 export const defaultFormData: SpoolFormData = {
@@ -27,6 +28,7 @@ export const defaultFormData: SpoolFormData = {
   weight_used: 0,
   slicer_filament: '',
   note: '',
+  cost_per_kg: null,
 };
 
 // Printer with calibrations type

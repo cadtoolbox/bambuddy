@@ -175,6 +175,7 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
           weight_used: spool.weight_used || 0,
           slicer_filament: spool.slicer_filament || '',
           note: spool.note || '',
+          cost_per_kg: spool.cost_per_kg ?? null,
         });
         setPresetInputValue(spool.slicer_filament_name || spool.slicer_filament || '');
 
@@ -343,6 +344,7 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
       nozzle_temp_min: null,
       nozzle_temp_max: null,
       note: formData.note || null,
+      cost_per_kg: formData.cost_per_kg,
     };
 
     // Only send weight_used when creating or when explicitly changed by the user.

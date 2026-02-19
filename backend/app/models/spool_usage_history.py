@@ -18,4 +18,5 @@ class SpoolUsageHistory(Base):
     weight_used: Mapped[float] = mapped_column(Float, default=0)
     percent_used: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="completed")  # completed/failed/aborted
+    cost: Mapped[float | None] = mapped_column(Float)  # Calculated cost for this usage event
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -259,6 +259,27 @@ export function AdditionalSection({
         </div>
       </div>
 
+      {/* Cost per kg */}
+      <div>
+        <label className="block text-sm font-medium text-bambu-gray mb-1">{t('inventory.costPerKg', 'Cost per kg')}</label>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="number"
+              value={formData.cost_per_kg ?? ''}
+              min={0}
+              step={0.01}
+              placeholder="0.00"
+              onChange={(e) => {
+                const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                updateField('cost_per_kg', value);
+              }}
+              className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:outline-none focus:border-bambu-green"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Note */}
       <div>
         <label className="block text-sm font-medium text-bambu-gray mb-1">{t('inventory.note')}</label>
