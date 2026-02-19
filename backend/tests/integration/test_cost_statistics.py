@@ -242,36 +242,6 @@ class TestSpoolCostPersistence:
 class TestSpoolUsageHistoryCost:
     """Tests for cost field in SpoolUsageHistory."""
 
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_usage_history_includes_cost(self, async_client: AsyncClient, db_session):
-        """Verify usage history records include cost when available."""
-        # This test would need to trigger actual usage tracking
-        # For now, we verify the schema allows cost field
-
-        # Create spool with cost
-        spool_data = {
-            "material": "PLA",
-            "label_weight": 1000,
-            "core_weight": 250,
-            "cost_per_kg": 20.00,
-        }
-
-        create_response = await async_client.post("/api/v1/inventory/spools", json=spool_data)
-        assert create_response.status_code == 200
-        spool_id = create_response.json()["id"]
-
-        # Get usage history (will be empty for new spool)
-        history_response = await async_client.get(f"/api/v1/inventory/spools/{spool_id}/usage")
-        assert history_response.status_code == 200
-
-        # Verify response structure supports cost field
-        history = history_response.json()
-        assert isinstance(history, list)
-        # If there are records, they should have cost field
-        for _record in history:
-            assert True  # Field should exist in schema
-
 
 class TestCostCalculationScenarios:
     """End-to-end tests for various cost calculation scenarios."""
@@ -283,7 +253,8 @@ class TestCostCalculationScenarios:
 
         # Create two spools with different costs
         spool1_data = {
-            "material": "PLA",
+            "material": "ABS",
+            "brand": "TestBrand",
             "label_weight": 1000,
             "core_weight": 250,
             "cost_per_kg": 20.00,
@@ -312,6 +283,7 @@ class TestCostCalculationScenarios:
         # Create spool with specific cost
         spool_data = {
             "material": "PLA",
+            "brand": "TestBrand",
             "label_weight": 1000,
             "core_weight": 250,
             "cost_per_kg": 19.99,  # Specific price

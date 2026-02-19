@@ -140,7 +140,7 @@ const columnHeaders: Record<string, (t: TFn) => string> = {
   data_origin: () => 'Data Origin',
   tag_type: () => 'Linked Tag Type',
   remaining: (t) => t('inventory.remaining'),
-  cost_per_kg: () => 'Cost/kg',
+  cost_per_kg: (t) => t('inventory.costPerKg'),
 };
 
 // Column cell renderers (25 columns — matching SpoolBuddy exactly)
