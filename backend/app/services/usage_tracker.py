@@ -253,7 +253,10 @@ async def on_print_complete(
 
     Returns a list of dicts describing what was logged (for WebSocket broadcast).
     """
+    from sqlalchemy import select
+
     from backend.app.api.routes.settings import get_setting
+    from backend.app.models.spool_usage_history import SpoolUsageHistory
 
     session = _active_sessions.pop(printer_id, None)
     status = data.get("status", "completed")
@@ -375,6 +378,7 @@ async def on_print_complete(
                         percent_used=delta_pct,
                         status=status,
                         cost=cost,
+                        archive_id=archive_id,
                     )
                     db.add(history)
 
@@ -404,6 +408,35 @@ async def on_print_complete(
 
     if results:
         await db.commit()
+
+    # --- Update PrintArchive.cost to sum all SpoolUsageHistory costs for this archive ---
+
+    if archive_id:
+        from sqlalchemy import func, select
+
+        from backend.app.models.archive import PrintArchive
+
+        # First try: sum by archive_id
+        cost_result = await db.execute(
+            select(func.coalesce(func.sum(SpoolUsageHistory.cost), 0)).where(SpoolUsageHistory.archive_id == archive_id)
+        )
+        total_cost = cost_result.scalar() or 0
+
+        # Fallback: if no cost found, sum by print_name and printer_id (legacy)
+        archive_result = await db.execute(select(PrintArchive).where(PrintArchive.id == archive_id))
+        archive = archive_result.scalar_one_or_none()
+        if archive and total_cost == 0 and archive.print_name and archive.printer_id:
+            legacy_cost_result = await db.execute(
+                select(func.coalesce(func.sum(SpoolUsageHistory.cost), 0)).where(
+                    SpoolUsageHistory.archive_id is None,
+                    SpoolUsageHistory.print_name == archive.print_name,
+                    SpoolUsageHistory.printer_id == archive.printer_id,
+                )
+            )
+            total_cost = legacy_cost_result.scalar() or 0
+        if archive:
+            archive.cost = total_cost
+            await db.commit()
 
     return results
 
@@ -678,6 +711,7 @@ async def _track_from_3mf(
             percent_used=percent,
             status=status,
             cost=cost,
+            archive_id=archive_id,
         )
         db.add(history)
 

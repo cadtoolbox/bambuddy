@@ -862,7 +862,7 @@ async def rescan_archive(
 
     if archive.filament_used_grams and archive.filament_type:
         usage_result = await db.execute(
-            select(func.sum(SpoolUsageHistory.cost)).where(SpoolUsageHistory.print_name == archive.print_name)
+            select(func.sum(SpoolUsageHistory.cost)).where(SpoolUsageHistory.archive_id == archive.id)
         )
         usage_cost = usage_result.scalar()
         if usage_cost is not None and usage_cost > 0:
@@ -912,24 +912,35 @@ async def recalculate_all_costs(
     default_cost_setting = await get_setting(db, "default_filament_cost")
     default_cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
 
-    # Pre-fetch all usage costs in one query
+    # Pre-fetch all usage costs by archive_id
     usage_costs_result = await db.execute(
-        select(SpoolUsageHistory.print_name, func.sum(SpoolUsageHistory.cost)).group_by(SpoolUsageHistory.print_name)
+        select(SpoolUsageHistory.archive_id, func.sum(SpoolUsageHistory.cost)).group_by(SpoolUsageHistory.archive_id)
     )
     usage_costs = usage_costs_result.fetchall()
-    cost_map = {row[0]: row[1] for row in usage_costs if row[1] is not None and row[1] > 0}
+    cost_map = {row[0]: row[1] for row in usage_costs if row[0] is not None and row[1] is not None and row[1] > 0}
 
     updated = 0
     for archive in archives:
-        usage_cost = cost_map.get(archive.print_name)
+        usage_cost = cost_map.get(archive.id)
         if usage_cost is not None:
             new_cost = round(usage_cost, 2)
-        elif archive.filament_used_grams and archive.filament_type:
-            primary_type = archive.filament_type.split(",")[0].strip()
-            cost_per_kg = filaments.get(primary_type, default_cost_per_kg)
-            new_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
         else:
-            new_cost = None
+            # Fallback: sum costs for old records by print_name
+            usage_result = await db.execute(
+                select(func.sum(SpoolUsageHistory.cost)).where(
+                    SpoolUsageHistory.print_name == archive.print_name,
+                    SpoolUsageHistory.archive_id is None,
+                )
+            )
+            fallback_cost = usage_result.scalar()
+            if fallback_cost is not None and fallback_cost > 0:
+                new_cost = round(fallback_cost, 2)
+            elif archive.filament_used_grams and archive.filament_type:
+                primary_type = archive.filament_type.split(",")[0].strip()
+                cost_per_kg = filaments.get(primary_type, default_cost_per_kg)
+                new_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
+            else:
+                new_cost = None
         if new_cost is not None and archive.cost != new_cost:
             archive.cost = new_cost
             updated += 1
