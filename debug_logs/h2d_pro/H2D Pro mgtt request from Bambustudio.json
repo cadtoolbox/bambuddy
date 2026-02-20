@@ -1,0 +1,56 @@
+{
+  "print": {
+    "ams_mapping": [
+      1,
+      0,
+      128,
+      2,
+      3
+    ],
+    "ams_mapping2": [
+      {
+        "ams_id": 0,
+        "slot_id": 1
+      },
+      {
+        "ams_id": 0,
+        "slot_id": 0
+      },
+      {
+        "ams_id": 128,
+        "slot_id": 0
+      },
+      {
+        "ams_id": 0,
+        "slot_id": 2
+      },
+      {
+        "ams_id": 0,
+        "slot_id": 3
+      }
+    ],
+    "auto_bed_leveling": 2,
+    "bed_leveling": false,
+    "bed_type": "textured_plate",
+    "cfg": "0",
+    "command": "project_file",
+    "extrude_cali_flag": 2,
+    "extrude_cali_manual_mode": 0,
+    "file": "Untitled.gcode.3mf",
+    "flow_cali": false,
+    "layer_inspect": true,
+    "md5": "64B5BC029BB2A0A19D8B9FF3E7BF29D3",
+    "nozzle_offset_cali": 2,
+    "param": "Metadata/plate_1.gcode",
+    "profile_id": "0",
+    "project_id": "0",
+    "sequence_id": "20002",
+    "subtask_id": "0",
+    "subtask_name": "Untitled",
+    "task_id": "0",
+    "timelapse": true,
+    "url": "ftp://Untitled.gcode.3mf",
+    "use_ams": true,
+    "vibration_cali": false
+  }
+}

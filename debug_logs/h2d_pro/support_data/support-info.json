@@ -1,0 +1,204 @@
+{
+  "generated_at": "2026-02-18T09:23:42.855508",
+  "app": {
+    "version": "0.2.1b",
+    "debug_mode": false
+  },
+  "system": {
+    "platform": "Linux",
+    "platform_release": "6.12.62+rpt-rpi-v8",
+    "platform_version": "#1 SMP PREEMPT Debian 1:6.12.62-1+rpt1 (2025-12-18)",
+    "architecture": "aarch64",
+    "python_version": "3.13.5"
+  },
+  "environment": {
+    "docker": false,
+    "data_dir": "/home/[user]/bambuddy",
+    "log_dir": "/home/[user]/bambuddy/logs",
+    "timezone": ""
+  },
+  "database": {
+    "archives_total": 51,
+    "archives_completed": 25,
+    "printers_total": 4,
+    "filaments_total": 0,
+    "projects_total": 1,
+    "smart_plugs_total": 0
+  },
+  "printers": [
+    {
+      "index": 1,
+      "model": "H2D Pro",
+      "nozzle_count": 2,
+      "is_active": true,
+      "mqtt_connected": true,
+      "state": "FINISH",
+      "firmware_version": "01.01.00.00",
+      "wifi_signal": -90,
+      "reachable": true,
+      "ams_unit_count": 2,
+      "ams_tray_count": 5,
+      "has_vt_tray": true,
+      "external_camera_configured": false,
+      "plate_detection_enabled": false,
+      "hms_error_count": 0,
+      "nozzle_rack_count": 2
+    },
+    {
+      "index": 2,
+      "model": "X1E",
+      "nozzle_count": 1,
+      "is_active": true,
+      "mqtt_connected": true,
+      "state": "FINISH",
+      "firmware_version": "01.02.02.00",
+      "wifi_signal": -90,
+      "reachable": true,
+      "ams_unit_count": 1,
+      "ams_tray_count": 4,
+      "has_vt_tray": true,
+      "external_camera_configured": false,
+      "plate_detection_enabled": false,
+      "hms_error_count": 0,
+      "nozzle_rack_count": 1
+    },
+    {
+      "index": 3,
+      "model": "X1E",
+      "nozzle_count": 1,
+      "is_active": true,
+      "mqtt_connected": true,
+      "state": "RUNNING",
+      "firmware_version": "01.02.02.00",
+      "wifi_signal": -90,
+      "reachable": true,
+      "ams_unit_count": 1,
+      "ams_tray_count": 4,
+      "has_vt_tray": true,
+      "external_camera_configured": false,
+      "plate_detection_enabled": false,
+      "hms_error_count": 0,
+      "nozzle_rack_count": 1
+    },
+    {
+      "index": 4,
+      "model": "H2D Pro",
+      "nozzle_count": 2,
+      "is_active": true,
+      "mqtt_connected": true,
+      "state": "RUNNING",
+      "firmware_version": "01.01.00.00",
+      "wifi_signal": -90,
+      "reachable": true,
+      "ams_unit_count": 2,
+      "ams_tray_count": 5,
+      "has_vt_tray": true,
+      "external_camera_configured": false,
+      "plate_detection_enabled": false,
+      "hms_error_count": 2,
+      "nozzle_rack_count": 2
+    }
+  ],
+  "settings": {
+    "auth_enabled": "true",
+    "setup_completed": "true",
+    "auto_archive": "true",
+    "save_thumbnails": "true",
+    "capture_finish_photo": "true",
+    "default_filament_cost": "25.0",
+    "currency": "CHF",
+    "energy_cost_per_kwh": "0.15",
+    "energy_tracking_mode": "total",
+    "check_updates": "true",
+    "check_printer_firmware": "true",
+    "notification_language": "de",
+    "ams_humidity_good": "40",
+    "ams_humidity_fair": "60",
+    "ams_temp_good": "28.0",
+    "ams_temp_fair": "35.0",
+    "ams_history_retention_days": "30",
+    "per_printer_mapping_expanded": "true",
+    "date_format": "iso",
+    "time_format": "24h",
+    "default_printer_id": "None",
+    "ftp_retry_enabled": "true",
+    "ftp_retry_count": "3",
+    "ftp_retry_delay": "2",
+    "mqtt_enabled": "false",
+    "mqtt_broker": "",
+    "mqtt_port": "1883",
+    "mqtt_username": "",
+    "mqtt_topic_prefix": "bambuddy",
+    "mqtt_use_tls": "false",
+    "ha_enabled": "false",
+    "library_archive_mode": "ask",
+    "library_disk_warning_gb": "5.0",
+    "camera_view_mode": "window",
+    "prometheus_enabled": "false",
+    "debug_logging_enabled": "true",
+    "debug_logging_enabled_at": "2026-02-18T08:39:02.706910",
+    "bed_cooled_threshold": "35.0",
+    "ftp_timeout": "30",
+    "preferred_slicer": "bambu_studio",
+    "virtual_printer_enabled": "false",
+    "virtual_printer_mode": "print_queue"
+  },
+  "integrations": {
+    "notification_providers": [
+      {
+        "type": "telegram",
+        "enabled": true,
+        "has_last_error": false
+      }
+    ],
+    "spoolman": {
+      "enabled": false,
+      "reachable": false
+    },
+    "mqtt_relay": {
+      "enabled": false,
+      "connected": false,
+      "broker": "",
+      "port": 0,
+      "topic_prefix": "bambuddy"
+    },
+    "homeassistant": {
+      "enabled": false
+    }
+  },
+  "database_health": {
+    "journal_mode": "wal",
+    "quick_check": "ok",
+    "db_size_bytes": 1531904,
+    "wal_size_bytes": 4610312
+  },
+  "dependencies": {
+    "fastapi": "0.128.0",
+    "uvicorn": "0.40.0",
+    "pydantic": "2.12.5",
+    "sqlalchemy": "2.0.46",
+    "paho-mqtt": "2.1.0",
+    "psutil": "7.2.2",
+    "httpx": "0.28.1",
+    "aiofiles": "25.1.0",
+    "cryptography": "46.0.5",
+    "opencv-python-headless": "4.13.0.90",
+    "numpy": "2.4.2"
+  },
+  "log_file": {
+    "size_bytes": 1889843,
+    "size_formatted": "1.8 MB"
+  },
+  "network": {
+    "interface_count": 1,
+    "interfaces": [
+      {
+        "name": "eth0",
+        "subnet": "129.129.181.0/24"
+      }
+    ]
+  },
+  "websockets": {
+    "active_connections": 1
+  }
+}

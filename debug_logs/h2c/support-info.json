@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-02-18T11:05:41.783882",
+  "app": {
+    "version": "0.2.1b",
+    "debug_mode": false
+  },
+  "system": {
+    "platform": "Windows",
+    "platform_release": "10",
+    "platform_version": "10.0.26100",
+    "architecture": "AMD64",
+    "python_version": "3.11.0"
+  },
+  "environment": {
+    "docker": false,
+    "data_dir": "C:\\Users\\Matteo\\Documents\\Personal\\3D Printing\\bambuddy",
+    "log_dir": "C:\\Users\\Matteo\\Documents\\Personal\\3D Printing\\bambuddy\\logs",
+    "timezone": ""
+  },
+  "database": {
+    "archives_total": 12,
+    "archives_completed": 1,
+    "printers_total": 1,
+    "filaments_total": 0,
+    "projects_total": 1,
+    "smart_plugs_total": 1
+  },
+  "printers": [
+    {
+      "index": 1,
+      "model": "H2C",
+      "nozzle_count": 2,
+      "is_active": true,
+      "mqtt_connected": true,
+      "state": "FAILED",
+      "firmware_version": "01.01.05.00",
+      "wifi_signal": -51,
+      "reachable": true,
+      "ams_unit_count": 2,
+      "ams_tray_count": 5,
+      "has_vt_tray": true,
+      "external_camera_configured": false,
+      "plate_detection_enabled": false,
+      "hms_error_count": 2,
+      "nozzle_rack_count": 7
+    }
+  ],
+  "settings": {
+    "auth_enabled": "true",
+    "setup_completed": "true",
+    "auto_archive": "true",
+    "save_thumbnails": "true",
+    "capture_finish_photo": "true",
+    "default_filament_cost": "25.0",
+    "currency": "USD",
+    "energy_cost_per_kwh": "0.15",
+    "energy_tracking_mode": "total",
+    "check_updates": "true",
+    "check_printer_firmware": "true",
+    "notification_language": "en",
+    "ams_humidity_good": "40",
+    "ams_humidity_fair": "60",
+    "ams_temp_good": "28.0",
+    "ams_temp_fair": "35.0",
+    "ams_history_retention_days": "30",
+    "per_printer_mapping_expanded": "false",
+    "date_format": "system",
+    "time_format": "system",
+    "default_printer_id": "None",
+    "ftp_retry_enabled": "true",
+    "ftp_retry_count": "3",
+    "ftp_retry_delay": "2",
+    "ftp_timeout": "30",
+    "mqtt_enabled": "false",
+    "mqtt_broker": "",
+    "mqtt_port": "1883",
+    "mqtt_username": "",
+    "mqtt_topic_prefix": "bambuddy",
+    "mqtt_use_tls": "false",
+    "ha_enabled": "false",
+    "library_archive_mode": "ask",
+    "library_disk_warning_gb": "5.0",
+    "camera_view_mode": "window",
+    "prometheus_enabled": "false",
+    "spoolman_enabled": "false",
+    "spoolman_sync_mode": "auto",
+    "spoolman_disable_weight_sync": "true",
+    "spoolman_report_partial_usage": "true",
+    "debug_logging_enabled": "true",
+    "debug_logging_enabled_at": "2026-02-18T10:28:42.159229",
+    "disable_filament_warnings": "false",
+    "preferred_slicer": "bambu_studio",
+    "virtual_printer_enabled": "false",
+    "virtual_printer_mode": "proxy"
+  },
+  "integrations": {
+    "notification_providers": [],
+    "spoolman": {
+      "enabled": false,
+      "reachable": false
+    },
+    "mqtt_relay": {
+      "enabled": false,
+      "connected": false,
+      "broker": "",
+      "port": 0,
+      "topic_prefix": "bambuddy"
+    },
+    "homeassistant": {
+      "enabled": false
+    }
+  },
+  "database_health": {
+    "journal_mode": "wal",
+    "quick_check": "ok",
+    "db_size_bytes": 1081344,
+    "wal_size_bytes": 4181832
+  },
+  "dependencies": {
+    "fastapi": "0.115.6",
+    "uvicorn": "0.34.0",
+    "pydantic": "2.10.4",
+    "sqlalchemy": "2.0.46",
+    "paho-mqtt": "2.1.0",
+    "psutil": "6.1.0",
+    "httpx": "0.28.1",
+    "aiofiles": "25.1.0",
+    "cryptography": "44.0.3",
+    "opencv-python-headless": "4.11.0.86",
+    "numpy": "2.2.5"
+  },
+  "log_file": {
+    "size_bytes": 4256083,
+    "size_formatted": "4.1 MB"
+  },
+  "network": {
+    "interface_count": 0,
+    "interfaces": []
+  },
+  "websockets": {
+    "active_connections": 2
+  }
+}
