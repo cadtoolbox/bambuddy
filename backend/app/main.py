@@ -2447,7 +2447,7 @@ async def on_print_complete(printer_id: int, data: dict):
 
                         energy_cost_per_kwh = await get_setting(db, "energy_cost_per_kwh")
                         cost_per_kwh = float(energy_cost_per_kwh) if energy_cost_per_kwh else 0.15
-                        energy_cost = round(energy_used * cost_per_kwh, 2)
+                        energy_cost = round(energy_used * cost_per_kwh, 3)
 
                         from backend.app.models.archive import PrintArchive
 
