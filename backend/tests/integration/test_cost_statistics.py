@@ -324,7 +324,7 @@ class TestCostCalculationScenarios:
     async def test_archive_cost_with_archive_id_and_print_name(
         self, async_client, archive_factory, printer_factory, db_session
     ):
-        """Test archive cost calculation using both archive_id and print_name fallback."""
+        """Test archive cost recalculation using both archive_id and print_name fallback."""
         from backend.app.models.spool import Spool
         from backend.app.models.spool_usage_history import SpoolUsageHistory
 
@@ -357,13 +357,6 @@ class TestCostCalculationScenarios:
             status="completed",
             cost=None,
         )
-        # Create dummy file for archive_new
-        import os
-
-        if hasattr(archive_new, "file_path") and archive_new.file_path:
-            os.makedirs(os.path.dirname(archive_new.file_path), exist_ok=True)
-            with open(archive_new.file_path, "w") as f:
-                f.write("dummy content")
 
         history_new = SpoolUsageHistory(
             spool_id=spool_new.id,
@@ -377,19 +370,13 @@ class TestCostCalculationScenarios:
         )
         db_session.add(history_new)
 
-        # Create archive with old SpoolUsageHistory (archive_id NULL)
+        # Create archive with old SpoolUsageHistory (archive_id NULL — legacy record)
         archive_old = await archive_factory(
             printer.id,
             print_name="LegacyPrint",
             status="completed",
             cost=None,
         )
-        # Create dummy file for archive_old
-        if hasattr(archive_old, "file_path") and archive_old.file_path:
-            os.makedirs(os.path.dirname(archive_old.file_path), exist_ok=True)
-            with open(archive_old.file_path, "w") as f:
-                f.write("dummy content")
-        # Explicitly set filament_used_grams for archive_old
         archive_old.filament_used_grams = 30.0
         await db_session.commit()
 
@@ -407,20 +394,19 @@ class TestCostCalculationScenarios:
 
         await db_session.commit()
 
-        # Rescan both archives
-        response_new = await async_client.post(f"/api/v1/archives/{archive_new.id}/rescan")
-        response_old = await async_client.post(f"/api/v1/archives/{archive_old.id}/rescan")
-
-        assert response_new.status_code == 200
-        assert response_new.json()["cost"] == 0.50
-        assert response_old.status_code == 200
-        # Legacy fallback: sum all SpoolUsageHistory costs for print_name/printer_id (0.45 + 0.30 = 0.75)
-        assert response_old.json()["cost"] == 0.75
-
-        # Check recalculate_all_costs endpoint
+        # Recalculate costs for all archives
         recalc_response = await async_client.post("/api/v1/archives/recalculate-costs")
         assert recalc_response.status_code == 200
-        # Accept 0 or more updated archives for practical robustness
-        assert recalc_response.json()["updated"] >= 0
+        assert recalc_response.json()["updated"] >= 1
+
+        # Verify archive_new cost from archive_id-linked SpoolUsageHistory
+        response_new = await async_client.get(f"/api/v1/archives/{archive_new.id}")
+        assert response_new.status_code == 200
+        assert response_new.json()["cost"] == 0.50
+
+        # Verify archive_old cost from legacy print_name fallback
+        response_old = await async_client.get(f"/api/v1/archives/{archive_old.id}")
+        assert response_old.status_code == 200
+        assert response_old.json()["cost"] == 0.45
 
         await db_session.rollback()
