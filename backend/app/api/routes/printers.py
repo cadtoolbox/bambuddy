@@ -91,6 +91,29 @@ async def list_usb_cameras(
     return {"cameras": cameras}
 
 
+@router.get("/developer-mode-warnings")
+async def get_developer_mode_warnings(
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if any connected printer lacks developer LAN mode."""
+    result = await db.execute(select(Printer).where(Printer.is_active == True))  # noqa: E712
+    printers = result.scalars().all()
+    statuses = printer_manager.get_all_statuses()
+
+    warnings = []
+    for printer in printers:
+        state = statuses.get(printer.id)
+        if state and state.connected and state.developer_mode is False:
+            warnings.append(
+                {
+                    "printer_id": printer.id,
+                    "name": printer.name,
+                }
+            )
+    return warnings
+
+
 @router.get("/{printer_id}", response_model=PrinterResponse)
 async def get_printer(
     printer_id: int,
@@ -467,6 +490,7 @@ async def get_printer_status(
         big_fan2_speed=state.big_fan2_speed,
         heatbreak_fan_speed=state.heatbreak_fan_speed,
         firmware_version=state.firmware_version,
+        developer_mode=state.developer_mode if state else None,
         plate_cleared=printer_manager.is_plate_cleared(printer_id),
     )
 

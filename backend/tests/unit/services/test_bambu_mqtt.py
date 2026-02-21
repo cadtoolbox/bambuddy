@@ -2190,3 +2190,116 @@ class TestTrayChangeLog:
             mqtt_client.state.last_loaded_tray = tn
 
         assert mqtt_client.state.tray_change_log == [(0, 0), (1, 50), (3, 120), (0, 200)]
+
+
+class TestDeveloperModeDetection:
+    """Tests for developer LAN mode detection from MQTT 'fun' field."""
+
+    @pytest.fixture
+    def mqtt_client(self):
+        """Create a BambuMQTTClient instance for testing."""
+        from backend.app.services.bambu_mqtt import BambuMQTTClient
+
+        client = BambuMQTTClient(
+            ip_address="192.168.1.100",
+            serial_number="TEST123",
+            access_code="12345678",
+        )
+        return client
+
+    def test_developer_mode_initially_none(self, mqtt_client):
+        """Verify developer_mode starts as None (unknown)."""
+        assert mqtt_client.state.developer_mode is None
+
+    def test_developer_mode_on_when_bit_clear(self, mqtt_client):
+        """Verify developer_mode is True when bit 0x20000000 is clear."""
+        # Bit 29 clear in lower 32 bits = developer mode ON
+        payload = {
+            "print": {
+                "gcode_state": "IDLE",
+                "fun": "1C8187FF9CFF",
+            }
+        }
+        mqtt_client._process_message(payload)
+        assert mqtt_client.state.developer_mode is True
+
+    def test_developer_mode_off_when_bit_set(self, mqtt_client):
+        """Verify developer_mode is False when bit 0x20000000 is set."""
+        # Bit 29 set in lower 32 bits = developer mode OFF (encryption required)
+        payload = {
+            "print": {
+                "gcode_state": "IDLE",
+                "fun": "1C81A7FF9CFF",
+            }
+        }
+        mqtt_client._process_message(payload)
+        assert mqtt_client.state.developer_mode is False
+
+    def test_developer_mode_exact_bit_check(self, mqtt_client):
+        """Verify only bit 0x20000000 matters, not other bits."""
+        # 0x20000000 in hex = bit 29. Set ONLY that bit.
+        payload = {
+            "print": {
+                "gcode_state": "IDLE",
+                "fun": "000020000000",
+            }
+        }
+        mqtt_client._process_message(payload)
+        assert mqtt_client.state.developer_mode is False
+
+        # All zeros = all bits clear = developer mode ON
+        payload["print"]["fun"] = "000000000000"
+        mqtt_client._process_message(payload)
+        assert mqtt_client.state.developer_mode is True
+
+    def test_developer_mode_invalid_fun_ignored(self, mqtt_client):
+        """Verify invalid fun values don't crash or change state."""
+        mqtt_client.state.developer_mode = True
+
+        payload = {
+            "print": {
+                "gcode_state": "IDLE",
+                "fun": "not_a_hex_value",
+            }
+        }
+        mqtt_client._process_message(payload)
+        # Should remain unchanged
+        assert mqtt_client.state.developer_mode is True
+
+    def test_developer_mode_missing_fun_preserves_state(self, mqtt_client):
+        """Verify messages without fun field don't reset developer_mode."""
+        mqtt_client.state.developer_mode = False
+
+        payload = {
+            "print": {
+                "gcode_state": "RUNNING",
+                "mc_percent": 50,
+            }
+        }
+        mqtt_client._process_message(payload)
+        assert mqtt_client.state.developer_mode is False
+
+    def test_developer_mode_persists_across_messages(self, mqtt_client):
+        """Verify developer_mode set by fun persists across messages without fun."""
+        # First message sets developer_mode
+        mqtt_client._process_message(
+            {
+                "print": {
+                    "gcode_state": "IDLE",
+                    "fun": "3EC1AFFF9CFF",
+                }
+            }
+        )
+        assert mqtt_client.state.developer_mode is False
+
+        # Subsequent messages without fun don't change it
+        for _ in range(3):
+            mqtt_client._process_message(
+                {
+                    "print": {
+                        "gcode_state": "RUNNING",
+                        "mc_percent": 50,
+                    }
+                }
+            )
+        assert mqtt_client.state.developer_mode is False

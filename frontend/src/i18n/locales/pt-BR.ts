@@ -459,6 +459,8 @@ export default {
       height: 'Altura',
       instruction: 'Ajuste a área de detecção para focar na placa de construção. A caixa verde na pré-visualização mostra a área atual.',
     },
+    developerModeWarning: 'O modo desenvolvedor LAN não está ativado em: {{names}}. Alguns recursos podem não funcionar.',
+    howToEnable: 'Como ativar',
   },
 
   // Archives page

@@ -450,6 +450,8 @@ export default {
       height: 'Altezza',
       instruction: 'Regola l\'area di rilevamento per focalizzare il piatto. Il riquadro verde mostra l\'area corrente.',
     },
+    developerModeWarning: 'La modalità sviluppatore LAN non è attivata su: {{names}}. Alcune funzionalità potrebbero non funzionare.',
+    howToEnable: 'Come attivare',
   },
 
   // Archives page

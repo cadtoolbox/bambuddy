@@ -250,6 +250,8 @@ export interface PrinterStatus {
   big_fan2_speed: number | null;     // Chamber/exhaust fan
   heatbreak_fan_speed: number | null; // Hotend heatbreak fan
   firmware_version: string | null;   // Firmware version from MQTT
+  // Developer LAN mode: true = enabled, false = disabled, null = unknown
+  developer_mode: boolean | null;
   // Queue: user has acknowledged plate is cleared for next queued print
   plate_cleared: boolean;
 }
@@ -2292,6 +2294,8 @@ export const api = {
       `/printers/${id}?delete_archives=${deleteArchives}`,
       { method: 'DELETE' }
     ),
+  getDeveloperModeWarnings: () =>
+    request<{ printer_id: number; name: string }[]>('/printers/developer-mode-warnings'),
   getPrinterStatus: (id: number) =>
     request<PrinterStatus>(`/printers/${id}/status`),
   refreshPrinterStatus: (id: number) =>

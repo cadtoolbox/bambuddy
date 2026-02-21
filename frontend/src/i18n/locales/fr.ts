@@ -459,6 +459,8 @@ export default {
       height: 'Hauteur',
       instruction: 'Ajustez le cadre vert pour cibler le plateau.',
     },
+    developerModeWarning: 'Le mode développeur LAN n\'est pas activé sur : {{names}}. Certaines fonctionnalités peuvent ne pas fonctionner.',
+    howToEnable: 'Comment activer',
   },
 
   // Archives page

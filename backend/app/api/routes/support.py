@@ -495,6 +495,7 @@ async def _collect_support_info() -> dict:
                     "external_camera_configured": bool(printer.external_camera_url),
                     "plate_detection_enabled": printer.plate_detection_enabled,
                     "hms_error_count": len(state.hms_errors) if state else 0,
+                    "developer_mode": state.developer_mode if state else None,
                     "nozzle_rack_count": len(state.nozzle_rack) if state else 0,
                 }
             )

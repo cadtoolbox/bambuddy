@@ -168,6 +168,9 @@ class PrinterState:
     tray_change_log: list = field(default_factory=list)
     # Firmware version info (from info.module[name="ota"].sw_ver)
     firmware_version: str | None = None
+    # Developer LAN mode: parsed from MQTT "fun" field bit 0x20000000
+    # True = dev mode ON (no encryption), False = dev mode OFF (encryption required), None = unknown
+    developer_mode: bool | None = None
 
 
 # Stage name mapping from BambuStudio DeviceManager.cpp
@@ -2051,6 +2054,14 @@ class BambuMQTTClient:
         ams_extruder_map_data = self.state.raw_data.get("ams_extruder_map")
         mapping_data = self.state.raw_data.get("mapping")
         self.state.raw_data = data
+
+        # Parse developer LAN mode from "fun" field
+        if "fun" in data:
+            try:
+                fun_int = int(data["fun"], 16)
+                self.state.developer_mode = (fun_int & 0x20000000) == 0
+            except (ValueError, TypeError):
+                pass
         if ams_data is not None:
             self.state.raw_data["ams"] = ams_data
         if vt_tray_data is not None:

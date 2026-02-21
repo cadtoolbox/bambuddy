@@ -459,6 +459,8 @@ export default {
       height: 'Höhe',
       instruction: 'Passen Sie den Erkennungsbereich an, um sich auf die Druckplatte zu konzentrieren. Der grüne Rahmen in der Vorschau zeigt den aktuellen Bereich.',
     },
+    developerModeWarning: 'Der Entwickler-LAN-Modus ist nicht aktiviert auf: {{names}}. Einige Funktionen funktionieren möglicherweise nicht.',
+    howToEnable: 'Aktivieren',
   },
 
   // Archives page

@@ -459,6 +459,8 @@ export default {
       height: 'Height',
       instruction: 'Adjust the detection area to focus on the build plate. The green box in the preview shows the current area.',
     },
+    developerModeWarning: 'Developer LAN mode is not enabled on: {{names}}. Some features may not work.',
+    howToEnable: 'How to enable',
   },
 
   // Archives page
