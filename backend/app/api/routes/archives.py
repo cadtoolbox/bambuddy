@@ -1822,8 +1822,7 @@ async def upload_photo(
         raise HTTPException(400, "File must be an image (.jpg, .jpeg, .png, .webp)")
 
     # Get archive directory
-    file_path = settings.base_dir / archive.file_path
-    archive_dir = file_path.parent
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
     photos_dir = archive_dir / "photos"
     photos_dir.mkdir(exist_ok=True)
 
@@ -1864,8 +1863,8 @@ async def get_photo(
     if not archive:
         raise HTTPException(404, "Archive not found")
 
-    file_path = settings.base_dir / archive.file_path
-    photo_path = file_path.parent / "photos" / filename
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
+    photo_path = archive_dir / "photos" / filename
 
     if not photo_path.exists():
         raise HTTPException(404, "Photo not found")
@@ -1900,8 +1899,8 @@ async def delete_photo(
         raise HTTPException(404, "Photo not found")
 
     # Delete file
-    file_path = settings.base_dir / archive.file_path
-    photo_path = file_path.parent / "photos" / filename
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
+    photo_path = archive_dir / "photos" / filename
     if photo_path.exists():
         photo_path.unlink()
 
