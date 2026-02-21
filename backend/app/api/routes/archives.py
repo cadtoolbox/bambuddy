@@ -829,7 +829,7 @@ async def rescan_archive(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     # Parse the 3MF file
@@ -966,7 +966,7 @@ async def rescan_all_archives(
     for archive in archives:
         try:
             file_path = settings.base_dir / archive.file_path
-            if not file_path.exists():
+            if not file_path.is_file():
                 errors.append({"id": archive.id, "error": "File not found"})
                 continue
 
@@ -1036,7 +1036,7 @@ async def backfill_content_hashes(
     for archive in archives:
         try:
             file_path = settings.base_dir / archive.file_path
-            if not file_path.exists():
+            if not file_path.is_file():
                 errors.append({"id": archive.id, "error": "File not found"})
                 continue
 
@@ -1095,7 +1095,7 @@ async def download_archive(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     # Use inline disposition to let browser/OS handle file association
@@ -1123,7 +1123,7 @@ async def download_archive_with_filename(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     return FileResponse(
@@ -1179,7 +1179,7 @@ async def download_archive_for_slicer(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     return FileResponse(
@@ -1990,7 +1990,7 @@ async def get_archive_capabilities(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     has_model = False
@@ -2208,7 +2208,7 @@ async def get_gcode(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     try:
@@ -2250,7 +2250,7 @@ async def get_plate_preview(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     try:
@@ -2411,7 +2411,7 @@ async def get_archive_plates(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     plates = []
@@ -2679,7 +2679,7 @@ async def get_plate_thumbnail(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     try:
@@ -2718,7 +2718,7 @@ async def get_filament_requirements(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     filaments = []
@@ -2938,7 +2938,7 @@ async def get_project_page(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)
@@ -2963,7 +2963,7 @@ async def update_project_page(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)
@@ -2995,7 +2995,7 @@ async def get_project_image(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)

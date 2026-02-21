@@ -1011,7 +1011,7 @@ def _load_objects_from_archive(archive, printer_id: int, logger) -> None:
         from backend.app.services.archive import extract_printable_objects_from_3mf
 
         file_path = app_settings.base_dir / archive.file_path
-        if file_path.exists() and str(file_path).endswith(".3mf"):
+        if file_path.is_file() and str(file_path).endswith(".3mf"):
             with open(file_path, "rb") as f:
                 threemf_data = f.read()
             # Extract with positions for UI overlay
@@ -2499,7 +2499,7 @@ async def on_print_complete(printer_id: int, data: dict):
                         result = await db.execute(select(PrintArchive).where(PrintArchive.id == archive_id))
                         archive = result.scalar_one_or_none()
 
-                        if archive:
+                        if archive and archive.file_path:
                             import uuid
                             from datetime import datetime
                             from pathlib import Path
