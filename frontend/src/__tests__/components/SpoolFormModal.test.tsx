@@ -140,6 +140,8 @@ describe('SpoolFormModal weightTouched', () => {
 
     // Change the remaining weight from 700 to 500 (weight_used becomes 1000 - 500 = 500)
     fireEvent.change(remainingInput, { target: { value: '500' } });
+    // Blur triggers updateField('weight_used', ...) which sets weightTouched
+    fireEvent.blur(remainingInput);
 
     // Click Save
     const saveButton = screen.getByRole('button', { name: /save/i });
