@@ -22,6 +22,7 @@ from backend.app.models.user import User
 from backend.app.schemas.spool import (
     SpoolAssignmentCreate,
     SpoolAssignmentResponse,
+    SpoolBulkCreate,
     SpoolCreate,
     SpoolKProfileBase,
     SpoolKProfileResponse,
@@ -480,6 +481,24 @@ async def create_spool(
     await db.refresh(spool)
     result = await db.execute(select(Spool).options(selectinload(Spool.k_profiles)).where(Spool.id == spool.id))
     return result.scalar_one()
+
+
+@router.post("/spools/bulk", response_model=list[SpoolResponse])
+async def bulk_create_spools(
+    data: SpoolBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+):
+    """Create multiple identical spools."""
+    spools = []
+    for _ in range(data.quantity):
+        spool = Spool(**data.spool.model_dump())
+        db.add(spool)
+        spools.append(spool)
+    await db.commit()
+    ids = [s.id for s in spools]
+    result = await db.execute(select(Spool).options(selectinload(Spool.k_profiles)).where(Spool.id.in_(ids)))
+    return list(result.scalars().all())
 
 
 @router.patch("/spools/{spool_id}", response_model=SpoolResponse)

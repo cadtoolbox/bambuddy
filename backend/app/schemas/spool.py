@@ -29,6 +29,11 @@ class SpoolCreate(SpoolBase):
     pass
 
 
+class SpoolBulkCreate(BaseModel):
+    spool: SpoolCreate
+    quantity: int = Field(default=1, ge=1, le=100)
+
+
 class SpoolUpdate(BaseModel):
     material: str | None = None
     subtype: str | None = None

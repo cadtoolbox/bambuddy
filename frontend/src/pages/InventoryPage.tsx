@@ -52,6 +52,7 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'tag_id', label: 'Tag ID', visible: false },
   { id: 'data_origin', label: 'Data Origin', visible: false },
   { id: 'tag_type', label: 'Linked Tag Type', visible: false },
+  { id: 'stock', label: 'Stock', visible: false },
   { id: 'remaining', label: 'Remaining', visible: true },
   { id: 'cost_per_kg', label: 'Cost/kg', visible: false },
 ];
@@ -116,6 +117,7 @@ type CellCtx = {
   assignmentMap: Record<number, SpoolAssignment>;
   currencySymbol: string;
   dateFormat: DateFormat;
+  t: TFn;
 };
 
 // Column header labels (25 columns — matching SpoolBuddy exactly)
@@ -143,6 +145,7 @@ const columnHeaders: Record<string, (t: TFn) => string> = {
   tag_id: () => 'Tag ID',
   data_origin: () => 'Data Origin',
   tag_type: () => 'Linked Tag Type',
+  stock: (t) => t('inventory.stock'),
   remaining: (t) => t('inventory.remaining'),
   cost_per_kg: (t) => t('inventory.costPerKg'),
 };
@@ -248,6 +251,16 @@ const columnCells: Record<string, (ctx: CellCtx) => ReactNode> = {
   tag_type: ({ spool }) => (
     <span className="text-sm text-bambu-gray">{spool.tag_type || '-'}</span>
   ),
+  stock: ({ spool, t }) => {
+    if (!spool.slicer_filament) {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-400">
+          {t('inventory.stock')}
+        </span>
+      );
+    }
+    return <span className="text-sm text-bambu-gray">-</span>;
+  },
   remaining: ({ remaining, pct }) => (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-bambu-dark-tertiary rounded-full overflow-hidden">
@@ -292,6 +305,7 @@ const columnSortValues: Record<string, (spool: InventorySpool, assignmentMap: Re
   note: (s) => (s.note || '').toLowerCase(),
   data_origin: (s) => (s.data_origin || '').toLowerCase(),
   tag_type: (s) => (s.tag_type || '').toLowerCase(),
+  stock: (s) => s.slicer_filament ? 1 : 0,
   cost_per_kg: (s) => s.cost_per_kg ?? 0,
 };
 
@@ -327,6 +341,7 @@ export default function InventoryPage() {
   const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
   const [materialFilter, setMaterialFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'stock' | 'configured'>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [sortState, setSortState] = useState<SortState>(loadSortState);
@@ -462,6 +477,13 @@ export default function InventoryPage() {
       filtered = filtered.filter((s) => s.brand === brandFilter);
     }
 
+    // Stock filter
+    if (stockFilter === 'stock') {
+      filtered = filtered.filter((s) => !s.slicer_filament);
+    } else if (stockFilter === 'configured') {
+      filtered = filtered.filter((s) => !!s.slicer_filament);
+    }
+
     // Global search
     if (search) {
       const q = search.toLowerCase();
@@ -476,7 +498,7 @@ export default function InventoryPage() {
     }
 
     return filtered;
-  }, [spools, archiveFilter, usageFilter, materialFilter, brandFilter, search]);
+  }, [spools, archiveFilter, usageFilter, materialFilter, brandFilter, stockFilter, search]);
 
   // Reset page on filter changes
   const resetPage = () => setPageIndex(0);
@@ -486,7 +508,7 @@ export default function InventoryPage() {
   const uniqueBrands = [...new Set(spools?.map((s) => s.brand).filter(Boolean) || [])].sort() as string[];
 
   // Check if any filters are non-default
-  const hasActiveFilters = archiveFilter !== 'active' || usageFilter !== 'all' || !!materialFilter || !!brandFilter || !!search;
+  const hasActiveFilters = archiveFilter !== 'active' || usageFilter !== 'all' || !!materialFilter || !!brandFilter || stockFilter !== 'all' || !!search;
 
   const handleColumnConfigSave = (config: ColumnConfig[]) => {
     setColumnConfig(config);
@@ -548,6 +570,7 @@ export default function InventoryPage() {
     setUsageFilter('all');
     setMaterialFilter('');
     setBrandFilter('');
+    setStockFilter('all');
     setSearch('');
     resetPage();
   };
@@ -758,6 +781,40 @@ export default function InventoryPage() {
           </button>
         </div>
 
+        {/* Stock filter chips */}
+        <div className="flex items-center rounded-lg border border-bambu-dark-tertiary overflow-hidden">
+          <button
+            onClick={() => { setStockFilter('all'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'all'
+                ? 'bg-bambu-green/20 text-bambu-green'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.all')}
+          </button>
+          <button
+            onClick={() => { setStockFilter('stock'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'stock'
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.stock')}
+          </button>
+          <button
+            onClick={() => { setStockFilter('configured'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'configured'
+                ? 'bg-bambu-green/20 text-bambu-green'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.configured')}
+          </button>
+        </div>
+
         <div className="w-px h-5 bg-bambu-dark-tertiary" />
 
         {/* Material dropdown chip */}
@@ -952,7 +1009,7 @@ export default function InventoryPage() {
                       >
                         {visibleColumns.map((colId) => (
                           <td key={colId} className="py-3 px-4">
-                            {columnCells[colId]?.({ spool, remaining, pct, assignmentMap, currencySymbol, dateFormat })}
+                            {columnCells[colId]?.({ spool, remaining, pct, assignmentMap, currencySymbol, dateFormat, t })}
                           </td>
                         ))}
                         <td className="py-3 px-4">

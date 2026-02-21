@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Save, Beaker, Palette } from 'lucide-react';
+import { X, Loader2, Save, Beaker, Palette, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import type { InventorySpool, SlicerSetting, SpoolCatalogEntry, LocalPreset } from '../api/client';
 import { Button } from './Button';
@@ -38,6 +38,8 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
   const [errors, setErrors] = useState<Partial<Record<keyof SpoolFormData, string>>>({});
   const [activeTab, setActiveTab] = useState<TabId>('filament');
   const [weightTouched, setWeightTouched] = useState(false);
+  const [quickAdd, setQuickAdd] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   // Cloud presets
   const [cloudAuthenticated, setCloudAuthenticated] = useState(false);
@@ -275,6 +277,8 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
         setFormData(defaultFormData);
         setPresetInputValue('');
         setSelectedProfiles(new Set());
+        setQuickAdd(false);
+        setQuantity(1);
       }
       setErrors({});
       setActiveTab('filament');
@@ -314,6 +318,24 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
       }
       await queryClient.invalidateQueries({ queryKey: ['inventory-spools'] });
       showToast(t('inventory.spoolCreated'), 'success');
+      onClose();
+    },
+    onError: (error: Error) => {
+      showToast(error.message, 'error');
+    },
+  });
+
+  const bulkCreateMutation = useMutation({
+    mutationFn: ({ data, qty }: { data: Record<string, unknown>; qty: number }) =>
+      api.bulkCreateSpools(data as Parameters<typeof api.bulkCreateSpools>[0], qty),
+    onSuccess: async (newSpools) => {
+      if (selectedProfiles.size > 0) {
+        for (const spool of newSpools) {
+          await saveKProfiles(spool.id);
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['inventory-spools'] });
+      showToast(t('inventory.spoolsCreated', { count: newSpools.length }), 'success');
       onClose();
     },
     onError: (error: Error) => {
@@ -397,7 +419,7 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
   if (!isOpen) return null;
 
   const handleSubmit = () => {
-    const validation = validateForm(formData);
+    const validation = validateForm(formData, quickAdd);
     if (!validation.isValid) {
       setErrors(validation.errors);
       // Switch to filament tab if there are errors there
@@ -435,12 +457,14 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
 
     if (isEditing) {
       updateMutation.mutate(data);
+    } else if (quantity > 1) {
+      bulkCreateMutation.mutate({ data, qty: quantity });
     } else {
       createMutation.mutate(data);
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || bulkCreateMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -463,6 +487,32 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
           </button>
         </div>
 
+        {/* Quick Add toggle — only in create mode */}
+        {!isEditing && (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-bambu-dark-tertiary flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-sm text-white">{t('inventory.quickAdd')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickAdd(!quickAdd);
+                if (!quickAdd) setActiveTab('filament');
+              }}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                quickAdd ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                  quickAdd ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-bambu-dark-tertiary flex-shrink-0">
           <button
@@ -476,22 +526,24 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
             <Palette className="w-4 h-4" />
             {t('inventory.filamentInfoTab')}
           </button>
-          <button
-            onClick={() => setActiveTab('pa-profile')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-              activeTab === 'pa-profile'
-                ? 'text-bambu-green border-b-2 border-bambu-green'
-                : 'text-bambu-gray hover:text-white'
-            }`}
-          >
-            <Beaker className="w-4 h-4" />
-            {t('inventory.paProfileTab')}
-            {selectedProfileCount > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-bambu-green/20 text-bambu-green">
-                {selectedProfileCount}
-              </span>
-            )}
-          </button>
+          {!quickAdd && (
+            <button
+              onClick={() => setActiveTab('pa-profile')}
+              className={`flex-1 px-4 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                activeTab === 'pa-profile'
+                  ? 'text-bambu-green border-b-2 border-bambu-green'
+                  : 'text-bambu-gray hover:text-white'
+              }`}
+            >
+              <Beaker className="w-4 h-4" />
+              {t('inventory.paProfileTab')}
+              {selectedProfileCount > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-bambu-green/20 text-bambu-green">
+                  {selectedProfileCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -514,19 +566,11 @@ export function SpoolFormModal({ isOpen, onClose, spool, printersWithCalibration
                   filamentOptions={filamentOptions}
                   availableBrands={availableBrands}
                   availableMaterials={availableMaterials}
+                  quickAdd={quickAdd}
+                  quantity={quantity}
+                  onQuantityChange={setQuantity}
+                  errors={errors}
                 />
-                {errors.slicer_filament && (
-                  <p className="mt-1 text-xs text-red-400">{errors.slicer_filament}</p>
-                )}
-                {errors.material && (
-                  <p className="mt-1 text-xs text-red-400">{errors.material}</p>
-                )}
-                {errors.brand && (
-                  <p className="mt-1 text-xs text-red-400">{errors.brand}</p>
-                )}
-                {errors.subtype && (
-                  <p className="mt-1 text-xs text-red-400">{errors.subtype}</p>
-                )}
               </div>
 
               {/* Color Section */}

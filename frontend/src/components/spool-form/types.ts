@@ -89,6 +89,10 @@ export interface FilamentSectionProps extends SectionProps {
   filamentOptions: FilamentOption[];
   availableBrands: string[];
   availableMaterials: string[];
+  quickAdd: boolean;
+  quantity: number;
+  onQuantityChange: (value: number) => void;
+  errors?: Partial<Record<keyof SpoolFormData, string>>;
 }
 
 // Color section props
@@ -119,8 +123,18 @@ export interface ValidationResult {
   errors: Partial<Record<keyof SpoolFormData, string>>;
 }
 
-export function validateForm(formData: SpoolFormData): ValidationResult {
+export function validateForm(formData: SpoolFormData, quickAdd = false): ValidationResult {
   const errors: Partial<Record<keyof SpoolFormData, string>> = {};
+
+  if (quickAdd) {
+    if (!formData.material) {
+      errors.material = 'Material is required';
+    }
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors,
+    };
+  }
 
   if (!formData.slicer_filament) {
     errors.slicer_filament = 'Slicer preset is required';
