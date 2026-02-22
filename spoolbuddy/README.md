@@ -7,7 +7,7 @@
 | SCK 		 | Pin23 (GPIO11)	 | Yellow 	  |
 | MISO 		 | Pin21 (GPIO9) 	 | Blue 	  |
 | MOSI 		 | Pin19 (GPIO10)	 | Green 	  |
-| NSS (CS) 	 | Pin23 (GPIO8) 	 | Orange 	  |
+| NSS (CS) 	 | Pin24 (GPIO8) 	 | Orange 	  |
 | BUSY 		 | Pin22 (GPIO25) 	 | White 	  |
 | RST 		 | Pin18 (GPIO24) 	 | Brown 	  |
 
