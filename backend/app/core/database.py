@@ -1306,6 +1306,12 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Table may not exist yet on first run
 
+    # Migration: Add filament_overrides column to print_queue for filament override in model-based assignment
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN filament_overrides TEXT"))
+    except OperationalError:
+        pass  # Already applied
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

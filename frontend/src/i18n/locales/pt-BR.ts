@@ -2761,6 +2761,11 @@ export default {
     rightNozzle: 'R',
     leftNozzleTooltip: 'Bico esquerdo',
     rightNozzleTooltip: 'Bico direito',
+    filamentOverride: 'Substituição de Filamento',
+    filamentOverrideHint: 'Substitua opcionalmente os filamentos para atribuição baseada em modelo. O agendador usará os filamentos selecionados em vez dos valores originais do 3MF.',
+    originalFilament: 'Original',
+    overrideWith: 'Substituir por',
+    resetToOriginal: 'Restaurar original',
   },
 
   // Backup
