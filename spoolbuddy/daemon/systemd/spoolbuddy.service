@@ -1,0 +1,17 @@
+[Unit]
+Description=SpoolBuddy Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Environment=SPOOLBUDDY_CONFIG=/etc/spoolbuddy/config.yaml
+ExecStart=/usr/bin/python3 -m spoolbuddy.daemon.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

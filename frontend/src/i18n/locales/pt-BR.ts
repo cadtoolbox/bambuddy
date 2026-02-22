@@ -3486,4 +3486,69 @@ export default {
 
   // Spoolman Settings
   spoolmanSettings: {},
+  spoolbuddy: {
+    nav: {
+      dashboard: 'Painel',
+      ams: 'AMS',
+      inventory: 'Inventário',
+      printers: 'Impressoras',
+      settings: 'Configurações',
+    },
+    status: {
+      nfcReady: 'Pronto',
+      nfcOff: 'Desligado',
+      offline: 'Dispositivo offline',
+    },
+    dashboard: {
+      idleMessage: 'Coloque o carretel na balança e escaneie a tag NFC',
+    },
+    weight: {
+      noReading: 'Sem leitura',
+      stable: 'Estável',
+      measuring: 'Medindo',
+      tare: 'Tara',
+      calibrate: 'Calibrar',
+      tareQueued: 'Comando de tara enviado',
+    },
+    spool: {
+      remaining: 'Restante',
+    },
+    tag: {
+      unknownTitle: 'Tag desconhecida',
+      linkExisting: 'Vincular a carretel existente',
+      createNew: 'Criar novo carretel',
+    },
+    actions: {
+      assignAms: 'Atribuir AMS',
+      updateWeight: 'Atualizar peso',
+      editSpool: 'Editar carretel',
+      viewHistory: 'Ver histórico',
+      weightUpdated: 'Peso do carretel atualizado',
+    },
+    ams: {
+      noData: 'Nenhum dado AMS disponível',
+    },
+    inventory: {
+      search: 'Buscar carretéis...',
+      empty: 'Nenhum carretel encontrado',
+    },
+    printers: {
+      noPrinters: 'Nenhuma impressora configurada',
+    },
+    settings: {
+      scaleCalibration: 'Calibração da balança',
+      currentWeight: 'Peso atual',
+      tareOffset: 'Offset de tara',
+      knownWeight: 'Peso conhecido',
+      calibrated: 'Calibração atualizada',
+      tareQueued: 'Comando de tara na fila',
+      nfcReader: 'Leitor NFC',
+      nfcConnected: 'Conectado',
+      nfcDisconnected: 'Desconectado',
+      deviceInfo: 'Info do dispositivo',
+      deviceId: 'ID do dispositivo',
+      uptime: 'Tempo ativo',
+      firmware: 'Firmware',
+    },
+  },
 };

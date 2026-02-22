@@ -2876,4 +2876,69 @@ export default {
     daysAgo: '{{count}}g fa',
     inDays: 'tra {{count}}g',
   },
+  spoolbuddy: {
+    nav: {
+      dashboard: 'Dashboard',
+      ams: 'AMS',
+      inventory: 'Inventario',
+      printers: 'Stampanti',
+      settings: 'Impostazioni',
+    },
+    status: {
+      nfcReady: 'Pronto',
+      nfcOff: 'Spento',
+      offline: 'Dispositivo offline',
+    },
+    dashboard: {
+      idleMessage: 'Posiziona la bobina sulla bilancia e scansiona il tag NFC',
+    },
+    weight: {
+      noReading: 'Nessuna lettura',
+      stable: 'Stabile',
+      measuring: 'Misurazione',
+      tare: 'Tara',
+      calibrate: 'Calibra',
+      tareQueued: 'Comando tara inviato',
+    },
+    spool: {
+      remaining: 'Rimanente',
+    },
+    tag: {
+      unknownTitle: 'Tag sconosciuto',
+      linkExisting: 'Collega a bobina esistente',
+      createNew: 'Crea nuova bobina',
+    },
+    actions: {
+      assignAms: 'Assegna AMS',
+      updateWeight: 'Aggiorna peso',
+      editSpool: 'Modifica bobina',
+      viewHistory: 'Visualizza cronologia',
+      weightUpdated: 'Peso bobina aggiornato',
+    },
+    ams: {
+      noData: 'Nessun dato AMS disponibile',
+    },
+    inventory: {
+      search: 'Cerca bobine...',
+      empty: 'Nessuna bobina trovata',
+    },
+    printers: {
+      noPrinters: 'Nessuna stampante configurata',
+    },
+    settings: {
+      scaleCalibration: 'Calibrazione bilancia',
+      currentWeight: 'Peso attuale',
+      tareOffset: 'Offset tara',
+      knownWeight: 'Peso noto',
+      calibrated: 'Calibrazione aggiornata',
+      tareQueued: 'Comando tara in coda',
+      nfcReader: 'Lettore NFC',
+      nfcConnected: 'Connesso',
+      nfcDisconnected: 'Disconnesso',
+      deviceInfo: 'Info dispositivo',
+      deviceId: 'ID dispositivo',
+      uptime: 'Tempo di attività',
+      firmware: 'Firmware',
+    },
+  },
 };

@@ -102,6 +102,7 @@ async def init_db():
         spool_catalog,
         spool_k_profile,
         spool_usage_history,
+        spoolbuddy_device,
         user,
         virtual_printer,
     )

@@ -3354,4 +3354,69 @@ export default {
     daysAgo: '{{count}}日前',
     inDays: 'あと{{count}}日',
   },
+  spoolbuddy: {
+    nav: {
+      dashboard: 'ダッシュボード',
+      ams: 'AMS',
+      inventory: '在庫',
+      printers: 'プリンター',
+      settings: '設定',
+    },
+    status: {
+      nfcReady: '準備完了',
+      nfcOff: 'オフ',
+      offline: 'デバイスオフライン',
+    },
+    dashboard: {
+      idleMessage: 'スプールを秤に置き、NFCタグをスキャンしてください',
+    },
+    weight: {
+      noReading: '計測なし',
+      stable: '安定',
+      measuring: '計測中',
+      tare: '風袋',
+      calibrate: '校正',
+      tareQueued: '風袋コマンドを送信しました',
+    },
+    spool: {
+      remaining: '残量',
+    },
+    tag: {
+      unknownTitle: '不明なタグ',
+      linkExisting: '既存のスプールにリンク',
+      createNew: '新しいスプールを作成',
+    },
+    actions: {
+      assignAms: 'AMS割り当て',
+      updateWeight: '重量更新',
+      editSpool: 'スプール編集',
+      viewHistory: '履歴表示',
+      weightUpdated: 'スプール重量を更新しました',
+    },
+    ams: {
+      noData: 'AMSデータがありません',
+    },
+    inventory: {
+      search: 'スプールを検索...',
+      empty: 'スプールが見つかりません',
+    },
+    printers: {
+      noPrinters: 'プリンターが設定されていません',
+    },
+    settings: {
+      scaleCalibration: '秤の校正',
+      currentWeight: '現在の重量',
+      tareOffset: '風袋オフセット',
+      knownWeight: '既知の重量',
+      calibrated: '校正が更新されました',
+      tareQueued: '風袋コマンドをキューに追加しました',
+      nfcReader: 'NFCリーダー',
+      nfcConnected: '接続済み',
+      nfcDisconnected: '未接続',
+      deviceInfo: 'デバイス情報',
+      deviceId: 'デバイスID',
+      uptime: '稼働時間',
+      firmware: 'ファームウェア',
+    },
+  },
 };

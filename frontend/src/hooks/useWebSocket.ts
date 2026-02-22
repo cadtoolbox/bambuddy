@@ -258,6 +258,39 @@ export function useWebSocket() {
           })
         );
         break;
+
+      case 'spoolbuddy_weight':
+        window.dispatchEvent(new CustomEvent('spoolbuddy-weight', {
+          detail: message as unknown as Record<string, unknown>,
+        }));
+        break;
+
+      case 'spoolbuddy_tag_matched':
+        window.dispatchEvent(new CustomEvent('spoolbuddy-tag-matched', {
+          detail: message as unknown as Record<string, unknown>,
+        }));
+        debouncedInvalidate('inventory-spools');
+        break;
+
+      case 'spoolbuddy_unknown_tag':
+        window.dispatchEvent(new CustomEvent('spoolbuddy-unknown-tag', {
+          detail: message as unknown as Record<string, unknown>,
+        }));
+        break;
+
+      case 'spoolbuddy_tag_removed':
+        window.dispatchEvent(new CustomEvent('spoolbuddy-tag-removed', {
+          detail: message as unknown as Record<string, unknown>,
+        }));
+        break;
+
+      case 'spoolbuddy_online':
+      case 'spoolbuddy_offline':
+        window.dispatchEvent(new CustomEvent('spoolbuddy-device-status', {
+          detail: message as unknown as Record<string, unknown>,
+        }));
+        debouncedInvalidate('spoolbuddy-devices');
+        break;
     }
   }, [queryClient, debouncedInvalidate, throttledPrinterStatusUpdate]);
 
