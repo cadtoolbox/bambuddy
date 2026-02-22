@@ -6,8 +6,8 @@ import logging
 import socket
 import time
 
-from spoolbuddy.daemon.api_client import APIClient
-from spoolbuddy.daemon.config import Config
+from .api_client import APIClient
+from .config import Config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +30,7 @@ def _get_ip() -> str:
 
 async def nfc_poll_loop(config: Config, api: APIClient):
     """Continuous NFC polling loop — runs in asyncio with blocking reads offloaded."""
-    from spoolbuddy.daemon.nfc_reader import NFCReader
+    from .nfc_reader import NFCReader
 
     nfc = NFCReader()
     if not nfc.ok:
@@ -62,7 +62,7 @@ async def nfc_poll_loop(config: Config, api: APIClient):
 
 async def scale_poll_loop(config: Config, api: APIClient):
     """Continuous scale reading loop — reads at 100ms, reports at 1s intervals."""
-    from spoolbuddy.daemon.scale_reader import ScaleReader
+    from .scale_reader import ScaleReader
 
     scale = ScaleReader(
         tare_offset=config.tare_offset,
