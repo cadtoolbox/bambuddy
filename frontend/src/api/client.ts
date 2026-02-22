@@ -4806,35 +4806,3 @@ export const supportApi = {
   clearLogs: () =>
     request<{ message: string }>('/support/logs', { method: 'DELETE' }),
 };
-
-export const spoolBuddyApi = {
-  getDevices: () =>
-    request<unknown[]>('/spoolbuddy/devices'),
-
-  registerDevice: (data: Record<string, unknown>) =>
-    request<unknown>('/spoolbuddy/devices/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  tare: (deviceId: string) =>
-    request<{ status: string }>(`/spoolbuddy/devices/${deviceId}/calibration/tare`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
-
-  setCalibrationFactor: (deviceId: string, knownWeightGrams: number, rawAdc: number) =>
-    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration/set-factor`, {
-      method: 'POST',
-      body: JSON.stringify({ known_weight_grams: knownWeightGrams, raw_adc: rawAdc }),
-    }),
-
-  getCalibration: (deviceId: string) =>
-    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration`),
-
-  updateSpoolWeight: (spoolId: number, weightGrams: number) =>
-    request<{ status: string; weight_used: number }>('/spoolbuddy/scale/update-spool-weight', {
-      method: 'POST',
-      body: JSON.stringify({ spool_id: spoolId, weight_grams: weightGrams }),
-    }),
-};

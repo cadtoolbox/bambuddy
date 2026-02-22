@@ -19,12 +19,6 @@ import InventoryPage from './pages/InventoryPage';
 import { SystemInfoPage } from './pages/SystemInfoPage';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
-import { SpoolBuddyLayout } from './components/spoolbuddy/SpoolBuddyLayout';
-import { SpoolBuddyDashboard } from './pages/spoolbuddy/SpoolBuddyDashboard';
-import { SpoolBuddyAmsPage } from './pages/spoolbuddy/SpoolBuddyAmsPage';
-import { SpoolBuddyInventoryPage } from './pages/spoolbuddy/SpoolBuddyInventoryPage';
-import { SpoolBuddyPrintersPage } from './pages/spoolbuddy/SpoolBuddyPrintersPage';
-import { SpoolBuddySettingsPage } from './pages/spoolbuddy/SpoolBuddySettingsPage';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -119,15 +113,6 @@ function App() {
 
                 {/* Stream overlay page - standalone for OBS/streaming embeds, no auth required */}
                 <Route path="/overlay/:printerId" element={<StreamOverlayPage />} />
-
-                {/* SpoolBuddy — standalone kiosk-optimized UI with its own layout */}
-                <Route element={<ProtectedRoute><WebSocketProvider><SpoolBuddyLayout /></WebSocketProvider></ProtectedRoute>}>
-                  <Route path="spoolbuddy" element={<SpoolBuddyDashboard />} />
-                  <Route path="spoolbuddy/ams" element={<SpoolBuddyAmsPage />} />
-                  <Route path="spoolbuddy/inventory" element={<SpoolBuddyInventoryPage />} />
-                  <Route path="spoolbuddy/printers" element={<SpoolBuddyPrintersPage />} />
-                  <Route path="spoolbuddy/settings" element={<SpoolBuddySettingsPage />} />
-                </Route>
 
                 {/* Main app with WebSocket for real-time updates */}
                 <Route element={<ProtectedRoute><WebSocketProvider><Layout /></WebSocketProvider></ProtectedRoute>}>
