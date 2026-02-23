@@ -2732,6 +2732,7 @@ export default {
     selectPlate: 'Choisir le plateau',
     filamentMapping: 'Mapping Filament',
     totalCost: 'Coût total :',
+    slotRemainingShort: ' - {{grams}}g rest.',
     printSettings: 'Réglages d\'impression',
     bedLeveling: 'Nivellement plateau',
     flowCalibration: 'Calibration débit',

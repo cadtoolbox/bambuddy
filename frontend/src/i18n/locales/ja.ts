@@ -2666,6 +2666,7 @@ export default {
     selectPlate: 'プレートを選択',
     filamentMapping: 'フィラメントマッピング',
     totalCost: '合計コスト:',
+    slotRemainingShort: ' - 残{{grams}}g',
     printSettings: '印刷設定',
     bedLeveling: 'ベッドレベリング',
     layerInspection: '第一層検査',
