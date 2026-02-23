@@ -91,9 +91,9 @@ run_with_progress() {
             time_str="${elapsed}s"
         fi
 
-        # Last line of output, stripped of ANSI codes and leading whitespace
+        # Last chunk of output (handles \r progress lines and regular \n lines)
         local last_line=""
-        last_line=$(tail -1 "$log_file" 2>/dev/null | tr -d '\r' | sed 's/\x1b\[[0-9;]*[mGKHJ]//g' | sed 's/^[[:space:]]*//' | cut -c1-50) || true
+        last_line=$(tail -c 4096 "$log_file" 2>/dev/null | tr '\r' '\n' | sed 's/\x1b\[[0-9;]*[mGKHJ]//g' | sed '/^[[:space:]]*$/d' | tail -1 | sed 's/^[[:space:]]*//' | cut -c1-50) || true
 
         printf "\r  ${spin[$((i % 10))]}  %-36s ${CYAN}%6s${NC}  %s\033[K" "$desc" "$time_str" "$last_line"
         i=$(( i + 1 ))
