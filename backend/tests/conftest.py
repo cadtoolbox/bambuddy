@@ -94,7 +94,7 @@ async def test_engine():
     # Allow aiosqlite's background thread to finish processing the close
     # response before the per-function event loop shuts down, preventing
     # "RuntimeError: Event loop is closed" in call_soon_threadsafe.
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
 
 
 @pytest.fixture
