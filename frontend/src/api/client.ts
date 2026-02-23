@@ -4806,3 +4806,49 @@ export const supportApi = {
   clearLogs: () =>
     request<{ message: string }>('/support/logs', { method: 'DELETE' }),
 };
+
+// SpoolBuddy types
+export interface SpoolBuddyDevice {
+  id: number;
+  device_id: string;
+  hostname: string;
+  ip_address: string;
+  firmware_version: string | null;
+  has_nfc: boolean;
+  has_scale: boolean;
+  tare_offset: number;
+  calibration_factor: number;
+  last_seen: string | null;
+  pending_command: string | null;
+  nfc_ok: boolean;
+  scale_ok: boolean;
+  uptime_s: number;
+  online: boolean;
+}
+
+// SpoolBuddy API
+export const spoolbuddyApi = {
+  getDevices: () =>
+    request<SpoolBuddyDevice[]>('/spoolbuddy/devices'),
+
+  tare: (deviceId: string) =>
+    request<{ status: string }>(`/spoolbuddy/devices/${deviceId}/calibration/tare`, {
+      method: 'POST',
+      body: '{}',
+    }),
+
+  getCalibration: (deviceId: string) =>
+    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration`),
+
+  setCalibrationFactor: (deviceId: string, knownWeightGrams: number, rawAdc: number) =>
+    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration/set-factor`, {
+      method: 'POST',
+      body: JSON.stringify({ known_weight_grams: knownWeightGrams, raw_adc: rawAdc }),
+    }),
+
+  updateSpoolWeight: (spoolId: number, weightGrams: number) =>
+    request<{ status: string; weight_used: number }>('/spoolbuddy/scale/update-spool-weight', {
+      method: 'POST',
+      body: JSON.stringify({ spool_id: spoolId, weight_grams: weightGrams }),
+    }),
+};
