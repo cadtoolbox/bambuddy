@@ -587,7 +587,21 @@ async def on_ams_change(printer_id: int, ams_data: list):
             result = await db.execute(select(SA).where(SA.printer_id == printer_id).options(selectinload(SA.spool)))
             stale = []
             for assignment in result.scalars().all():
-                current_tray = _find_tray_in_ams_data(ams_data, assignment.ams_id, assignment.tray_id)
+                # External spool assignments (ams_id=255) live in vt_tray, not AMS data
+                if assignment.ams_id == 255:
+                    ps = printer_manager.get_status(printer_id)
+                    vt_tray_raw = ps.raw_data.get("vt_tray", []) if ps else []
+                    ext_id = assignment.tray_id + 254  # 0→254, 1→255
+                    current_tray = None
+                    for vt in vt_tray_raw:
+                        if isinstance(vt, dict) and int(vt.get("id", 254)) == ext_id:
+                            current_tray = vt
+                            break
+                    if not current_tray:
+                        # vt_tray data may not have arrived yet — keep assignment
+                        continue
+                else:
+                    current_tray = _find_tray_in_ams_data(ams_data, assignment.ams_id, assignment.tray_id)
                 if not current_tray:
                     logger.info(
                         "Auto-unlink: spool %d AMS%d-T%d — tray not found in AMS data (slot empty?)",
