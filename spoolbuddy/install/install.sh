@@ -64,6 +64,71 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+# Run a long-running command with a spinner + live progress output.
+# Usage: run_with_progress "description" command [args...]
+run_with_progress() {
+    local desc="$1"
+    shift
+
+    local log_file
+    log_file=$(mktemp /tmp/spoolbuddy-install.XXXXXX)
+    local start_time=$SECONDS
+
+    # Run command in background, capture stdout+stderr
+    "$@" > "$log_file" 2>&1 &
+    local pid=$!
+
+    # Spinner frames (braille pattern)
+    local -a spin=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local i=0
+
+    while kill -0 "$pid" 2>/dev/null; do
+        local elapsed=$(( SECONDS - start_time ))
+        local time_str
+        if (( elapsed >= 60 )); then
+            time_str="$(( elapsed / 60 ))m$(printf '%02d' $(( elapsed % 60 )))s"
+        else
+            time_str="${elapsed}s"
+        fi
+
+        # Last line of output, stripped of ANSI codes and leading whitespace
+        local last_line=""
+        last_line=$(tail -1 "$log_file" 2>/dev/null | tr -d '\r' | sed 's/\x1b\[[0-9;]*[mGKHJ]//g' | sed 's/^[[:space:]]*//' | cut -c1-50) || true
+
+        printf "\r  ${spin[$((i % 10))]}  %-36s ${CYAN}%6s${NC}  %s\033[K" "$desc" "$time_str" "$last_line"
+        i=$(( i + 1 ))
+        sleep 0.15
+    done
+
+    local exit_code=0
+    wait "$pid" || exit_code=$?
+
+    # Clear spinner line
+    printf "\r\033[K"
+
+    # Format elapsed time for summary
+    local elapsed=$(( SECONDS - start_time ))
+    local time_suffix=""
+    if (( elapsed >= 60 )); then
+        time_suffix=" ($(( elapsed / 60 ))m $(( elapsed % 60 ))s)"
+    elif (( elapsed >= 5 )); then
+        time_suffix=" (${elapsed}s)"
+    fi
+
+    if [[ $exit_code -eq 0 ]]; then
+        success "${desc}${time_suffix}"
+        rm -f "$log_file"
+    else
+        echo -e "${RED}[FAIL]${NC} ${desc}${time_suffix}"
+        echo ""
+        echo -e "  ${YELLOW}Last 20 lines:${NC}"
+        tail -20 "$log_file" 2>/dev/null | sed 's/^/    /'
+        echo ""
+        echo -e "  Full log: ${CYAN}$log_file${NC}"
+        exit 1
+    fi
+}
+
 prompt() {
     local prompt_text="$1"
     local default_value="$2"
@@ -276,13 +341,8 @@ configure_boot_config() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 install_system_packages() {
-    info "Updating package lists..."
-    apt-get update -qq
-
-    info "Installing system packages..."
-    apt-get install -y -qq $SYSTEM_PACKAGES
-
-    success "System packages installed"
+    run_with_progress "Updating package lists" apt-get update
+    run_with_progress "Installing system packages" apt-get install -y $SYSTEM_PACKAGES
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -308,37 +368,28 @@ create_spoolbuddy_user() {
 }
 
 download_spoolbuddy() {
-    info "Downloading SpoolBuddy..."
-
     if [[ -d "$INSTALL_PATH/.git" ]]; then
         info "Existing installation found, updating..."
         git config --global --add safe.directory "$INSTALL_PATH" 2>/dev/null || true
         cd "$INSTALL_PATH"
-        git fetch origin
-        git reset --hard origin/main
+        run_with_progress "Fetching updates" git fetch origin
+        git reset --hard origin/main > /dev/null 2>&1
     else
         mkdir -p "$INSTALL_PATH"
-        git clone "$GITHUB_REPO" "$INSTALL_PATH"
+        run_with_progress "Cloning repository" git clone "$GITHUB_REPO" "$INSTALL_PATH"
     fi
 
     chown -R "$SPOOLBUDDY_SERVICE_USER:$SPOOLBUDDY_SERVICE_USER" "$INSTALL_PATH"
-    success "Downloaded to $INSTALL_PATH"
 }
 
 setup_spoolbuddy_venv() {
-    info "Setting up SpoolBuddy Python environment..."
-
     cd "$INSTALL_PATH/spoolbuddy"
 
-    # Create venv with system site packages (needed for python3-spidev, python3-libgpiod)
-    $PYTHON_CMD -m venv --system-site-packages venv
-
-    # Install SpoolBuddy-specific Python packages
-    "$INSTALL_PATH/spoolbuddy/venv/bin/pip" install --upgrade pip -q
-    "$INSTALL_PATH/spoolbuddy/venv/bin/pip" install $SPOOLBUDDY_PIP_PACKAGES -q
+    run_with_progress "Creating SpoolBuddy venv" $PYTHON_CMD -m venv --system-site-packages venv
+    run_with_progress "Upgrading pip" "$INSTALL_PATH/spoolbuddy/venv/bin/pip" install --upgrade pip
+    run_with_progress "Installing SpoolBuddy packages" "$INSTALL_PATH/spoolbuddy/venv/bin/pip" install $SPOOLBUDDY_PIP_PACKAGES
 
     chown -R "$SPOOLBUDDY_SERVICE_USER:$SPOOLBUDDY_SERVICE_USER" "$INSTALL_PATH/spoolbuddy/venv"
-    success "SpoolBuddy Python environment ready"
 }
 
 create_spoolbuddy_env() {
@@ -413,16 +464,13 @@ create_bambuddy_user() {
 }
 
 setup_bambuddy_venv() {
-    info "Setting up Bambuddy Python environment..."
-
     cd "$INSTALL_PATH"
-    $PYTHON_CMD -m venv venv
 
-    "$INSTALL_PATH/venv/bin/pip" install --upgrade pip -q
-    "$INSTALL_PATH/venv/bin/pip" install -r requirements.txt -q
+    run_with_progress "Creating Bambuddy venv" $PYTHON_CMD -m venv venv
+    run_with_progress "Upgrading pip" "$INSTALL_PATH/venv/bin/pip" install --upgrade pip
+    run_with_progress "Installing Bambuddy dependencies" "$INSTALL_PATH/venv/bin/pip" install -r requirements.txt
 
     chown -R "$BAMBUDDY_SERVICE_USER:$BAMBUDDY_SERVICE_USER" "$INSTALL_PATH/venv"
-    success "Bambuddy Python environment ready"
 }
 
 install_nodejs() {
@@ -437,22 +485,18 @@ install_nodejs() {
         fi
     fi
 
-    info "Installing Node.js 22..."
-    apt-get remove -y nodejs npm 2>/dev/null || true
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -y nodejs
+    apt-get remove -y nodejs npm > /dev/null 2>&1 || true
+    run_with_progress "Setting up Node.js repository" bash -c "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"
+    run_with_progress "Installing Node.js" apt-get install -y nodejs
     hash -r 2>/dev/null || true
     success "Node.js installed: $(node --version)"
 }
 
 build_frontend() {
-    info "Building Bambuddy frontend (this may take a few minutes on RPi)..."
-
     cd "$INSTALL_PATH/frontend"
-    npm ci --silent
-    npm run build
 
-    success "Frontend built"
+    run_with_progress "Installing frontend dependencies" npm ci
+    run_with_progress "Building frontend" npm run build
 }
 
 create_bambuddy_env() {
