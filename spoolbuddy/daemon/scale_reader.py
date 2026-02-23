@@ -11,9 +11,7 @@ MOVING_AVG_SIZE = 5
 
 class ScaleReader:
     def __init__(self, tare_offset: int = 0, calibration_factor: float = 1.0):
-        from scale_diag import NAU7802
-
-        self._scale = NAU7802()
+        self._scale = None
         self._tare_offset = tare_offset
         self._calibration_factor = calibration_factor
         self._samples: deque[float] = deque(maxlen=MOVING_AVG_SIZE)
@@ -22,6 +20,9 @@ class ScaleReader:
         self._last_raw = 0
 
         try:
+            from scale_diag import NAU7802
+
+            self._scale = NAU7802()
             self._scale.init()
             self._ok = True
             logger.info("Scale initialized (tare=%d, cal=%.6f)", tare_offset, calibration_factor)
@@ -38,7 +39,8 @@ class ScaleReader:
 
     def close(self):
         try:
-            self._scale.close()
+            if self._scale:
+                self._scale.close()
         except Exception:
             pass
 
