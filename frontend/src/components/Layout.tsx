@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { SwitchbarPopover } from './SwitchbarPopover';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { api, supportApi, pendingUploadsApi } from '../api/client';
 import { getIconByName } from './IconPicker';
 import { useIsSidebarCompact } from '../hooks/useIsSidebarCompact';
@@ -177,6 +177,29 @@ export function Layout() {
     refetchOnWindowFocus: true,
   });
   const pendingUploadsCount = pendingUploadsData?.count ?? 0;
+
+  // Check if any printer with pending queue items needs plate clearing
+  const queuePrinterIds = useMemo(() => {
+    const ids = new Set<number>();
+    queueItems?.forEach(item => {
+      if (item.printer_id) ids.add(item.printer_id);
+    });
+    return Array.from(ids);
+  }, [queueItems]);
+
+  const printerStatusQueries = useQueries({
+    queries: queuePrinterIds.map(id => ({
+      queryKey: ['printerStatus', id],
+      queryFn: () => api.getPrinterStatus(id),
+      staleTime: 30 * 1000, // WebSocket keeps this warm
+    })),
+  });
+
+  const needsClearPlate = printerStatusQueries.some(result => {
+    const status = result.data;
+    if (!status) return false;
+    return (status.state === 'FINISH' || status.state === 'FAILED') && !status.plate_cleared;
+  });
 
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);
@@ -532,6 +555,7 @@ export function Layout() {
                 const showArchiveBadge = id === 'archives' && pendingUploadsCount > 0;
                 const badgeCount = showQueueBadge ? pendingQueueCount : showArchiveBadge ? pendingUploadsCount : 0;
                 const showBadge = showQueueBadge || showArchiveBadge;
+                const showClearPlateDot = id === 'printers' && needsClearPlate;
 
                 return (
                   <li
@@ -566,6 +590,9 @@ export function Layout() {
                       )}
                       <div className="relative">
                         <Icon className="w-5 h-5 flex-shrink-0" />
+                        {showClearPlateDot && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-yellow-500 rounded-full border-2 border-bambu-dark-secondary" />
+                        )}
                         {showBadge && (
                           <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold rounded-full ${
                             showArchiveBadge ? 'bg-blue-500 text-white' : 'bg-yellow-500 text-black'
