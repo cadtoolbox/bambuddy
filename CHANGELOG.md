@@ -2,7 +2,9 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
-## [0.2.1b3] - Unreleased
+## [0.2.1b4] - Unreleased
+
+## [0.2.1b3] - 2026-02-23
 
 ### Fixed
 - **Print Bed Cooled Notification Never Triggers** ([#497](https://github.com/maziggy/bambuddy/issues/497)) — The bed cooldown monitor (which polls bed temperature after a print and sends a notification when it drops below the configured threshold) was defined at the end of the `on_print_complete` callback, after an early `return` that exits when no archive is found for the print. Prints started from BambuStudio or the printer's touchscreen typically have no archive in Bambuddy, so the function returned before the bed cooldown task was ever created. Moved the bed cooldown monitor to before the archive lookup early-return so it fires for all completed prints regardless of archive state. Also hardened the temperature dict check from truthiness (`if status.temperatures:`) to type check (`isinstance(status.temperatures, dict)`) to avoid false negatives on empty dicts.
