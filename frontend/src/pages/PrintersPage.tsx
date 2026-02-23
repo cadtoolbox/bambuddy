@@ -3239,7 +3239,13 @@ function PrinterCard({
                           <div className={`grid ${status.vt_tray.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5`}>
                             {[...status.vt_tray].sort((a, b) => (a.id ?? 254) - (b.id ?? 254)).map((extTray) => {
                               const extTrayId = extTray.id ?? 254;
-                              const isExtActive = effectiveTrayNow === extTrayId;
+                              // On dual-nozzle (H2C/H2D), tray_now=254 means "external spool"
+                              // generically — use active_extruder to determine L vs R:
+                              // extruder 1=left → Ext-L (id=254), extruder 0=right → Ext-R (id=255)
+                              const isExtActive = isDualNozzle && effectiveTrayNow === 254
+                                ? (extTrayId === 254 && status.active_extruder === 1) ||
+                                  (extTrayId === 255 && status.active_extruder === 0)
+                                : effectiveTrayNow === extTrayId;
                               const slotTrayId = extTrayId - 254; // 0 or 1
                               const extLabel = isDualNozzle
                                 ? (extTrayId === 254 ? t('printers.extL') : t('printers.extR'))
