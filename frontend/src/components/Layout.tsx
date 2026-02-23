@@ -119,13 +119,6 @@ export function Layout() {
     refetchInterval: 60 * 60 * 1000, // Check every hour
   });
 
-  // Fetch Spoolman settings to determine if inventory should be hidden
-  const { data: spoolmanSettings } = useQuery({
-    queryKey: ['spoolman-settings'],
-    queryFn: api.getSpoolmanSettings,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Fetch external links for sidebar
   const { data: externalLinks } = useQuery({
     queryKey: ['external-links'],
@@ -229,13 +222,9 @@ export function Layout() {
 
     // Determine if settings should be hidden (user role and auth enabled)
     const hideSettings = authEnabled && user?.role === 'user';
-    // Hide inventory when Spoolman mode is active
-    const hideInventory = spoolmanSettings?.spoolman_enabled === 'true';
-
     // Add items in stored order
     for (const id of sidebarOrder) {
       if (hideSettings && id === 'settings') continue;
-      if (hideInventory && id === 'inventory') continue;
       if (navItemsMap.has(id) || extLinksMap.has(id)) {
         result.push(id);
         seen.add(id);
@@ -245,7 +234,6 @@ export function Layout() {
     // Add any new internal nav items not in stored order
     for (const item of defaultNavItems) {
       if (hideSettings && item.id === 'settings') continue;
-      if (hideInventory && item.id === 'inventory') continue;
       if (!seen.has(item.id)) {
         result.push(item.id);
         seen.add(item.id);

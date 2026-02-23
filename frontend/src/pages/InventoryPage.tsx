@@ -337,7 +337,29 @@ function saveSortState(state: SortState) {
   } catch { /* ignore */ }
 }
 
-export default function InventoryPage() {
+// Wrapper: when Spoolman is enabled, embed its UI; otherwise show internal inventory
+export default function InventoryPageRouter() {
+  const { data: spoolmanSettings } = useQuery({
+    queryKey: ['spoolman-settings'],
+    queryFn: api.getSpoolmanSettings,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (spoolmanSettings?.spoolman_enabled === 'true' && spoolmanSettings?.spoolman_url) {
+    return (
+      <iframe
+        src={spoolmanSettings.spoolman_url}
+        className="h-full w-full border-0"
+        title="Spoolman"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+      />
+    );
+  }
+
+  return <InventoryPage />;
+}
+
+function InventoryPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
