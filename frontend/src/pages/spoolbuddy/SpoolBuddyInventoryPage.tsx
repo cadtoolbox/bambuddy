@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api, type InventorySpool } from '../../api/client';
+import { SpoolIcon } from '../../components/spoolbuddy/SpoolIcon';
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-';
@@ -20,6 +21,7 @@ function SpoolCard({ spool }: { spool: InventorySpool }) {
   const remaining = Math.max(0, spool.label_weight - spool.weight_used);
   const remainingPct = spool.label_weight > 0 ? (remaining / spool.label_weight) * 100 : 0;
   const colorHex = spool.rgba ? `#${spool.rgba.slice(0, 6)}` : '#808080';
+  const fillColor = remainingPct > 50 ? '#22c55e' : remainingPct > 15 ? '#f59e0b' : '#ef4444';
 
   return (
     <button
@@ -27,23 +29,24 @@ function SpoolCard({ spool }: { spool: InventorySpool }) {
       onClick={() => setExpanded(!expanded)}
     >
       <div className="flex items-center gap-3">
-        {/* Color swatch */}
-        <div
-          className="w-8 h-8 rounded-full border border-zinc-700 shrink-0"
-          style={{ backgroundColor: colorHex }}
-        />
+        {/* Spool icon */}
+        <SpoolIcon color={colorHex} isEmpty={false} size={36} />
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-zinc-100 truncate">
-              {spool.material}
-              {spool.color_name && <span className="text-zinc-400 ml-1">- {spool.color_name}</span>}
+              {spool.color_name || spool.material}
             </span>
+            {spool.tag_uid && (
+              <svg className="w-3 h-3 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            )}
           </div>
-          {spool.brand && (
-            <span className="text-xs text-zinc-500 truncate block">{spool.brand}</span>
-          )}
+          <span className="text-xs text-zinc-500 truncate block">
+            {spool.brand ? `${spool.brand} \u2022 ` : ''}{spool.material}{spool.subtype ? ` ${spool.subtype}` : ''}
+          </span>
         </div>
 
         {/* Weight */}
@@ -57,10 +60,7 @@ function SpoolCard({ spool }: { spool: InventorySpool }) {
       <div className="w-full h-1 bg-zinc-700 rounded-full overflow-hidden mt-2">
         <div
           className="h-full rounded-full transition-all"
-          style={{
-            width: `${Math.min(100, remainingPct)}%`,
-            backgroundColor: remainingPct > 50 ? '#22c55e' : remainingPct > 15 ? '#f59e0b' : '#ef4444',
-          }}
+          style={{ width: `${Math.min(100, remainingPct)}%`, backgroundColor: fillColor }}
         />
       </div>
 
@@ -86,7 +86,7 @@ function SpoolCard({ spool }: { spool: InventorySpool }) {
           {spool.tag_uid && (
             <div className="col-span-2 flex justify-between">
               <span className="text-zinc-500">Tag</span>
-              <span className="text-zinc-400 font-mono">{spool.tag_uid}</span>
+              <span className="text-zinc-400 font-mono text-[10px]">{spool.tag_uid}</span>
             </div>
           )}
         </div>

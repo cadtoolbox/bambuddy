@@ -49,7 +49,7 @@ export function SpoolBuddyBottomNav() {
   const { t } = useTranslation();
 
   return (
-    <nav className="h-12 bg-zinc-950 border-t border-zinc-800 flex items-stretch shrink-0">
+    <nav className="h-12 bg-bambu-dark-secondary border-t border-bambu-dark-tertiary flex items-stretch shrink-0">
       {navItems.map((item) => (
         <NavLink
           key={item.to}
@@ -58,8 +58,8 @@ export function SpoolBuddyBottomNav() {
           className={({ isActive }) =>
             `flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
               isActive
-                ? 'text-green-500 bg-zinc-900'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
+                ? 'text-bambu-green bg-bambu-dark'
+                : 'text-white/50 hover:text-white/70 hover:bg-bambu-dark-tertiary'
             }`
           }
         >

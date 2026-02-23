@@ -4,6 +4,7 @@ export interface MatchedSpool {
   id: number;
   tag_uid: string;
   material: string;
+  subtype: string | null;
   color_name: string | null;
   rgba: string | null;
   brand: string | null;
@@ -114,6 +115,7 @@ export function useSpoolBuddyState() {
           id: spool.id,
           tag_uid: detail.tag_uid ?? detail.data?.tag_uid ?? '',
           material: spool.material ?? '',
+          subtype: spool.subtype ?? null,
           color_name: spool.color_name ?? null,
           rgba: spool.rgba ?? null,
           brand: spool.brand ?? null,
