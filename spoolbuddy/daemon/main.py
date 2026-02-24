@@ -73,6 +73,9 @@ async def scale_poll_loop(config: Config, api: APIClient):
         return
 
     last_report = 0.0
+    last_reported_grams: float | None = None
+    last_reported_stable: bool | None = None
+    REPORT_THRESHOLD = 2.0  # Only report if weight changed by more than this (grams)
     try:
         while True:
             result = await asyncio.to_thread(scale.read)
@@ -82,12 +85,19 @@ async def scale_poll_loop(config: Config, api: APIClient):
                 now = time.monotonic()
 
                 if now - last_report >= config.scale_report_interval:
-                    await api.scale_reading(
-                        device_id=config.device_id,
-                        weight_grams=grams,
-                        stable=stable,
-                        raw_adc=raw_adc,
-                    )
+                    # Only send when weight changed meaningfully or stability flipped
+                    weight_changed = last_reported_grams is None or abs(grams - last_reported_grams) >= REPORT_THRESHOLD
+                    stability_changed = last_reported_stable is None or stable != last_reported_stable
+
+                    if weight_changed or stability_changed:
+                        await api.scale_reading(
+                            device_id=config.device_id,
+                            weight_grams=grams,
+                            stable=stable,
+                            raw_adc=raw_adc,
+                        )
+                        last_reported_grams = grams
+                        last_reported_stable = stable
                     last_report = now
 
             await asyncio.sleep(config.scale_read_interval)
