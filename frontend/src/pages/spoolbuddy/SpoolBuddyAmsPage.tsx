@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ function getAmsName(amsId: number): string {
 function mapModelCode(ssdpModel: string | null): string {
   if (!ssdpModel) return '';
   const modelMap: Record<string, string> = {
-    'O1D': 'H2D', 'O1E': 'H2D Pro', 'O2D': 'H2D Pro', 'O1C': 'H2C', 'O1C2': 'H2C', 'O1S': 'H2S',
+    'O1D': 'H2D', 'O1E': 'H2D Pro', 'O2D': 'H2D Pro', 'O1C': 'H2C', 'O1S': 'H2S',
     'BL-P001': 'X1C', 'BL-P002': 'X1', 'BL-P003': 'X1E',
     'C11': 'P1S', 'C12': 'P1P', 'C13': 'P2S',
     'N2S': 'A1', 'N1': 'A1 Mini',
@@ -77,6 +77,46 @@ export function SpoolBuddyAmsPage() {
   const trayNow = status?.tray_now ?? 255;
   const isDualNozzle = printer?.nozzle_count === 2 || status?.temperatures?.nozzle_2 !== undefined;
   const vtTrays = useMemo(() => [...(status?.vt_tray ?? [])].sort((a, b) => (a.id ?? 254) - (b.id ?? 254)), [status?.vt_tray]);
+
+  const amsThresholds: AmsThresholds | undefined = settings ? {
+    humidityGood: Number(settings.ams_humidity_good) || 40,
+    humidityFair: Number(settings.ams_humidity_fair) || 60,
+    tempGood: Number(settings.ams_temp_good) || 28,
+    tempFair: Number(settings.ams_temp_fair) || 35,
+  } : undefined;
+
+  // Cache ams_extruder_map to prevent L/R indicators bouncing on updates
+  const cachedAmsExtruderMap = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0) {
+      cachedAmsExtruderMap.current = status.ams_extruder_map;
+    }
+  }, [status?.ams_extruder_map]);
+  const amsExtruderMap = (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0)
+    ? status.ams_extruder_map
+    : cachedAmsExtruderMap.current;
+
+  const getNozzleSide = (amsId: number): 'L' | 'R' | null => {
+    if (!isDualNozzle) return null;
+    const mappedExtruderId = amsExtruderMap[String(amsId)];
+    const normalizedId = amsId >= 128 ? amsId - 128 : amsId;
+    const extruderId = mappedExtruderId !== undefined ? mappedExtruderId : normalizedId;
+    // extruder 0 = right, 1 = left
+    return extruderId === 1 ? 'L' : 'R';
+  };
+
+  const [configureSlotModal, setConfigureSlotModal] = useState<{
+    amsId: number;
+    trayId: number;
+    trayCount: number;
+    trayType?: string;
+    trayColor?: string;
+    traySubBrands?: string;
+    trayInfoIdx?: string;
+    extruderId?: number;
+    caliIdx?: number | null;
+    savedPresetId?: string;
+  } | null>(null);
 
   const amsThresholds: AmsThresholds | undefined = settings ? {
     humidityGood: Number(settings.ams_humidity_good) || 40,
@@ -169,6 +209,44 @@ export function SpoolBuddyAmsPage() {
     });
   }, [slotPresets, isDualNozzle]);
 
+  const handleAmsSlotClick = (amsId: number, trayId: number, tray: AMSTray | null) => {
+    const globalTrayId = amsId >= 128 ? (amsId - 128) * 4 + trayId + 64 : amsId * 4 + trayId;
+    const slotPreset = slotPresets?.[globalTrayId];
+    const mappedExtruderId = amsExtruderMap[String(amsId)];
+    const normalizedId = amsId >= 128 ? amsId - 128 : amsId;
+    const extruderId = mappedExtruderId !== undefined ? mappedExtruderId : normalizedId;
+    setConfigureSlotModal({
+      amsId,
+      trayId,
+      trayCount: tray ? (amsId >= 128 ? 1 : 4) : 4,
+      trayType: tray?.tray_type || undefined,
+      trayColor: tray?.tray_color || undefined,
+      traySubBrands: tray?.tray_sub_brands || undefined,
+      trayInfoIdx: tray?.tray_info_idx || undefined,
+      extruderId: isDualNozzle ? extruderId : undefined,
+      caliIdx: tray?.cali_idx,
+      savedPresetId: slotPreset?.preset_id,
+    });
+  };
+
+  const handleExtSlotClick = (extTray: AMSTray) => {
+    const extTrayId = extTray.id ?? 254;
+    const slotTrayId = extTrayId - 254;
+    const extSlotPreset = slotPresets?.[255 * 4 + slotTrayId];
+    setConfigureSlotModal({
+      amsId: 255,
+      trayId: slotTrayId,
+      trayCount: 1,
+      trayType: extTray.tray_type || undefined,
+      trayColor: extTray.tray_color || undefined,
+      traySubBrands: extTray.tray_sub_brands || undefined,
+      trayInfoIdx: extTray.tray_info_idx || undefined,
+      extruderId: isDualNozzle ? (extTrayId === 254 ? 1 : 0) : undefined,
+      caliIdx: extTray.cali_idx,
+      savedPresetId: extSlotPreset?.preset_id,
+    });
+  };
+
   // Set alert for low filament in status bar
   useEffect(() => {
     if (!isConnected && selectedPrinterId) {
@@ -236,10 +314,10 @@ export function SpoolBuddyAmsPage() {
     }
 
     return items;
-  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, t, getActiveSlotForAms, getNozzleSide, handleAmsSlotClick, handleExtSlotClick]);
+  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, slotPresets, amsExtruderMap, t]);
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-3">
       <div className="flex-1 min-h-0">
         {!selectedPrinterId ? (
           <div className="flex-1 flex items-center justify-center h-full">
@@ -287,11 +365,11 @@ export function SpoolBuddyAmsPage() {
                   return (
                     <div
                       key={key}
-                      className={`bg-bambu-dark-secondary rounded-lg px-3 py-2 cursor-pointer hover:bg-bambu-dark-secondary/80 transition-all flex items-center gap-2 ${isActive ? 'ring-2 ring-bambu-green' : ''}`}
+                      className={`bg-bambu-dark-secondary rounded-lg px-2 py-1.5 cursor-pointer hover:bg-bambu-dark-secondary/80 transition-all flex items-center gap-2 ${isActive ? 'ring-2 ring-bambu-green' : ''}`}
                       onClick={onClick}
                     >
                       {/* Spool */}
-                      <div className="relative w-10 h-10 flex-shrink-0">
+                      <div className="relative w-8 h-8 flex-shrink-0">
                         {isEmpty ? (
                           <div className="w-full h-full rounded-full border-2 border-dashed border-gray-500 flex items-center justify-center">
                             <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
@@ -312,10 +390,10 @@ export function SpoolBuddyAmsPage() {
                       {/* Info */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-white/50 font-medium truncate">{label}</span>
+                          <span className="text-[10px] text-white/50 font-medium truncate">{label}</span>
                           {nozzleSide && <NozzleBadge side={nozzleSide} />}
                         </div>
-                        <div className="text-sm text-white/80 truncate">
+                        <div className="text-xs text-white/80 truncate">
                           {isEmpty ? 'Empty' : tray.tray_type || '?'}
                         </div>
                         {(temp != null || humidity != null) && (
@@ -339,7 +417,7 @@ export function SpoolBuddyAmsPage() {
                       </div>
                       {/* Fill bar */}
                       {!isEmpty && tray.remain != null && tray.remain >= 0 && (
-                        <div className="w-1.5 h-8 bg-bambu-dark-tertiary rounded-full overflow-hidden flex-shrink-0 flex flex-col-reverse">
+                        <div className="w-1 h-6 bg-bambu-dark-tertiary rounded-full overflow-hidden flex-shrink-0 flex flex-col-reverse">
                           <div
                             className="w-full rounded-full"
                             style={{
@@ -365,7 +443,6 @@ export function SpoolBuddyAmsPage() {
           printerId={selectedPrinterId}
           slotInfo={configureSlotModal}
           printerModel={mapModelCode(printer?.model ?? null) || undefined}
-          fullScreen
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['slotPresets', selectedPrinterId] });
             queryClient.invalidateQueries({ queryKey: ['printerStatus', selectedPrinterId] });
