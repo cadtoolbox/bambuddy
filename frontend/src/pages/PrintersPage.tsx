@@ -46,7 +46,7 @@ import {
 
 import { useNavigate } from 'react-router-dom';
 import { api, discoveryApi, firmwareApi } from '../api/client';
-import { formatDateOnly, formatETA, formatDuration } from '../utils/date';
+import { formatDateOnly, formatETA, formatDuration, parseUTCDate } from '../utils/date';
 import type { Printer, PrinterCreate, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -3739,7 +3739,7 @@ function PrinterCard({
                         )}
                         {/* Timestamp */}
                         <p className="text-[10px] text-bambu-gray/60">
-                          {ref.timestamp ? new Date(ref.timestamp).toLocaleDateString() : ''}
+                          {ref.timestamp ? parseUTCDate(ref.timestamp)?.toLocaleDateString() ?? '' : ''}
                         </p>
                       </div>
                     ))}

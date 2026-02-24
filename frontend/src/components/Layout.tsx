@@ -12,6 +12,7 @@ import { useIsSidebarCompact } from '../hooks/useIsSidebarCompact';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Card, CardHeader, CardContent } from './Card';
+import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
 
 interface NavItem {
@@ -201,7 +202,7 @@ export function Layout() {
       setDebugDuration(null);
       return;
     }
-    const enabledAt = new Date(debugLoggingState.enabled_at).getTime();
+    const enabledAt = parseUTCDate(debugLoggingState.enabled_at)?.getTime() ?? Date.now();
     const updateDuration = () => {
       setDebugDuration(Math.floor((Date.now() - enabledAt) / 1000));
     };

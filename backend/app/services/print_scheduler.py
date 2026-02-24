@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import defusedxml.ElementTree as ET
@@ -80,7 +80,7 @@ class PrintScheduler:
 
             for item in items:
                 # Check scheduled time first (scheduled_time is stored in UTC from ISO string)
-                if item.scheduled_time and item.scheduled_time > datetime.utcnow():
+                if item.scheduled_time and item.scheduled_time > datetime.now(timezone.utc):
                     continue
 
                 # Skip items that require manual start
@@ -124,7 +124,7 @@ class PrintScheduler:
                         if not await self._check_previous_success(db, item):
                             item.status = "skipped"
                             item.error_message = "Previous print failed or was aborted"
-                            item.completed_at = datetime.now()
+                            item.completed_at = datetime.now(timezone.utc)
                             await db.commit()
                             logger.info("Skipped queue item %s - previous print failed", item.id)
 
@@ -201,7 +201,7 @@ class PrintScheduler:
                             if not await self._check_previous_success(db, item):
                                 item.status = "skipped"
                                 item.error_message = "Previous print failed or was aborted"
-                                item.completed_at = datetime.now()
+                                item.completed_at = datetime.now(timezone.utc)
                                 await db.commit()
                                 logger.info("Skipped queue item %s - previous print failed", item.id)
 
@@ -940,7 +940,7 @@ class PrintScheduler:
         if not printer:
             item.status = "failed"
             item.error_message = "Printer not found"
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error("Queue item %s: Printer %s not found", item.id, item.printer_id)
             await self._power_off_if_needed(db, item)
@@ -950,7 +950,7 @@ class PrintScheduler:
         if not printer_manager.is_connected(item.printer_id):
             item.status = "failed"
             item.error_message = "Printer not connected"
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error("Queue item %s: Printer %s not connected", item.id, item.printer_id)
             await self._power_off_if_needed(db, item)
@@ -969,7 +969,7 @@ class PrintScheduler:
             if not archive:
                 item.status = "failed"
                 item.error_message = "Archive not found"
-                item.completed_at = datetime.utcnow()
+                item.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 logger.error("Queue item %s: Archive %s not found", item.id, item.archive_id)
                 await self._power_off_if_needed(db, item)
@@ -985,7 +985,7 @@ class PrintScheduler:
             if not library_file:
                 item.status = "failed"
                 item.error_message = "Library file not found"
-                item.completed_at = datetime.utcnow()
+                item.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 logger.error("Queue item %s: Library file %s not found", item.id, item.library_file_id)
                 await self._power_off_if_needed(db, item)
@@ -1021,7 +1021,7 @@ class PrintScheduler:
             # Neither archive nor library file specified
             item.status = "failed"
             item.error_message = "No source file specified"
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error("Queue item %s: No archive_id or library_file_id specified", item.id)
             await self._power_off_if_needed(db, item)
@@ -1031,7 +1031,7 @@ class PrintScheduler:
         if not file_path.exists():
             item.status = "failed"
             item.error_message = "Source file not found on disk"
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error("Queue item %s: File not found: %s", item.id, file_path)
             await self._power_off_if_needed(db, item)
@@ -1106,7 +1106,7 @@ class PrintScheduler:
             )
             item.status = "failed"
             item.error_message = error_msg
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error(
                 f"Queue item {item.id}: FTP upload failed - printer={printer.name}, model={printer.model}, "
@@ -1146,7 +1146,7 @@ class PrintScheduler:
         # in "printing" status without actually printing - but that's safer than
         # accidentally reprinting the same file hours later.
         item.status = "printing"
-        item.started_at = datetime.utcnow()
+        item.started_at = datetime.now(timezone.utc)
         await db.commit()
 
         # Consume the plate-cleared flag now that we're starting a print
@@ -1214,7 +1214,7 @@ class PrintScheduler:
             # Print command failed - revert status
             item.status = "failed"
             item.error_message = "Failed to send print command to printer"
-            item.completed_at = datetime.utcnow()
+            item.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.error(
                 f"Queue item {item.id}: Failed to start print on {printer.name} ({printer.model}) - "

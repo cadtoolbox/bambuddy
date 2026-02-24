@@ -10,7 +10,7 @@ import { useFilamentMapping } from '../../hooks/useFilamentMapping';
 import { useMultiPrinterFilamentMapping, type PerPrinterConfig } from '../../hooks/useMultiPrinterFilamentMapping';
 import { isPlaceholderDate } from '../../utils/amsHelpers';
 import { getCurrencySymbol } from '../../utils/currency';
-import { toDateTimeLocalValue } from '../../utils/date';
+import { toDateTimeLocalValue, parseUTCDate } from '../../utils/date';
 import { Button } from '../Button';
 import { Card, CardContent } from '../Card';
 import { FilamentMapping } from './FilamentMapping';
@@ -94,7 +94,7 @@ export function PrintModal({
 
       let scheduledTime = '';
       if (queueItem.scheduled_time && !isPlaceholderDate(queueItem.scheduled_time)) {
-        const date = new Date(queueItem.scheduled_time);
+        const date = parseUTCDate(queueItem.scheduled_time) ?? new Date();
         // Use toDateTimeLocalValue to convert UTC to local time for datetime-local input
         scheduledTime = toDateTimeLocalValue(date);
       }

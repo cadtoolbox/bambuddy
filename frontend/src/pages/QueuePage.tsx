@@ -50,7 +50,7 @@ import {
   Weight,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { type TimeFormat, formatETA, formatDuration, formatRelativeTime } from '../utils/date';
+import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -501,7 +501,7 @@ function SortableQueueItem({
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
                 {item.scheduled_time
-                  ? (new Date(item.scheduled_time).getTime() - Date.now() < -60000
+                  ? ((parseUTCDate(item.scheduled_time)?.getTime() ?? 0) - Date.now() < -60000
                       ? t?.('queue.time.overdue') ?? 'Overdue'
                       : formatRelativeTime(item.scheduled_time, timeFormat, t))
                   : t?.('queue.time.asap') ?? 'ASAP'}
@@ -869,7 +869,7 @@ export function QueuePage() {
     // Helper to get scheduled time as timestamp (ASAP/placeholder = 0 for earliest)
     const getScheduledTime = (item: PrintQueueItem): number => {
       if (!item.scheduled_time) return 0;
-      const time = new Date(item.scheduled_time).getTime();
+      const time = parseUTCDate(item.scheduled_time)?.getTime() ?? 0;
       // Placeholder dates (> 6 months out) are treated as ASAP
       const sixMonthsFromNow = Date.now() + (180 * 24 * 60 * 60 * 1000);
       return time > sixMonthsFromNow ? 0 : time;
@@ -955,7 +955,7 @@ export function QueuePage() {
         cmp = (a.printer_name || '').localeCompare(b.printer_name || '');
       } else {
         // Default: by date - most recent first (desc) is the natural order
-        cmp = new Date(b.completed_at || b.created_at).getTime() - new Date(a.completed_at || a.created_at).getTime();
+        cmp = (parseUTCDate(b.completed_at || b.created_at)?.getTime() ?? 0) - (parseUTCDate(a.completed_at || a.created_at)?.getTime() ?? 0);
       }
       return historySortAsc ? -cmp : cmp;
     });
