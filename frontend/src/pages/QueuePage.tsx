@@ -111,6 +111,7 @@ function BulkEditModal({
   onSave,
   onClose,
   isSaving,
+  canControlPrinter,
   t,
 }: {
   selectedCount: number;
@@ -118,6 +119,7 @@ function BulkEditModal({
   onSave: (data: Partial<PrintQueueBulkUpdate>) => void;
   onClose: () => void;
   isSaving: boolean;
+  canControlPrinter: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [printerId, setPrinterId] = useState<number | null | 'unchanged'>('unchanged');
@@ -193,7 +195,7 @@ function BulkEditModal({
             <label className="block text-sm font-medium text-white mb-2">{t('queue.bulkEdit.queueOptions')}</label>
             <div className="space-y-2">
               <TriStateToggle label={t('queue.bulkEdit.staged')} value={manualStart} onChange={setManualStart} t={t} />
-              <TriStateToggle label={t('queue.bulkEdit.autoPowerOff')} value={autoOffAfter} onChange={setAutoOffAfter} t={t} />
+              <TriStateToggle label={t('queue.bulkEdit.autoPowerOff')} value={autoOffAfter} onChange={setAutoOffAfter} disabled={!canControlPrinter} t={t} />
               <TriStateToggle label={t('queue.bulkEdit.requirePrevious')} value={requirePreviousSuccess} onChange={setRequirePreviousSuccess} t={t} />
             </div>
           </div>
@@ -231,32 +233,37 @@ function TriStateToggle({
   label,
   value,
   onChange,
+  disabled,
   t,
 }: {
   label: string;
   value: boolean | 'unchanged';
   onChange: (val: boolean | 'unchanged') => void;
+  disabled?: boolean;
   t: (key: string) => string;
 }) {
   return (
-    <div className="flex items-center justify-between py-1">
+    <div className={`flex items-center justify-between py-1 ${disabled ? 'opacity-50' : ''}`}>
       <span className="text-sm text-bambu-gray">{label}</span>
       <div className="flex items-center gap-1 bg-bambu-dark rounded-lg p-0.5">
         <button
           onClick={() => onChange('unchanged')}
-          className={`px-2 py-1 text-xs rounded ${value === 'unchanged' ? 'bg-bambu-dark-tertiary text-white' : 'text-bambu-gray hover:text-white'}`}
+          disabled={disabled}
+          className={`px-2 py-1 text-xs rounded ${value === 'unchanged' ? 'bg-bambu-dark-tertiary text-white' : 'text-bambu-gray hover:text-white'} disabled:cursor-not-allowed`}
         >
           —
         </button>
         <button
           onClick={() => onChange(false)}
-          className={`px-2 py-1 text-xs rounded ${value === false ? 'bg-red-500/20 text-red-400' : 'text-bambu-gray hover:text-white'}`}
+          disabled={disabled}
+          className={`px-2 py-1 text-xs rounded ${value === false ? 'bg-red-500/20 text-red-400' : 'text-bambu-gray hover:text-white'} disabled:cursor-not-allowed`}
         >
           {t('common.off')}
         </button>
         <button
           onClick={() => onChange(true)}
-          className={`px-2 py-1 text-xs rounded ${value === true ? 'bg-bambu-green/20 text-bambu-green' : 'text-bambu-gray hover:text-white'}`}
+          disabled={disabled}
+          className={`px-2 py-1 text-xs rounded ${value === true ? 'bg-bambu-green/20 text-bambu-green' : 'text-bambu-gray hover:text-white'} disabled:cursor-not-allowed`}
         >
           {t('common.on')}
         </button>
@@ -1431,6 +1438,7 @@ export function QueuePage() {
           }}
           onClose={() => setShowBulkEditModal(false)}
           isSaving={bulkUpdateMutation.isPending}
+          canControlPrinter={hasPermission('printers:control')}
           t={t}
         />
       )}

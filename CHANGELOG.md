@@ -4,6 +4,9 @@ All notable changes to Bambuddy will be documented in this file.
 
 ## [0.2.1b4] - Unreleased
 
+### Fixed
+- **"Power Off Printer" Option Not Gated by Control Permission** ([#500](https://github.com/maziggy/bambuddy/issues/500)) — The "Power off printer when done" checkbox in the print modal and the auto power off toggle in the bulk edit modal were accessible to all users regardless of permissions. Users without the `printers:control` permission can now no longer enable auto power off — the checkbox and tri-state toggle are disabled and visually dimmed.
+
 ## [0.2.1b3] - 2026-02-23
 
 ### Fixed

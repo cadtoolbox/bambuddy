@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PrintQueueItemCreate, PrintQueueItemUpdate } from '../../api/client';
 import { api } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useFilamentMapping } from '../../hooks/useFilamentMapping';
 import { useMultiPrinterFilamentMapping, type PerPrinterConfig } from '../../hooks/useMultiPrinterFilamentMapping';
@@ -48,6 +49,7 @@ export function PrintModal({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
 
   // Determine if we're printing a library file
   const isLibraryFile = !!libraryFileId && !archiveId;
@@ -775,6 +777,7 @@ export function PrintModal({
                 onChange={setScheduleOptions}
                 dateFormat={settings?.date_format || 'system'}
                 timeFormat={settings?.time_format || 'system'}
+                canControlPrinter={hasPermission('printers:control')}
               />
             )}
 
