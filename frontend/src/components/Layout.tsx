@@ -220,8 +220,8 @@ export function Layout() {
     const result: string[] = [];
     const seen = new Set<string>();
 
-    // Determine if settings should be hidden (user role and auth enabled)
-    const hideSettings = authEnabled && user?.role === 'user';
+    // Determine if settings should be hidden (no settings:read permission)
+    const hideSettings = authEnabled && !hasPermission('settings:read');
     // Add items in stored order
     for (const id of sidebarOrder) {
       if (hideSettings && id === 'settings') continue;

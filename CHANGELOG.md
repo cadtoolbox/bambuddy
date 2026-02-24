@@ -6,6 +6,7 @@ All notable changes to Bambuddy will be documented in this file.
 
 ### Fixed
 - **"Power Off Printer" Option Not Gated by Control Permission** ([#500](https://github.com/maziggy/bambuddy/issues/500)) — The "Power off printer when done" checkbox in the print modal and the auto power off toggle in the bulk edit modal were accessible to all users regardless of permissions. Users without the `printers:control` permission can now no longer enable auto power off — the checkbox and tri-state toggle are disabled and visually dimmed.
+- **Created Admin Users Can't See Settings Button** ([#503](https://github.com/maziggy/bambuddy/issues/503)) — The sidebar hid the Settings link based on a hardcoded `role === 'user'` check instead of the actual `settings:read` permission, so newly created admin users who had the permission still couldn't see the button. Also, after login the auth state was set directly from the login response instead of re-fetching the full auth status, which could miss permission data. Now uses `hasPermission('settings:read')` for the sidebar check and calls `checkAuthStatus()` after login to load the complete user state including permissions.
 
 ## [0.2.1b3] - 2026-02-23
 
