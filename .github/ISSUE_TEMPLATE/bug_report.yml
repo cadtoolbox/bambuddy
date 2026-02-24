@@ -152,6 +152,6 @@ body:
         - label: I am using the latest version of Bambuddy
           required: true
         - label: My printer is set to LAN Only mode
-          required: true
+          required: false
         - label: My printer has Developer Mode enabled
-          required: true
+          required: false
