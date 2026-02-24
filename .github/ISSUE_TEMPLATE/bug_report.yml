@@ -150,7 +150,7 @@ body:
         - label: I have searched existing issues to ensure this bug hasn't already been reported
           required: true
         - label: I am using the latest version of Bambuddy
-          required: false
+          required: true
         - label: My printer is set to LAN Only mode
           required: true
         - label: My printer has Developer Mode enabled
