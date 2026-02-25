@@ -74,6 +74,7 @@ async def init_db():
     from backend.app.models import (  # noqa: F401
         active_print_spoolman,
         ams_history,
+        ams_label,
         api_key,
         archive,
         color_catalog,

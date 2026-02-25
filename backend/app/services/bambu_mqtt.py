@@ -620,12 +620,17 @@ class BambuMQTTClient:
         """Handle version info response from get_version command.
 
         Parses firmware version from the 'ota' module in the module list.
+        Also extracts AMS unit firmware versions from 'ams/<id>' modules and
+        stores them on the corresponding AMS unit in raw_data so the status
+        route can expose them to the frontend.
+
         Message format:
         {
             "command": "get_version",
             "module": [
                 {"name": "ota", "sw_ver": "01.08.05.00"},
                 {"name": "rv1126", "sw_ver": "00.00.14.74"},
+                {"name": "ams/0", "sw_ver": "00.00.06.96", "sn": "ABC123"},
                 ...
             ]
         }
@@ -648,6 +653,36 @@ class BambuMQTTClient:
                     if self.on_state_change:
                         self.on_state_change(self.state)
                 break
+
+        # Extract AMS unit firmware versions from ams/<id> modules (e.g. "ams/0")
+        # and store them on the corresponding raw AMS unit for the status route.
+        ams_raw = self.state.raw_data.get("ams")
+        if ams_raw and isinstance(ams_raw, list):
+            for module in modules:
+                if not isinstance(module, dict):
+                    continue
+                name = module.get("name", "")
+                if not name.startswith("ams/"):
+                    continue
+                try:
+                    ams_id = int(name.split("/", 1)[1])
+                except (ValueError, IndexError):
+                    continue
+                sw_ver = module.get("sw_ver", "")
+                sn = module.get("sn", "")
+                for ams_unit in ams_raw:
+                    if not isinstance(ams_unit, dict):
+                        continue
+                    if ams_unit.get("id") == ams_id:
+                        if sw_ver:
+                            ams_unit["sw_ver"] = sw_ver
+                            logger.debug(
+                                "[%s] AMS %s firmware: %s", self.serial_number, ams_id, sw_ver
+                            )
+                        # Only set sn from version info if not already present in AMS data
+                        if sn and not ams_unit.get("sn"):
+                            ams_unit["sn"] = sn
+                        break
 
     def _parse_xcam_data(self, xcam_data):
         """Parse xcam data for camera settings and AI detection options."""
