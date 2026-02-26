@@ -688,3 +688,57 @@ class TestSimplifiedBackupRestore:
 
         assert response.status_code == 400
         assert "not a valid zip" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_restore_reinitializes_database_schema(self, async_client: AsyncClient):
+        """Verify restore calls reinitialize_database and init_db after replacing the database.
+
+        This ensures that tables added after a backup was created (e.g. ams_labels) are
+        created immediately after restore without requiring a manual restart, preventing
+        HTTP 500 errors when those tables are accessed.
+        """
+        import io
+        import zipfile
+        from unittest.mock import AsyncMock, patch
+
+        # Create a minimal valid SQLite database to include in the backup ZIP
+        import os
+        import sqlite3
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:
+            conn = sqlite3.connect(tmp_db.name)
+            conn.close()
+            tmp_db_path = tmp_db.name
+
+        try:
+            with open(tmp_db_path, "rb") as f:
+                db_bytes = f.read()
+        finally:
+            os.unlink(tmp_db_path)
+
+        # Build a backup ZIP containing bambuddy.db
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("bambuddy.db", db_bytes)
+        zip_buffer.seek(0)
+
+        mock_reinitialize = AsyncMock()
+        mock_init_db = AsyncMock()
+        mock_close = AsyncMock()
+
+        with (
+            patch("backend.app.core.database.close_all_connections", mock_close),
+            patch("backend.app.core.database.reinitialize_database", mock_reinitialize),
+            patch("backend.app.core.database.init_db", mock_init_db),
+            patch("shutil.copy2"),
+        ):
+            files = {"file": ("backup.zip", zip_buffer.read(), "application/zip")}
+            response = await async_client.post("/api/v1/settings/restore", files=files)
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        mock_close.assert_called_once()
+        mock_reinitialize.assert_called_once()
+        mock_init_db.assert_called_once()
