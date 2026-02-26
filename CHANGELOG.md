@@ -14,6 +14,9 @@ All notable changes to Bambuddy will be documented in this file.
 - **Virtual Printer Queue Mode Doesn't Assign Printer** ([#518](https://github.com/maziggy/bambuddy/issues/518)) — Files sent to a virtual printer in "print queue" mode were added to the queue with no printer assigned, requiring manual assignment. The `_add_to_print_queue()` method always created queue items with `printer_id=None` and no `target_model`. Now assigns the virtual printer's `target_printer_id` if configured, or falls back to the VP's model (e.g., P1S, X1C) as `target_model` for "Any Printer" scheduling.
 - **Settings Text Fields Reset While Typing** — Text input fields on the Settings page (MQTT broker hostname, HA URL, tokens, etc.) reset mid-typing because the auto-save `onSuccess` handler overwrote `localSettings` with the server response, discarding characters typed during the save request. Removed the stale state overwrite so in-progress user input is preserved.
 
+### Improved
+- **Queue API Returns More Print Metadata** ([#524](https://github.com/maziggy/bambuddy/issues/524)) — The `GET /api/v1/queue` and `GET /api/v1/queue/{id}` endpoints now include `filament_type`, `filament_color`, `layer_height`, `nozzle_diameter`, and `sliced_for_model` from the archive or library file. Previously these fields were only available via the archive endpoints, requiring an extra API call.
+
 ## [0.2.1b3] - 2026-02-23
 
 ### Fixed
