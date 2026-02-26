@@ -1302,3 +1302,39 @@ class TestAMSVersionInfoWarnings:
             )
         assert not any("serial number not available" in r.message for r in caplog.records)
         assert not any("firmware version not available" in r.message for r in caplog.records)
+
+    def test_version_cached_when_get_version_arrives_before_push_status(self, mqtt_client):
+        """get_version arriving before push_status still populates the cache.
+
+        Real-world ordering: get_version response is often received before the
+        first push_status (AMS data).  The cache must be populated unconditionally
+        so that _apply_ams_version_cache can apply sn/sw_ver when AMS data arrives.
+        """
+        # raw_data has NO "ams" key yet — simulates get_version arriving first
+        assert "ams" not in mqtt_client.state.raw_data
+
+        mqtt_client._handle_version_info(
+            {
+                "module": [
+                    {"name": "ota", "sw_ver": "01.02.02.00"},
+                    {
+                        "name": "ams/0",
+                        "sw_ver": "00.00.06.75",
+                        "sn": "00600A422205315",
+                    },
+                ]
+            }
+        )
+
+        # Cache must be populated even though no AMS raw data existed
+        cache = getattr(mqtt_client, "_ams_version_cache", None)
+        assert cache is not None, "_ams_version_cache should be set"
+        assert cache.get(0) == {"sw_ver": "00.00.06.75", "sn": "00600A422205315"}
+
+        # When AMS data later arrives (simulating push_status), _apply_ams_version_cache
+        # should hydrate sn and sw_ver onto the new AMS unit.
+        ams_list = [{"id": "0", "tray": []}]
+        mqtt_client._apply_ams_version_cache(ams_list)
+
+        assert ams_list[0].get("sn") == "00600A422205315"
+        assert ams_list[0].get("sw_ver") == "00.00.06.75"

@@ -693,26 +693,30 @@ class BambuMQTTClient:
 
         # Extract AMS unit firmware versions from ams/<id> modules (e.g. "ams/0")
         # and store them on the corresponding raw AMS unit for the status route.
+        # Always cache regardless of whether AMS data has arrived yet — get_version
+        # often arrives before the first push_status, so caching must be unconditional.
+        if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
+            self._ams_version_cache = {}
         ams_raw = self.state.raw_data.get("ams")
-        if ams_raw and isinstance(ams_raw, list):
-            for module in modules:
-                if not isinstance(module, dict):
-                    continue
-                name = module.get("name", "")
-                if not name.startswith("ams/"):
-                    continue
-                try:
-                    ams_id = int(name.split("/", 1)[1])
-                except (ValueError, IndexError):
-                    continue
-                sw_ver = module.get("sw_ver", "")
-                sn = module.get("sn", "")
+        for module in modules:
+            if not isinstance(module, dict):
+                continue
+            name = module.get("name", "")
+            if not name.startswith("ams/"):
+                continue
+            try:
+                ams_id = int(name.split("/", 1)[1])
+            except (ValueError, IndexError):
+                continue
+            sw_ver = module.get("sw_ver", "")
+            sn = module.get("sn", "")
 
-                # Cache version info for later (get_version may arrive before AMS status)
-                if sw_ver or sn:
-                    if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
-                        self._ams_version_cache = {}
-                    self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
+            # Always cache so _apply_ams_version_cache can apply it when AMS data arrives
+            if sw_ver or sn:
+                self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
+
+            # Also directly update any AMS unit already present in raw_data
+            if ams_raw and isinstance(ams_raw, list):
                 for ams_unit in ams_raw:
                     if not isinstance(ams_unit, dict):
                         continue
@@ -731,8 +735,9 @@ class BambuMQTTClient:
                             ams_unit["sn"] = sn
                         break
 
-            # Warn if any AMS unit is still missing serial number or firmware version
-            # after processing the version info response.
+        # Warn if any AMS unit is still missing serial number or firmware version
+        # after processing the version info response.
+        if ams_raw and isinstance(ams_raw, list):
             for ams_unit in ams_raw:
                 if not isinstance(ams_unit, dict):
                     continue
