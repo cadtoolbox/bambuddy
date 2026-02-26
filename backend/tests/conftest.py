@@ -61,6 +61,7 @@ async def test_engine():
     # Import all models to register them
     from backend.app.models import (
         ams_history,
+        ams_label,
         api_key,
         archive,
         external_link,
@@ -74,6 +75,7 @@ async def test_engine():
         printer,
         project,
         settings,
+        slot_preset,
         smart_plug,
         user,
     )
