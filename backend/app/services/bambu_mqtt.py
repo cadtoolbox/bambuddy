@@ -296,6 +296,10 @@ class BambuMQTTClient:
         self._disconnection_event: threading.Event | None = None
         self._previous_ams_hash: str | None = None  # Track AMS changes
 
+        # Cache AMS firmware/SN from get_version in case it arrives before AMS status
+        # Key: ams_id (int). Value: {'sw_ver': str, 'sn': str}
+        self._ams_version_cache: dict[int, dict[str, str]] = {}
+
         # K-profile command tracking
         self._sequence_id: int = 0
         self._pending_kprofile_response: asyncio.Event | None = None
@@ -703,10 +707,20 @@ class BambuMQTTClient:
                     continue
                 sw_ver = module.get("sw_ver", "")
                 sn = module.get("sn", "")
-                for ams_unit in ams_raw:
+                
+            # Cache version info for later (get_version may arrive before AMS status)
+            if sw_ver or sn:
+                if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
+                    self._ams_version_cache = {}
+                self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
+for ams_unit in ams_raw:
                     if not isinstance(ams_unit, dict):
                         continue
-                    if ams_unit.get("id") == ams_id:
+                    try:
+                    unit_id = int(ams_unit.get("id")) if ams_unit.get("id") is not None else None
+                except (ValueError, TypeError):
+                    unit_id = None
+                if unit_id == ams_id:
                         if sw_ver:
                             ams_unit["sw_ver"] = sw_ver
                             logger.debug(
@@ -735,6 +749,39 @@ class BambuMQTTClient:
                         self.serial_number,
                         ams_id,
                     )
+    def _apply_ams_version_cache(self, ams_list: list) -> None:
+        """Apply cached AMS firmware/SN (from get_version) onto an AMS list in-place.
+
+        get_version may arrive before pushall/AMS status, and AMS unit IDs may be
+        strings in MQTT payloads. This helper normalizes IDs and fills missing
+        sw_ver/sn fields without overwriting values already present.
+        """
+        if not ams_list or not isinstance(ams_list, list):
+            return
+        cache = getattr(self, '_ams_version_cache', None)
+        if not cache or not isinstance(cache, dict):
+            return
+        for unit in ams_list:
+            if not isinstance(unit, dict):
+                continue
+            raw_id = unit.get('id')
+            try:
+                unit_id = int(raw_id) if raw_id is not None else None
+            except (ValueError, TypeError):
+                unit_id = None
+            if unit_id is None:
+                continue
+            cached = cache.get(unit_id)
+            if not cached:
+                continue
+            sw_ver = cached.get('sw_ver') or ''
+            sn = cached.get('sn') or ''
+            if sw_ver and not unit.get('sw_ver'):
+                unit['sw_ver'] = sw_ver
+            # Only set sn if not already present in AMS data
+            if sn and not unit.get('sn') and not unit.get('serial_number'):
+                unit['sn'] = sn
+
 
     def _parse_xcam_data(self, xcam_data):
         """Parse xcam data for camera settings and AI detection options."""
@@ -1330,7 +1377,11 @@ class BambuMQTTClient:
 
         self.state.raw_data["ams"] = merged_ams
 
-        # Update timestamp for RFID refresh detection (frontend can detect "new data arrived")
+        
+
+        # Apply cached AMS firmware/SN from get_version (handles ordering and id type mismatches)
+        self._apply_ams_version_cache(merged_ams)
+# Update timestamp for RFID refresh detection (frontend can detect "new data arrived")
         self.state.last_ams_update = time.time()
         logger.debug("[%s] Merged AMS data: %s new units, %s total", self.serial_number, len(ams_list), len(merged_ams))
 
