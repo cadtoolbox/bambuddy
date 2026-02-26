@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -96,46 +96,6 @@ export function SpoolBuddyAmsPage() {
     ? status.ams_extruder_map
     : cachedAmsExtruderMap.current;
 
-  const getNozzleSide = (amsId: number): 'L' | 'R' | null => {
-    if (!isDualNozzle) return null;
-    const mappedExtruderId = amsExtruderMap[String(amsId)];
-    const normalizedId = amsId >= 128 ? amsId - 128 : amsId;
-    const extruderId = mappedExtruderId !== undefined ? mappedExtruderId : normalizedId;
-    // extruder 0 = right, 1 = left
-    return extruderId === 1 ? 'L' : 'R';
-  };
-
-  const [configureSlotModal, setConfigureSlotModal] = useState<{
-    amsId: number;
-    trayId: number;
-    trayCount: number;
-    trayType?: string;
-    trayColor?: string;
-    traySubBrands?: string;
-    trayInfoIdx?: string;
-    extruderId?: number;
-    caliIdx?: number | null;
-    savedPresetId?: string;
-  } | null>(null);
-
-  const amsThresholds: AmsThresholds | undefined = settings ? {
-    humidityGood: Number(settings.ams_humidity_good) || 40,
-    humidityFair: Number(settings.ams_humidity_fair) || 60,
-    tempGood: Number(settings.ams_temp_good) || 28,
-    tempFair: Number(settings.ams_temp_fair) || 35,
-  } : undefined;
-
-  // Cache ams_extruder_map to prevent L/R indicators bouncing on updates
-  const cachedAmsExtruderMap = useRef<Record<string, number>>({});
-  useEffect(() => {
-    if (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0) {
-      cachedAmsExtruderMap.current = status.ams_extruder_map;
-    }
-  }, [status?.ams_extruder_map]);
-  const amsExtruderMap = (status?.ams_extruder_map && Object.keys(status.ams_extruder_map).length > 0)
-    ? status.ams_extruder_map
-    : cachedAmsExtruderMap.current;
-
   const getNozzleSide = useCallback((amsId: number): 'L' | 'R' | null => {
     if (!isDualNozzle) return null;
     const mappedExtruderId = amsExtruderMap[String(amsId)];
@@ -209,44 +169,6 @@ export function SpoolBuddyAmsPage() {
     });
   }, [slotPresets, isDualNozzle]);
 
-  const handleAmsSlotClick = (amsId: number, trayId: number, tray: AMSTray | null) => {
-    const globalTrayId = amsId >= 128 ? (amsId - 128) * 4 + trayId + 64 : amsId * 4 + trayId;
-    const slotPreset = slotPresets?.[globalTrayId];
-    const mappedExtruderId = amsExtruderMap[String(amsId)];
-    const normalizedId = amsId >= 128 ? amsId - 128 : amsId;
-    const extruderId = mappedExtruderId !== undefined ? mappedExtruderId : normalizedId;
-    setConfigureSlotModal({
-      amsId,
-      trayId,
-      trayCount: tray ? (amsId >= 128 ? 1 : 4) : 4,
-      trayType: tray?.tray_type || undefined,
-      trayColor: tray?.tray_color || undefined,
-      traySubBrands: tray?.tray_sub_brands || undefined,
-      trayInfoIdx: tray?.tray_info_idx || undefined,
-      extruderId: isDualNozzle ? extruderId : undefined,
-      caliIdx: tray?.cali_idx,
-      savedPresetId: slotPreset?.preset_id,
-    });
-  };
-
-  const handleExtSlotClick = (extTray: AMSTray) => {
-    const extTrayId = extTray.id ?? 254;
-    const slotTrayId = extTrayId - 254;
-    const extSlotPreset = slotPresets?.[255 * 4 + slotTrayId];
-    setConfigureSlotModal({
-      amsId: 255,
-      trayId: slotTrayId,
-      trayCount: 1,
-      trayType: extTray.tray_type || undefined,
-      trayColor: extTray.tray_color || undefined,
-      traySubBrands: extTray.tray_sub_brands || undefined,
-      trayInfoIdx: extTray.tray_info_idx || undefined,
-      extruderId: isDualNozzle ? (extTrayId === 254 ? 1 : 0) : undefined,
-      caliIdx: extTray.cali_idx,
-      savedPresetId: extSlotPreset?.preset_id,
-    });
-  };
-
   // Set alert for low filament in status bar
   useEffect(() => {
     if (!isConnected && selectedPrinterId) {
@@ -314,7 +236,7 @@ export function SpoolBuddyAmsPage() {
     }
 
     return items;
-  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, slotPresets, amsExtruderMap, t]);
+  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, t, getActiveSlotForAms, getNozzleSide, handleAmsSlotClick, handleExtSlotClick]);
 
   return (
     <div className="h-full flex flex-col p-3">
