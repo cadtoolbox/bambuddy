@@ -1173,3 +1173,92 @@ class TestClearHMSErrorsAPI:
 
             assert response.status_code == 500
             assert "failed" in response.json()["detail"].lower()
+
+
+class TestAMSLabelsAPI:
+    """Integration tests for /api/v1/printers/{printer_id}/ams-labels endpoints."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_get_ams_labels_empty(self, async_client: AsyncClient, printer_factory):
+        """Verify empty dict returned when no AMS labels exist."""
+        printer = await printer_factory(name="Test Printer")
+
+        response = await async_client.get(f"/api/v1/printers/{printer.id}/ams-labels")
+
+        assert response.status_code == 200
+        assert response.json() == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_save_ams_label(self, async_client: AsyncClient, printer_factory):
+        """Verify AMS label can be saved for a printer."""
+        printer = await printer_factory(name="Test Printer")
+
+        response = await async_client.put(f"/api/v1/printers/{printer.id}/ams-labels/0?label=Workshop+AMS")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ams_id"] == 0
+        assert data["label"] == "Workshop AMS"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_save_ams_label_then_get(self, async_client: AsyncClient, printer_factory):
+        """Verify saved AMS label is returned by GET endpoint."""
+        printer = await printer_factory(name="Test Printer")
+
+        await async_client.put(f"/api/v1/printers/{printer.id}/ams-labels/0?label=Silk+Colours")
+
+        response = await async_client.get(f"/api/v1/printers/{printer.id}/ams-labels")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "0" in data
+        assert data["0"] == "Silk Colours"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_save_ams_label_update(self, async_client: AsyncClient, printer_factory):
+        """Verify AMS label can be updated."""
+        printer = await printer_factory(name="Test Printer")
+
+        await async_client.put(f"/api/v1/printers/{printer.id}/ams-labels/0?label=OldName")
+        response = await async_client.put(f"/api/v1/printers/{printer.id}/ams-labels/0?label=NewName")
+
+        assert response.status_code == 200
+        assert response.json()["label"] == "NewName"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_save_ams_label_printer_not_found(self, async_client: AsyncClient):
+        """Verify 404 returned when printer does not exist."""
+        response = await async_client.put("/api/v1/printers/9999/ams-labels/0?label=Test")
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_delete_ams_label(self, async_client: AsyncClient, printer_factory):
+        """Verify AMS label can be deleted."""
+        printer = await printer_factory(name="Test Printer")
+
+        await async_client.put(f"/api/v1/printers/{printer.id}/ams-labels/0?label=ToDelete")
+        response = await async_client.delete(f"/api/v1/printers/{printer.id}/ams-labels/0")
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        get_response = await async_client.get(f"/api/v1/printers/{printer.id}/ams-labels")
+        assert get_response.json() == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_delete_ams_label_nonexistent(self, async_client: AsyncClient, printer_factory):
+        """Verify delete is idempotent — no error if label doesn't exist."""
+        printer = await printer_factory(name="Test Printer")
+
+        response = await async_client.delete(f"/api/v1/printers/{printer.id}/ams-labels/0")
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
