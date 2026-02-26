@@ -139,6 +139,13 @@ async def async_client(test_engine, db_session) -> AsyncGenerator[AsyncClient, N
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
 
+        # The app lifespan called init_db() which used the module-level engine
+        # (not the test engine), creating aiosqlite connections. Dispose those
+        # connections so their background threads finish before the event loop closes.
+        from backend.app.core.database import engine as real_engine
+
+        await real_engine.dispose()
+
     app.dependency_overrides.clear()
 
 

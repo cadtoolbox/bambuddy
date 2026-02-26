@@ -734,7 +734,11 @@ async def on_ams_change(printer_id: int, ams_data: list):
                             # The AMS remain% is low-resolution (integer %, i.e. 10g steps for 1kg spool)
                             # and must not overwrite precise values from the usage tracker (3MF/G-code).
                             remain_raw = tray.get("remain")
-                            if remain_raw is not None and existing_assignment.spool:
+                            if (
+                                remain_raw is not None
+                                and existing_assignment.spool
+                                and not existing_assignment.spool.weight_locked
+                            ):
                                 try:
                                     remain_val = int(remain_raw)
                                 except (TypeError, ValueError):
