@@ -1,4 +1,5 @@
 from backend.app.models.ams_history import AMSSensorHistory
+from backend.app.models.ams_label import AmsLabel
 from backend.app.models.api_key import APIKey
 from backend.app.models.archive import PrintArchive
 from backend.app.models.color_catalog import ColorCatalogEntry
@@ -16,6 +17,7 @@ from backend.app.models.pending_upload import PendingUpload
 from backend.app.models.printer import Printer
 from backend.app.models.project import Project
 from backend.app.models.settings import Settings
+from backend.app.models.slot_preset import SlotPresetMapping
 from backend.app.models.smart_plug import SmartPlug
 from backend.app.models.spool import Spool
 from backend.app.models.spool_assignment import SpoolAssignment
@@ -39,6 +41,7 @@ __all__ = [
     "Project",
     "APIKey",
     "AMSSensorHistory",
+    "AmsLabel",
     "PendingUpload",
     "LibraryFolder",
     "LibraryFile",
@@ -53,6 +56,7 @@ __all__ = [
     "SpoolKProfile",
     "SpoolAssignment",
     "SpoolCatalogEntry",
+    "SlotPresetMapping",
     "SpoolUsageHistory",
     "ColorCatalogEntry",
 ]
