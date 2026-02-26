@@ -431,7 +431,7 @@ export default {
     // AMS hover popup
     amsPopup: {
       friendlyName: 'AMS Name',
-      friendlyNamePlaceholder: 'e.g. Silk Colours',
+      friendlyNamePlaceholder: 'e.g. AMS Friendly Name',
       serialNumber: 'Serial Number',
       firmwareVersion: 'Firmware',
       save: 'Save',
