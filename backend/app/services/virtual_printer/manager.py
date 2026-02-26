@@ -310,10 +310,12 @@ class VirtualPrinterInstance:
                     target_model = None
                     if not self.target_printer_id and self.model:
                         target_model = VIRTUAL_PRINTER_MODELS.get(self.model)
+                    plate_id = self._extract_plate_id(file_path)
                     queue_item = PrintQueueItem(
                         printer_id=self.target_printer_id,
                         target_model=target_model,
                         archive_id=archive.id,
+                        plate_id=plate_id,
                         position=1,
                         status="pending",
                     )
@@ -329,6 +331,26 @@ class VirtualPrinterInstance:
                     logger.error("Failed to archive file: %s", file_path.name)
         except Exception as e:
             logger.error("Error adding to print queue: %s", e)
+
+    @staticmethod
+    def _extract_plate_id(file_path: Path) -> int | None:
+        """Extract plate index from 3MF slice_info.config."""
+        try:
+            import xml.etree.ElementTree as ET
+            import zipfile
+
+            with zipfile.ZipFile(file_path, "r") as zf:
+                if "Metadata/slice_info.config" in zf.namelist():
+                    content = zf.read("Metadata/slice_info.config").decode()
+                    root = ET.fromstring(content)  # noqa: S314
+                    plate = root.find(".//plate")
+                    if plate is not None:
+                        for meta in plate.findall("metadata"):
+                            if meta.get("key") == "index" and meta.get("value"):
+                                return int(meta.get("value"))
+        except Exception:
+            return None
+        return None
 
     # -- Service lifecycle --
 
