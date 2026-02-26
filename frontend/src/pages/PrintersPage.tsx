@@ -1420,6 +1420,7 @@ function AmsNameHoverCard({
   const [position, setPosition] = useState<'top' | 'bottom'>('top');
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1443,7 +1444,9 @@ function AmsNameHoverCard({
   };
   const handleMouseLeave = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+    if (!isInputFocused) {
+      timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+    }
   };
   useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
 
@@ -1490,31 +1493,27 @@ function AmsNameHoverCard({
             <div className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium">{label}</div>
 
             {/* Serial number */}
-            {ams.serial_number && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
-                  {t('printers.amsPopup.serialNumber')}
-                </span>
-                <span className="text-[10px] text-white font-mono truncate">{ams.serial_number}</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
+                {t('printers.amsPopup.serialNumber')}
+              </span>
+              <span className="text-[10px] text-white font-mono truncate">{ams.serial_number || '—'}</span>
+            </div>
 
             {/* Firmware version */}
-            {ams.sw_ver && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
-                  {t('printers.amsPopup.firmwareVersion')}
-                </span>
-                <span className="text-[10px] text-white font-mono truncate">{ams.sw_ver}</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
+                {t('printers.amsPopup.firmwareVersion')}
+              </span>
+              <span className="text-[10px] text-white font-mono truncate">{ams.sw_ver || '—'}</span>
+            </div>
 
             {/* Divider */}
             <div className="h-px bg-bambu-dark-tertiary/50" />
 
             {/* Friendly name editor */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium block">
+              <span className="text-[10px] text-bambu-gray font-medium block">
                 {t('printers.amsPopup.friendlyName')}
               </span>
               <input
@@ -1522,6 +1521,13 @@ function AmsNameHoverCard({
                 value={editValue}
                 onChange={(e) => canEdit && setEditValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => {
+                  setIsInputFocused(false);
+                  if (!triggerRef.current?.matches(':hover') && !cardRef.current?.matches(':hover')) {
+                    timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+                  }
+                }}
                 placeholder={canEdit ? t('printers.amsPopup.friendlyNamePlaceholder') : (amsLabels?.[ams.id] || '—')}
                 disabled={!canEdit}
                 title={!canEdit ? t('printers.amsPopup.noEditPermission') : undefined}

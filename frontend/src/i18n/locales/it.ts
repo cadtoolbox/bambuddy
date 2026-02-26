@@ -422,7 +422,7 @@ export default {
     slotOptions: 'Opzioni slot',
     // AMS hover popup
     amsPopup: {
-      friendlyName: 'Nome descrittivo',
+      friendlyName: 'Nome AMS',
       friendlyNamePlaceholder: 'es. Colori seta',
       serialNumber: 'Numero di serie',
       firmwareVersion: 'Firmware',
