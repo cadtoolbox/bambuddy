@@ -320,10 +320,16 @@ class PrintScheduler:
                     logger.debug("Skipping printer %s (%s) - missing filaments: %s", printer.id, printer.name, missing)
                     continue
 
-            # If filament overrides with colors, prefer printers with exact color matches
+            # If filament overrides with colors, only consider printers that have at least one color match
             if filament_overrides:
                 color_matches = self._count_override_color_matches(printer.id, filament_overrides)
-                candidates.append((printer.id, color_matches))
+                if color_matches > 0:
+                    candidates.append((printer.id, color_matches))
+                else:
+                    override_colors = [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in filament_overrides]
+                    printers_missing_filament.append((printer.name, override_colors))
+                    logger.debug("Skipping printer %s (%s) - no matching override colors", printer.id, printer.name)
+                    continue
             else:
                 # No overrides - take first available (existing behavior)
                 return printer.id, None
