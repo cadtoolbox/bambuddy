@@ -1205,3 +1205,100 @@ class TestRequestTopicAmsMapping:
         assert complete_data["status"] == "completed"
         # Mapping cleared after completion
         assert mqtt_client._captured_ams_mapping is None
+
+
+class TestAMSVersionInfoWarnings:
+    """Tests that warnings are logged when AMS serial/firmware can't be retrieved."""
+
+    @pytest.fixture
+    def mqtt_client(self):
+        from backend.app.services.bambu_mqtt import BambuMQTTClient
+
+        client = BambuMQTTClient(
+            ip_address="192.168.1.100",
+            serial_number="TEST123",
+            access_code="12345678",
+        )
+        return client
+
+    def _seed_ams(self, mqtt_client, ams_id=0):
+        """Seed a single AMS unit in raw_data so version-info processing finds it."""
+        mqtt_client.state.raw_data["ams"] = [{"id": ams_id, "tray": []}]
+
+    def test_no_warning_when_serial_and_firmware_present(self, mqtt_client, caplog):
+        """No warning logged when both sn and sw_ver are present in version info."""
+        import logging
+
+        self._seed_ams(mqtt_client)
+        with caplog.at_level(logging.WARNING, logger="backend.app.services.bambu_mqtt"):
+            mqtt_client._handle_version_info(
+                {
+                    "module": [
+                        {"name": "ota", "sw_ver": "01.08.05.00"},
+                        {"name": "ams/0", "sw_ver": "00.00.06.96", "sn": "ABC123"},
+                    ]
+                }
+            )
+        assert not any("serial number not available" in r.message for r in caplog.records)
+        assert not any("firmware version not available" in r.message for r in caplog.records)
+
+    def test_warning_when_serial_number_missing(self, mqtt_client, caplog):
+        """Warning logged when sn is absent from version info for an AMS unit."""
+        import logging
+
+        self._seed_ams(mqtt_client)
+        with caplog.at_level(logging.WARNING, logger="backend.app.services.bambu_mqtt"):
+            mqtt_client._handle_version_info(
+                {
+                    "module": [
+                        {"name": "ota", "sw_ver": "01.08.05.00"},
+                        # ams/0 module present but no 'sn' field
+                        {"name": "ams/0", "sw_ver": "00.00.06.96"},
+                    ]
+                }
+            )
+        assert any("serial number not available" in r.message for r in caplog.records)
+        assert not any("firmware version not available" in r.message for r in caplog.records)
+
+    def test_warning_when_firmware_version_missing(self, mqtt_client, caplog):
+        """Warning logged when sw_ver is absent from version info for an AMS unit."""
+        import logging
+
+        self._seed_ams(mqtt_client)
+        with caplog.at_level(logging.WARNING, logger="backend.app.services.bambu_mqtt"):
+            mqtt_client._handle_version_info(
+                {
+                    "module": [
+                        {"name": "ota", "sw_ver": "01.08.05.00"},
+                        # ams/0 module present but no 'sw_ver' field
+                        {"name": "ams/0", "sn": "ABC123"},
+                    ]
+                }
+            )
+        assert any("firmware version not available" in r.message for r in caplog.records)
+        assert not any("serial number not available" in r.message for r in caplog.records)
+
+    def test_warning_when_ams_module_absent_from_version_info(self, mqtt_client, caplog):
+        """Warning logged when no ams/* module exists in version info at all."""
+        import logging
+
+        self._seed_ams(mqtt_client)
+        with caplog.at_level(logging.WARNING, logger="backend.app.services.bambu_mqtt"):
+            # Only ota module — no ams/* entry
+            mqtt_client._handle_version_info(
+                {"module": [{"name": "ota", "sw_ver": "01.08.05.00"}]}
+            )
+        assert any("serial number not available" in r.message for r in caplog.records)
+        assert any("firmware version not available" in r.message for r in caplog.records)
+
+    def test_no_warning_when_no_ams_raw_data(self, mqtt_client, caplog):
+        """No warning when there is no AMS data in raw_data at all."""
+        import logging
+
+        # raw_data has no "ams" key
+        with caplog.at_level(logging.WARNING, logger="backend.app.services.bambu_mqtt"):
+            mqtt_client._handle_version_info(
+                {"module": [{"name": "ota", "sw_ver": "01.08.05.00"}]}
+            )
+        assert not any("serial number not available" in r.message for r in caplog.records)
+        assert not any("firmware version not available" in r.message for r in caplog.records)

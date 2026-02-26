@@ -684,6 +684,25 @@ class BambuMQTTClient:
                             ams_unit["sn"] = sn
                         break
 
+            # Warn if any AMS unit is still missing serial number or firmware version
+            # after processing the version info response.
+            for ams_unit in ams_raw:
+                if not isinstance(ams_unit, dict):
+                    continue
+                ams_id = ams_unit.get("id", "?")
+                if not ams_unit.get("sn") and not ams_unit.get("serial_number"):
+                    logger.warning(
+                        "[%s] AMS unit %s: serial number not available in version info",
+                        self.serial_number,
+                        ams_id,
+                    )
+                if not ams_unit.get("sw_ver"):
+                    logger.warning(
+                        "[%s] AMS unit %s: firmware version not available in version info",
+                        self.serial_number,
+                        ams_id,
+                    )
+
     def _parse_xcam_data(self, xcam_data):
         """Parse xcam data for camera settings and AI detection options."""
         if not isinstance(xcam_data, dict):
