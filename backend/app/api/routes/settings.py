@@ -397,6 +397,7 @@ async def create_backup(
 @router.post("/restore")
 async def restore_backup(
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_RESTORE),
 ):
     """Restore from a complete backup ZIP.
@@ -456,16 +457,6 @@ async def restore_backup(
             # 5. Replace database
             logger.info("Restoring database from backup...")
             shutil.copy2(backup_db, db_path)
-
-            # Remove stale WAL and SHM files to prevent database corruption
-            for suffix in ("-wal", "-shm"):
-                stale_file = db_path.parent / (db_path.name + suffix)
-                if stale_file.exists():
-                    try:
-                        stale_file.unlink()
-                        logger.info("Removed stale %s file", suffix)
-                    except OSError as e:
-                        logger.warning("Could not remove %s file: %s", suffix, e)
 
             # 6. Replace data directories
             # For Docker compatibility: clear contents then copy (don't delete mount points)
