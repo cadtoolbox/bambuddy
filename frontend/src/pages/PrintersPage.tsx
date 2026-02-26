@@ -1540,6 +1540,22 @@ function PrinterCard({
     return Array.from(ids);
   }, [status?.ams, status?.vt_tray, status?.nozzle_rack]);
 
+  // Collect loaded filament types for queue widget filtering
+  const loadedFilamentTypes = useMemo(() => {
+    const types = new Set<string>();
+    if (status?.ams) {
+      for (const ams of status.ams) {
+        for (const tray of ams.tray || []) {
+          if (tray.tray_type) types.add(tray.tray_type.toUpperCase());
+        }
+      }
+    }
+    for (const vt of status?.vt_tray ?? []) {
+      if (vt.tray_type) types.add(vt.tray_type.toUpperCase());
+    }
+    return types;
+  }, [status?.ams, status?.vt_tray]);
+
   // Fetch cloud filament info for tooltips (name includes color, also has K value)
   const { data: filamentInfo } = useQuery({
     queryKey: ['filamentInfo', trayInfoIds],
@@ -2473,7 +2489,7 @@ function PrinterCard({
                 </div>
 
                 {/* Queue Widget - always visible when there are pending items */}
-                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} />
+                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} loadedFilamentTypes={loadedFilamentTypes} />
               </>
             )}
 

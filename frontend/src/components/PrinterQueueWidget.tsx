@@ -12,9 +12,10 @@ interface PrinterQueueWidgetProps {
   printerModel?: string | null;
   printerState?: string | null;
   plateCleared?: boolean;
+  loadedFilamentTypes?: Set<string>;
 }
 
-export function PrinterQueueWidget({ printerId, printerModel, printerState, plateCleared }: PrinterQueueWidgetProps) {
+export function PrinterQueueWidget({ printerId, printerModel, printerState, plateCleared, loadedFilamentTypes }: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -37,8 +38,15 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
     },
   });
 
-  const nextItem = queue?.[0];
-  const totalPending = queue?.length || 0;
+  // Filter queue to items this printer can actually print (filament type check)
+  const compatibleQueue = queue?.filter(item => {
+    if (!item.required_filament_types?.length) return true;
+    if (!loadedFilamentTypes?.size) return true;
+    return item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()));
+  });
+
+  const nextItem = compatibleQueue?.[0];
+  const totalPending = compatibleQueue?.length || 0;
 
   if (totalPending === 0) {
     return null;

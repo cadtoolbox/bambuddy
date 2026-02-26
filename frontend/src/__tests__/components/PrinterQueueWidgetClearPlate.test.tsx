@@ -196,4 +196,171 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       });
     });
   });
+
+  describe('filament compatibility filtering', () => {
+    const petgQueueItems = [
+      {
+        id: 10,
+        printer_id: 1,
+        archive_id: 10,
+        position: 1,
+        status: 'pending',
+        archive_name: 'PETG Print',
+        printer_name: 'H2S',
+        print_time_seconds: 3600,
+        scheduled_time: null,
+        required_filament_types: ['PETG'],
+      },
+    ];
+
+    it('hides widget when queue item requires filament not loaded on printer', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(petgQueueItems))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+        />
+      );
+
+      // Wait for query to settle, then confirm widget is not rendered
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('PETG Print')).not.toBeInTheDocument();
+    });
+
+    it('shows widget when queue item required filaments match loaded', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(petgQueueItems))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA', 'PETG'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('PETG Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when queue item has no required_filament_types', async () => {
+      // Default mockQueueItems have no required_filament_types
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('First Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when loadedFilamentTypes prop is not provided', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(petgQueueItems))
+      );
+
+      render(
+        <PrinterQueueWidget printerId={1} printerState="FINISH" />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('PETG Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+
+    it('skips incompatible first item and shows compatible second item', async () => {
+      const mixedQueue = [
+        {
+          id: 10,
+          printer_id: 1,
+          archive_id: 10,
+          position: 1,
+          status: 'pending',
+          archive_name: 'PETG Print',
+          printer_name: 'H2S',
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['PETG'],
+        },
+        {
+          id: 11,
+          printer_id: 1,
+          archive_id: 11,
+          position: 2,
+          status: 'pending',
+          archive_name: 'PLA Print',
+          printer_name: 'H2S',
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(mixedQueue))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('PLA Print')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('PETG Print')).not.toBeInTheDocument();
+    });
+
+    it('matches filament types case-insensitively', async () => {
+      const lowercaseQueue = [
+        {
+          id: 10,
+          printer_id: 1,
+          archive_id: 10,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Petg Print',
+          printer_name: 'H2S',
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['petg'],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(lowercaseQueue))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Petg Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+  });
 });
