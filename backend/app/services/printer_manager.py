@@ -589,6 +589,10 @@ def printer_state_to_dict(state: PrinterState, printer_id: int | None = None, mo
                     "temp": ams_data.get("temp"),
                     "is_ams_ht": is_ams_ht,
                     "tray": trays,
+                    # Serial number: Bambu MQTT uses "sn" key on AMS unit objects
+                    "serial_number": str(ams_data.get("sn") or ams_data.get("serial_number") or ""),
+                    # Firmware version: populated by _handle_version_info from get_version
+                    "sw_ver": str(ams_data.get("sw_ver") or ""),
                 }
             )
 
