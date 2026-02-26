@@ -707,20 +707,20 @@ class BambuMQTTClient:
                     continue
                 sw_ver = module.get("sw_ver", "")
                 sn = module.get("sn", "")
-                
-            # Cache version info for later (get_version may arrive before AMS status)
-            if sw_ver or sn:
-                if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
-                    self._ams_version_cache = {}
-                self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
-for ams_unit in ams_raw:
+
+                # Cache version info for later (get_version may arrive before AMS status)
+                if sw_ver or sn:
+                    if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
+                        self._ams_version_cache = {}
+                    self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
+                for ams_unit in ams_raw:
                     if not isinstance(ams_unit, dict):
                         continue
                     try:
-                    unit_id = int(ams_unit.get("id")) if ams_unit.get("id") is not None else None
-                except (ValueError, TypeError):
-                    unit_id = None
-                if unit_id == ams_id:
+                        unit_id = int(ams_unit.get("id")) if ams_unit.get("id") is not None else None
+                    except (ValueError, TypeError):
+                        unit_id = None
+                    if unit_id == ams_id:
                         if sw_ver:
                             ams_unit["sw_ver"] = sw_ver
                             logger.debug(
