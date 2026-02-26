@@ -1417,6 +1417,7 @@ function AmsNameHoverCard({
   const [position, setPosition] = useState<'top' | 'bottom'>('top');
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -1426,6 +1427,7 @@ function AmsNameHoverCard({
   useEffect(() => {
     if (isVisible) {
       setEditValue(amsLabels?.[ams.id] ?? '');
+      setSaveError(null);
       if (triggerRef.current && cardRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
         const spaceAbove = rect.top - 56;
@@ -1450,6 +1452,7 @@ function AmsNameHoverCard({
   const handleSave = async () => {
     if (!canEdit) return;
     setIsSaving(true);
+    setSaveError(null);
     try {
       const trimmed = editValue.trim();
       if (trimmed) {
@@ -1459,6 +1462,8 @@ function AmsNameHoverCard({
       }
       onSaved();
       setIsVisible(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -1491,7 +1496,7 @@ function AmsNameHoverCard({
 
             {/* Serial number */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
+              <span className="text-[10px] tracking-wide text-bambu-gray font-medium shrink-0">
                 {t('printers.amsPopup.serialNumber')}
               </span>
               <span className="text-[10px] text-white font-mono truncate">{ams.serial_number || '—'}</span>
@@ -1499,7 +1504,7 @@ function AmsNameHoverCard({
 
             {/* Firmware version */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium shrink-0">
+              <span className="text-[10px] tracking-wide text-bambu-gray font-medium shrink-0">
                 {t('printers.amsPopup.firmwareVersion')}
               </span>
               <span className="text-[10px] text-white font-mono truncate">{ams.sw_ver || '—'}</span>
@@ -1532,23 +1537,28 @@ function AmsNameHoverCard({
                 maxLength={100}
               />
               {canEdit && (
-                <div className="flex gap-1 justify-end">
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-2 py-0.5 text-[10px] bg-bambu-green text-white rounded hover:bg-bambu-green/80 disabled:opacity-50"
-                  >
-                    {t('printers.amsPopup.save')}
-                  </button>
-                  {amsLabels?.[ams.id] && (
-                    <button
-                      onClick={() => { setEditValue(''); }}
-                      disabled={isSaving}
-                      className="px-2 py-0.5 text-[10px] bg-bambu-dark-tertiary text-bambu-gray rounded hover:bg-bambu-dark-tertiary/70 disabled:opacity-50"
-                    >
-                      {t('printers.amsPopup.clear')}
-                    </button>
+                <div className="space-y-1">
+                  {saveError && (
+                    <p className="text-[10px] text-red-400 break-words">{saveError}</p>
                   )}
+                  <div className="flex gap-1 justify-end">
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="px-2 py-0.5 text-[10px] bg-bambu-green text-white rounded hover:bg-bambu-green/80 disabled:opacity-50"
+                    >
+                      {t('printers.amsPopup.save')}
+                    </button>
+                    {amsLabels?.[ams.id] && (
+                      <button
+                        onClick={() => { setEditValue(''); setSaveError(null); }}
+                        disabled={isSaving}
+                        className="px-2 py-0.5 text-[10px] bg-bambu-dark-tertiary text-bambu-gray rounded hover:bg-bambu-dark-tertiary/70 disabled:opacity-50"
+                      >
+                        {t('printers.amsPopup.clear')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
