@@ -2,7 +2,7 @@
 
 All notable changes to Bambuddy will be documented in this file.
 
-## [0.2.1] - Unreleased
+## [0.2.1] - 2026-02-27
 
 ### Fixed
 - **FTP Proxy Cannot Bind to Port 990 in Docker** — The `cap_add: NET_BIND_SERVICE` in docker-compose.yml didn't reliably propagate to the Python process when running as a non-root user (`user:` directive), depending on the container runtime's ambient capability support. Now sets the file capability directly on the Python binary in the Dockerfile via `setcap`, which the kernel honors regardless of runtime configuration.
