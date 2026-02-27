@@ -1,4 +1,13 @@
+
 import type { Printer, SpoolKProfile } from '../../api/client';
+
+// Catalog color display type (moved from component)
+export interface CatalogDisplayColor {
+  name: string;
+  hex: string;
+  manufacturer?: string;
+  material?: string;
+}
 
 // Form data structure
 export interface SpoolFormData {
@@ -9,9 +18,11 @@ export interface SpoolFormData {
   rgba: string;
   label_weight: number;
   core_weight: number;
+  core_weight_catalog_id: number | null;
   weight_used: number;
   slicer_filament: string;
   note: string;
+  cost_per_kg: number | null;
 }
 
 export const defaultFormData: SpoolFormData = {
@@ -22,9 +33,11 @@ export const defaultFormData: SpoolFormData = {
   rgba: '808080FF',
   label_weight: 1000,
   core_weight: 250,
+  core_weight_catalog_id: null,
   weight_used: 0,
   slicer_filament: '',
   note: '',
+  cost_per_kg: null,
 };
 
 // Printer with calibrations type
@@ -75,6 +88,11 @@ export interface FilamentSectionProps extends SectionProps {
   selectedPresetOption?: FilamentOption;
   filamentOptions: FilamentOption[];
   availableBrands: string[];
+  availableMaterials: string[];
+  quickAdd: boolean;
+  quantity: number;
+  onQuantityChange: (value: number) => void;
+  errors?: Partial<Record<keyof SpoolFormData, string>>;
 }
 
 // Color section props
@@ -87,6 +105,7 @@ export interface ColorSectionProps extends SectionProps {
 // Additional section props
 export interface AdditionalSectionProps extends SectionProps {
   spoolCatalog: { id: number; name: string; weight: number }[];
+  currencySymbol: string;
 }
 
 // PA Profile section props
@@ -104,8 +123,18 @@ export interface ValidationResult {
   errors: Partial<Record<keyof SpoolFormData, string>>;
 }
 
-export function validateForm(formData: SpoolFormData): ValidationResult {
+export function validateForm(formData: SpoolFormData, quickAdd = false): ValidationResult {
   const errors: Partial<Record<keyof SpoolFormData, string>> = {};
+
+  if (quickAdd) {
+    if (!formData.material) {
+      errors.material = 'Material is required';
+    }
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors,
+    };
+  }
 
   if (!formData.slicer_filament) {
     errors.slicer_filament = 'Slicer preset is required';
@@ -113,6 +142,14 @@ export function validateForm(formData: SpoolFormData): ValidationResult {
 
   if (!formData.material) {
     errors.material = 'Material is required';
+  }
+
+  if (!formData.brand) {
+    errors.brand = 'Brand is required';
+  }
+
+  if (!formData.subtype) {
+    errors.subtype = 'Subtype is required';
   }
 
   return {

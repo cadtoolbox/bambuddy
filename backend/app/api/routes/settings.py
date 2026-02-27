@@ -89,6 +89,7 @@ async def get_settings(
                 "spoolman_report_partial_usage",
                 "check_updates",
                 "check_printer_firmware",
+                "include_beta_updates",
                 "virtual_printer_enabled",
                 "ftp_retry_enabled",
                 "mqtt_enabled",
@@ -520,10 +521,10 @@ async def restore_backup(
 async def get_network_interfaces(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.SETTINGS_READ),
 ):
-    """Get available network interfaces for SSDP proxy configuration."""
-    from backend.app.services.network_utils import get_network_interfaces
+    """Get available network interfaces with all IPs (primary + aliases)."""
+    from backend.app.services.network_utils import get_all_interface_ips
 
-    interfaces = get_network_interfaces()
+    interfaces = get_all_interface_ips()
     return {"interfaces": interfaces}
 
 

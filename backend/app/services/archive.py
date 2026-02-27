@@ -4,7 +4,7 @@ import logging
 import re
 import shutil
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from defusedxml import ElementTree as ET
@@ -831,6 +831,7 @@ class ArchiveService:
         source_file: Path,
         print_data: dict | None = None,
         created_by_id: int | None = None,
+        original_filename: str | None = None,
     ) -> PrintArchive | None:
         """Archive a 3MF file with metadata.
 
@@ -839,6 +840,8 @@ class ArchiveService:
             source_file: Path to the 3MF file
             print_data: Print data from MQTT (optional)
             created_by_id: User ID who created this archive (optional, for user tracking)
+            original_filename: Original human-readable filename (optional, for library files
+                stored with UUID names)
         """
         # Verify printer exists if specified
         if printer_id is not None:
@@ -849,7 +852,8 @@ class ArchiveService:
 
         # Create archive directory structure
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive_name = f"{timestamp}_{source_file.stem}"
+        display_stem = Path(original_filename).stem if original_filename else source_file.stem
+        archive_name = f"{timestamp}_{display_stem}"
         # Use "unassigned" folder for archives without a printer
         printer_folder = str(printer_id) if printer_id is not None else "unassigned"
         archive_dir = settings.archive_dir / printer_folder / archive_name
@@ -889,8 +893,8 @@ class ArchiveService:
 
         # Determine status and timestamps
         status = print_data.get("status", "completed") if print_data else "archived"
-        started_at = datetime.now() if status == "printing" else None
-        completed_at = datetime.now() if status in ("completed", "failed", "archived") else None
+        started_at = datetime.now(timezone.utc) if status == "printing" else None
+        completed_at = datetime.now(timezone.utc) if status in ("completed", "failed", "archived") else None
 
         # Calculate cost based on filament usage and type
         cost = None
@@ -923,12 +927,12 @@ class ArchiveService:
         # Create archive record
         archive = PrintArchive(
             printer_id=printer_id,
-            filename=source_file.name,
+            filename=original_filename or source_file.name,
             file_path=str(dest_file.relative_to(settings.base_dir)),
             file_size=dest_file.stat().st_size,
             content_hash=content_hash,
             thumbnail_path=thumbnail_path,
-            print_name=metadata.get("print_name") or source_file.stem,
+            print_name=metadata.get("print_name") or display_stem,
             print_time_seconds=metadata.get("print_time_seconds"),
             filament_used_grams=metadata.get("filament_used_grams"),
             filament_type=metadata.get("filament_type"),
@@ -986,43 +990,6 @@ class ArchiveService:
             archive.failure_reason = failure_reason
 
         await self.db.commit()
-        return True
-
-    async def add_reprint_cost(self, archive_id: int) -> bool:
-        """Add cost for a reprint to the existing archive cost."""
-        archive = await self.get_archive(archive_id)
-        if not archive:
-            return False
-
-        if not archive.filament_used_grams or not archive.filament_type:
-            return False
-
-        # Calculate cost based on filament type or default
-        from backend.app.api.routes.settings import get_setting
-
-        primary_type = archive.filament_type.split(",")[0].strip()
-
-        # Look up filament cost_per_kg from database
-        filament_result = await self.db.execute(select(Filament).where(Filament.type == primary_type).limit(1))
-        filament = filament_result.scalar_one_or_none()
-
-        if filament:
-            cost_per_kg = filament.cost_per_kg
-        else:
-            # Use default filament cost from settings
-            default_cost_setting = await get_setting(self.db, "default_filament_cost")
-            cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
-
-        additional_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
-
-        # Add to existing cost (or set if None)
-        if archive.cost is None:
-            archive.cost = additional_cost
-        else:
-            archive.cost = round(archive.cost + additional_cost, 2)
-
-        await self.db.commit()
-        logger.info("Added reprint cost %s to archive %s, new total: %s", additional_cost, archive_id, archive.cost)
         return True
 
     async def list_archives(

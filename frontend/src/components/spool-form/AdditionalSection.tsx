@@ -8,15 +8,18 @@ function SpoolWeightPicker({
   catalog,
   value,
   onChange,
+  catalogId,
+  onCatalogIdChange,
 }: {
   catalog: { id: number; name: string; weight: number }[];
   value: number;
   onChange: (weight: number) => void;
+  catalogId: number | null;
+  onCatalogIdChange: (id: number | null) => void;
 }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -30,6 +33,35 @@ function SpoolWeightPicker({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // When value changes, auto-select if there's only one matching entry or keep selection if it still matches
+  useEffect(() => {
+    // If no catalog loaded yet, skip matching logic
+    if (catalog.length === 0) {
+      return;
+    }
+
+    const matches = catalog.filter(e => e.weight === value);
+
+    // If currently selected entry still matches the weight, keep it selected
+    if (catalogId) {
+      const selected = catalog.find(e => e.id === catalogId);
+      if (selected && selected.weight === value) {
+        return; // Keep current selection
+      }
+    }
+
+    // If exactly one match, auto-select it
+    if (matches.length === 1) {
+      onCatalogIdChange(matches[0].id);
+    } else if (matches.length === 0) {
+      // No matches, clear selection to prevent stale catalog ID
+      if (catalogId !== null) {
+        onCatalogIdChange(null);
+      }
+    }
+    // If multiple matches, don't auto-select - let user choose
+  }, [value, catalog, catalogId, onCatalogIdChange]);
+
   const filtered = useMemo(() => {
     if (!search) return catalog;
     const s = search.toLowerCase();
@@ -39,17 +71,29 @@ function SpoolWeightPicker({
     );
   }, [catalog, search]);
 
-  // Display value: show catalog name if selected, or the weight
+  // Find all entries matching the current weight
+  const matchingEntries = useMemo(() => {
+    return catalog.filter(e => e.weight === value);
+  }, [catalog, value]);
+
+  // Display value: show catalog name if selected by ID, otherwise show first match
   const displayValue = useMemo(() => {
     if (isOpen) return search;
-    if (selectedId) {
-      const entry = catalog.find(e => e.id === selectedId);
+
+    // If a catalog ID is explicitly selected, use that
+    if (catalogId) {
+      const entry = catalog.find(e => e.id === catalogId);
       if (entry) return entry.name;
     }
-    const match = catalog.find(e => e.weight === value);
-    if (match) return match.name;
+
+    // Otherwise, show the first matching entry as a suggestion
+    if (matchingEntries.length > 0) {
+      return matchingEntries[0].name;
+    }
+
+    // Leave empty if there are no matches
     return '';
-  }, [isOpen, search, selectedId, catalog, value]);
+  }, [isOpen, search, catalogId, catalog, matchingEntries]);
 
   return (
     <div>
@@ -86,12 +130,12 @@ function SpoolWeightPicker({
                     key={entry.id}
                     type="button"
                     className={`w-full px-3 py-2 text-left text-sm hover:bg-bambu-dark-tertiary flex justify-between items-center ${
-                      (selectedId ? entry.id === selectedId : entry.weight === value)
+                      (catalogId ? entry.id === catalogId : entry.weight === value)
                         ? 'bg-bambu-green/10 text-bambu-green'
                         : 'text-white'
                     }`}
                     onClick={() => {
-                      setSelectedId(entry.id);
+                      onCatalogIdChange(entry.id);
                       onChange(entry.weight);
                       setIsOpen(false);
                       setSearch('');
@@ -128,11 +172,14 @@ export function AdditionalSection({
   formData,
   updateField,
   spoolCatalog,
+  currencySymbol,
 }: AdditionalSectionProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [measuredInput, setMeasuredInput] = useState('');
   const [isMeasuredFocused, setIsMeasuredFocused] = useState(false);
+  const [remainingInput, setRemainingInput] = useState('');
+  const [isRemainingFocused, setIsRemainingFocused] = useState(false);
 
   const remainingWeight = Math.max(0, formData.label_weight - formData.weight_used);
   const measuredDefault = formData.core_weight + remainingWeight;
@@ -143,6 +190,12 @@ export function AdditionalSection({
     }
   }, [isMeasuredFocused, measuredDefault]);
 
+  useEffect(() => {
+    if (!isRemainingFocused) {
+      setRemainingInput(String(remainingWeight));
+    }
+  }, [isRemainingFocused, remainingWeight]);
+
   return (
     <div className="space-y-4">
       {/* Empty Spool Weight */}
@@ -150,6 +203,8 @@ export function AdditionalSection({
         catalog={spoolCatalog}
         value={formData.core_weight}
         onChange={(weight) => updateField('core_weight', weight)}
+        catalogId={formData.core_weight_catalog_id}
+        onCatalogIdChange={(id) => updateField('core_weight_catalog_id', id)}
       />
 
       {/* Current Weight (remaining filament) */}
@@ -159,12 +214,24 @@ export function AdditionalSection({
           <div className="relative flex-1">
             <input
               type="number"
-              value={remainingWeight}
+              value={remainingInput}
               min={0}
               max={formData.label_weight}
+              onFocus={() => setIsRemainingFocused(true)}
               onChange={(e) => {
-                const remaining = parseInt(e.target.value) || 0;
-                updateField('weight_used', Math.max(0, formData.label_weight - remaining));
+                setRemainingInput(e.target.value);
+              }}
+              onBlur={() => {
+                setIsRemainingFocused(false);
+                const raw = remainingInput.trim();
+                const remaining = Number(raw);
+                if (!raw || !Number.isFinite(remaining) || remaining < 0 || remaining > formData.label_weight) {
+                  setRemainingInput(String(remainingWeight));
+                  return;
+                }
+                const rounded = Math.round(remaining);
+                updateField('weight_used', Math.max(0, formData.label_weight - rounded));
+                setRemainingInput(String(rounded));
               }}
               className="w-full px-3 py-2 pr-7 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:outline-none focus:border-bambu-green"
             />
@@ -210,6 +277,29 @@ export function AdditionalSection({
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-bambu-gray">g</span>
           </div>
           <span className="text-xs text-bambu-gray shrink-0">/ {formData.core_weight + formData.label_weight}g</span>
+        </div>
+      </div>
+
+      {/* Cost per kg */}
+      <div>
+        <label className="block text-sm font-medium text-bambu-gray mb-1">{t('inventory.costPerKg', 'Cost per kg')}</label>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-bambu-gray text-sm pointer-events-none">{currencySymbol}</span>
+            <input
+              type="number"
+              value={formData.cost_per_kg ?? ''}
+              min={0}
+              step={0.01}
+              placeholder="0.00"
+              onChange={(e) => {
+                const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                updateField('cost_per_kg', value);
+              }}
+              style={{ paddingLeft: `${Math.max(2, currencySymbol.length * 0.6 + 1)}rem` }}
+              className="w-full py-2 pr-3 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white text-sm focus:outline-none focus:border-bambu-green"
+            />
+          </div>
         </div>
       </div>
 

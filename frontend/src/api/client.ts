@@ -250,6 +250,8 @@ export interface PrinterStatus {
   big_fan2_speed: number | null;     // Chamber/exhaust fan
   heatbreak_fan_speed: number | null; // Hotend heatbreak fan
   firmware_version: string | null;   // Firmware version from MQTT
+  // Developer LAN mode: true = enabled, false = disabled, null = unknown
+  developer_mode: boolean | null;
   // Queue: user has acknowledged plate is cleared for next queued print
   plate_cleared: boolean;
 }
@@ -761,6 +763,7 @@ export interface AppSettings {
   energy_tracking_mode: 'print' | 'total';
   check_updates: boolean;
   check_printer_firmware: boolean;
+  include_beta_updates: boolean;
   notification_language: string;
   // AMS threshold settings
   ams_humidity_good: number;  // <= this is green
@@ -1219,6 +1222,7 @@ export interface PrintQueueItem {
   auto_off_after: boolean;
   manual_start: boolean;  // Requires manual trigger to start (staged)
   ams_mapping: number[] | null;  // AMS slot mapping for multi-color prints
+  filament_overrides: Array<{ slot_id: number; type: string; color: string }> | null;  // Filament overrides for model-based assignment
   plate_id: number | null;  // Plate ID for multi-plate 3MF files
   // Print options
   bed_levelling: boolean;
@@ -1248,6 +1252,7 @@ export interface PrintQueueItemCreate {
   printer_id?: number | null;  // null = unassigned
   target_model?: string | null;  // Target printer model (mutually exclusive with printer_id)
   target_location?: string | null;  // Target location filter (only used with target_model)
+  filament_overrides?: Array<{ slot_id: number; type: string; color: string }> | null;
   // Either archive_id OR library_file_id must be provided
   archive_id?: number | null;
   library_file_id?: number | null;
@@ -1270,6 +1275,7 @@ export interface PrintQueueItemUpdate {
   printer_id?: number | null;  // null = unassign
   target_model?: string | null;  // Target printer model (mutually exclusive with printer_id)
   target_location?: string | null;  // Target location filter (only used with target_model)
+  filament_overrides?: Array<{ slot_id: number; type: string; color: string }> | null;
   position?: number;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
@@ -1629,6 +1635,15 @@ export interface NotificationTestResponse {
   message: string;
 }
 
+export interface BackgroundDispatchResponse {
+  status: 'dispatched' | string;
+  printer_id: number;
+  archive_id?: number | null;
+  filename: string;
+  dispatch_job_id: number;
+  dispatch_position: number;
+}
+
 // Provider-specific config types for reference
 export interface CallMeBotConfig {
   phone: string;
@@ -1771,6 +1786,7 @@ export interface InventorySpool {
   brand: string | null;
   label_weight: number;
   core_weight: number;
+  core_weight_catalog_id: number | null;
   weight_used: number;
   slicer_filament: string | null;
   slicer_filament_name: string | null;
@@ -1787,6 +1803,7 @@ export interface InventorySpool {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  cost_per_kg: number | null;
   k_profiles?: SpoolKProfile[];
 }
 
@@ -1798,6 +1815,7 @@ export interface SpoolUsageRecord {
   weight_used: number;
   percent_used: number;
   status: string;
+  cost: number | null;
   created_at: string;
 }
 
@@ -1969,7 +1987,7 @@ export interface ExternalLinkUpdate {
 
 // Permission type - all available permissions
 export type Permission =
-  | 'printers:read' | 'printers:create' | 'printers:update' | 'printers:delete' | 'printers:control' | 'printers:files' | 'printers:ams_rfid'
+  | 'printers:read' | 'printers:create' | 'printers:update' | 'printers:delete' | 'printers:control' | 'printers:files' | 'printers:ams_rfid' | 'printers:clear_plate'
   | 'archives:read' | 'archives:create'
   | 'archives:update_own' | 'archives:update_all' | 'archives:delete_own' | 'archives:delete_all'
   | 'archives:reprint_own' | 'archives:reprint_all'
@@ -2279,6 +2297,13 @@ export const api = {
       `/printers/${id}?delete_archives=${deleteArchives}`,
       { method: 'DELETE' }
     ),
+  getDeveloperModeWarnings: () =>
+    request<{ printer_id: number; name: string }[]>('/printers/developer-mode-warnings'),
+  getAvailableFilaments: (model: string, location?: string) => {
+    const params = new URLSearchParams({ model });
+    if (location) params.set('location', location);
+    return request<Array<{ type: string; color: string; tray_info_idx: string; extruder_id: number | null }>>(`/printers/available-filaments?${params}`);
+  },
   getPrinterStatus: (id: number) =>
     request<PrinterStatus>(`/printers/${id}/status`),
   refreshPrinterStatus: (id: number) =>
@@ -2783,8 +2808,17 @@ export const api = {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   },
-  getSource3mfForSlicer: (archiveId: number, filename: string) =>
-    `${API_BASE}/archives/${archiveId}/source/${encodeURIComponent(filename.endsWith('.3mf') ? filename : filename + '.3mf')}`,
+  getSource3mfForSlicer: (archiveId: number, filename: string) => {
+    // Sanitize: slicers url_decode() the entire URL, so / \ ? # in filenames break path routing
+    const safe = filename.replace(/[/\\?#]/g, '_');
+    return `${API_BASE}/archives/${archiveId}/source/${encodeURIComponent(safe.endsWith('.3mf') ? safe : safe + '.3mf')}`;
+  },
+  createSourceSlicerToken: (archiveId: number) =>
+    request<{ token: string }>(`/archives/${archiveId}/source-slicer-token`, { method: 'POST' }),
+  getSourceSlicerDownloadUrl: (archiveId: number, token: string, filename: string) => {
+    const safe = filename.replace(/[/\\?#]/g, '_');
+    return `${API_BASE}/archives/${archiveId}/source-dl/${token}/${encodeURIComponent(safe.endsWith('.3mf') ? safe : safe + '.3mf')}`;
+  },
   uploadSource3mf: async (archiveId: number, file: File): Promise<{ status: string; filename: string }> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -2905,8 +2939,16 @@ export const api = {
     }),
   getArchiveProjectImageUrl: (archiveId: number, imagePath: string) =>
     `${API_BASE}/archives/${archiveId}/project-image/${encodeURIComponent(imagePath)}`,
-  getArchiveForSlicer: (id: number, filename: string) =>
-    `${API_BASE}/archives/${id}/file/${encodeURIComponent(filename.endsWith('.3mf') ? filename : filename + '.3mf')}`,
+  getArchiveForSlicer: (id: number, filename: string) => {
+    const safe = filename.replace(/[/\\?#]/g, '_');
+    return `${API_BASE}/archives/${id}/file/${encodeURIComponent(safe.endsWith('.3mf') ? safe : safe + '.3mf')}`;
+  },
+  createArchiveSlicerToken: (archiveId: number) =>
+    request<{ token: string }>(`/archives/${archiveId}/slicer-token`, { method: 'POST' }),
+  getArchiveSlicerDownloadUrl: (archiveId: number, token: string, filename: string) => {
+    const safe = filename.replace(/[/\\?#]/g, '_');
+    return `${API_BASE}/archives/${archiveId}/dl/${token}/${encodeURIComponent(safe.endsWith('.3mf') ? safe : safe + '.3mf')}`;
+  },
   getArchivePlates: (archiveId: number) =>
     request<ArchivePlatesResponse>(`/archives/${archiveId}/plates`),
   getArchiveFilamentRequirements: (archiveId: number, plateId?: number) =>
@@ -2927,6 +2969,7 @@ export const api = {
     printerId: number,
     options?: {
       plate_id?: number;
+      plate_name?: string;
       ams_mapping?: number[];
       timelapse?: boolean;
       bed_levelling?: boolean;
@@ -2936,7 +2979,7 @@ export const api = {
       use_ams?: boolean;
     }
   ) =>
-    request<{ status: string; printer_id: number; archive_id: number; filename: string }>(
+    request<BackgroundDispatchResponse>(
       `/archives/${archiveId}/reprint?printer_id=${printerId}`,
       {
         method: 'POST',
@@ -3179,10 +3222,11 @@ export const api = {
     request<HASensorEntity[]>('/smart-plugs/ha/sensors'),
 
   // Print Queue
-  getQueue: (printerId?: number, status?: string) => {
+  getQueue: (printerId?: number, status?: string, targetModel?: string) => {
     const params = new URLSearchParams();
     if (printerId) params.set('printer_id', String(printerId));
     if (status) params.set('status', status);
+    if (targetModel) params.set('target_model', targetModel);
     return request<PrintQueueItem[]>(`/queue/?${params}`);
   },
   getQueueItem: (id: number) => request<PrintQueueItem>(`/queue/${id}`),
@@ -3312,10 +3356,10 @@ export const api = {
       { method: 'POST' }
     ),
 
-  // Filaments
-  listFilaments: () => request<Filament[]>('/filaments/'),
-  getFilament: (id: number) => request<Filament>(`/filaments/${id}`),
-  getFilamentsByType: (type: string) => request<Filament[]>(`/filaments/by-type/${type}`),
+  // Filament Catalog (material types with cost/temp data)
+  listFilaments: () => request<Filament[]>('/filament-catalog/'),
+  getFilament: (id: number) => request<Filament>(`/filament-catalog/${id}`),
+  getFilamentsByType: (type: string) => request<Filament[]>(`/filament-catalog/by-type/${type}`),
 
   // Notification Providers
   getNotificationProviders: () => request<NotificationProvider[]>('/notifications/'),
@@ -3445,6 +3489,11 @@ export const api = {
     request<InventorySpool>('/inventory/spools', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  bulkCreateSpools: (data: Omit<InventorySpool, 'id' | 'archived_at' | 'created_at' | 'updated_at' | 'k_profiles'>, quantity: number) =>
+    request<InventorySpool[]>('/inventory/spools/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ spool: data, quantity }),
     }),
   updateSpool: (id: number, data: Partial<Omit<InventorySpool, 'id' | 'archived_at' | 'created_at' | 'updated_at' | 'k_profiles'>>) =>
     request<InventorySpool>(`/inventory/spools/${id}`, {
@@ -3937,6 +3986,10 @@ export const api = {
   deleteLibraryFile: (id: number) =>
     request<{ status: string; message: string }>(`/library/files/${id}`, { method: 'DELETE' }),
   getLibraryFileDownloadUrl: (id: number) => `${API_BASE}/library/files/${id}/download`,
+  createLibrarySlicerToken: (fileId: number) =>
+    request<{ token: string }>(`/library/files/${fileId}/slicer-token`, { method: 'POST' }),
+  getLibrarySlicerDownloadUrl: (fileId: number, token: string, filename: string) =>
+    `${API_BASE}/library/files/${fileId}/dl/${token}/${encodeURIComponent(filename)}`,
   downloadLibraryFile: async (id: number, filename?: string): Promise<void> => {
     const headers: Record<string, string> = {};
     if (authToken) {
@@ -3993,6 +4046,7 @@ export const api = {
     printerId: number,
     options?: {
       plate_id?: number;
+      plate_name?: string;
       ams_mapping?: number[];
       bed_levelling?: boolean;
       flow_cali?: boolean;
@@ -4002,13 +4056,23 @@ export const api = {
       use_ams?: boolean;
     }
   ) =>
-    request<{ status: string; printer_id: number; archive_id: number; filename: string }>(
+    request<BackgroundDispatchResponse>(
       `/library/files/${fileId}/print?printer_id=${printerId}`,
       {
         method: 'POST',
         body: options ? JSON.stringify(options) : undefined,
       }
     ),
+  cancelBackgroundDispatchJob: (jobId: number) =>
+    request<{
+      status: 'cancelled' | 'cancelling';
+      job_id: number;
+      source_name: string;
+      printer_id: number;
+      printer_name: string;
+    }>(`/background-dispatch/${jobId}`, {
+      method: 'DELETE',
+    }),
   getLibraryFilePlates: (fileId: number) =>
     request<LibraryFilePlatesResponse>(`/library/files/${fileId}/plates`),
   getLibraryFileFilamentRequirements: (fileId: number, plateId?: number) =>
@@ -4492,6 +4556,8 @@ export interface NetworkInterface {
   ip: string;
   netmask: string;
   subnet: string;
+  is_alias?: boolean;
+  label?: string;
 }
 
 export interface VirtualPrinterModels {
@@ -4537,6 +4603,69 @@ export const virtualPrinterApi = {
       method: 'PUT',
     });
   },
+};
+
+// Multi Virtual Printer API
+export interface VirtualPrinterConfig {
+  id: number;
+  name: string;
+  enabled: boolean;
+  mode: VirtualPrinterMode;
+  model: string | null;
+  model_name: string | null;
+  access_code_set: boolean;
+  serial: string;
+  target_printer_id: number | null;
+  bind_ip: string | null;
+  remote_interface_ip: string | null;
+  position: number;
+  status: { running: boolean; pending_files: number; proxy?: VirtualPrinterProxyStatus };
+}
+
+export interface VirtualPrinterListResponse {
+  printers: VirtualPrinterConfig[];
+  models: Record<string, string>;
+}
+
+export const multiVirtualPrinterApi = {
+  list: () => request<VirtualPrinterListResponse>('/virtual-printers'),
+
+  get: (id: number) => request<VirtualPrinterConfig>(`/virtual-printers/${id}`),
+
+  create: (data: {
+    name?: string;
+    enabled?: boolean;
+    mode?: string;
+    model?: string;
+    access_code?: string;
+    target_printer_id?: number;
+    bind_ip?: string;
+    remote_interface_ip?: string;
+  }) =>
+    request<VirtualPrinterConfig>('/virtual-printers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: {
+    name?: string;
+    enabled?: boolean;
+    mode?: string;
+    model?: string;
+    access_code?: string;
+    target_printer_id?: number;
+    bind_ip?: string;
+    remote_interface_ip?: string;
+  }) =>
+    request<VirtualPrinterConfig>(`/virtual-printers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  remove: (id: number) =>
+    request<{ detail: string; id: number }>(`/virtual-printers/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Pending Uploads API
@@ -4685,4 +4814,50 @@ export const supportApi = {
 
   clearLogs: () =>
     request<{ message: string }>('/support/logs', { method: 'DELETE' }),
+};
+
+// SpoolBuddy types
+export interface SpoolBuddyDevice {
+  id: number;
+  device_id: string;
+  hostname: string;
+  ip_address: string;
+  firmware_version: string | null;
+  has_nfc: boolean;
+  has_scale: boolean;
+  tare_offset: number;
+  calibration_factor: number;
+  last_seen: string | null;
+  pending_command: string | null;
+  nfc_ok: boolean;
+  scale_ok: boolean;
+  uptime_s: number;
+  online: boolean;
+}
+
+// SpoolBuddy API
+export const spoolbuddyApi = {
+  getDevices: () =>
+    request<SpoolBuddyDevice[]>('/spoolbuddy/devices'),
+
+  tare: (deviceId: string) =>
+    request<{ status: string }>(`/spoolbuddy/devices/${deviceId}/calibration/tare`, {
+      method: 'POST',
+      body: '{}',
+    }),
+
+  getCalibration: (deviceId: string) =>
+    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration`),
+
+  setCalibrationFactor: (deviceId: string, knownWeightGrams: number, rawAdc: number) =>
+    request<{ tare_offset: number; calibration_factor: number }>(`/spoolbuddy/devices/${deviceId}/calibration/set-factor`, {
+      method: 'POST',
+      body: JSON.stringify({ known_weight_grams: knownWeightGrams, raw_adc: rawAdc }),
+    }),
+
+  updateSpoolWeight: (spoolId: number, weightGrams: number) =>
+    request<{ status: string; weight_used: number }>('/spoolbuddy/scale/update-spool-weight', {
+      method: 'POST',
+      body: JSON.stringify({ spool_id: spoolId, weight_grams: weightGrams }),
+    }),
 };

@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Trash2, Archive, RotateCcw, Edit2, Package,
   Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   TrendingDown, Layers, Printer, AlertTriangle, X, Clock, LayoutGrid, TableProperties, Columns,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  ArrowUp, ArrowDown, ArrowUpDown, Group, ChevronDown,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { InventorySpool, SpoolAssignment } from '../api/client';
@@ -15,12 +15,23 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ColumnConfigModal, type ColumnConfig } from '../components/ColumnConfigModal';
 import { useToast } from '../contexts/ToastContext';
 import { resolveSpoolColorName } from '../utils/colors';
+import { getCurrencySymbol } from '../utils/currency';
+import { formatDateInput, parseUTCDate, type DateFormat } from '../utils/date';
+import { formatSlotLabel } from '../utils/amsHelpers';
 
 type ArchiveFilter = 'active' | 'archived';
 type UsageFilter = 'all' | 'used' | 'new';
 type ViewMode = 'table' | 'cards';
 type SortDirection = 'asc' | 'desc';
 type SortState = { column: string; direction: SortDirection } | null;
+
+type DisplayItem =
+  | { type: 'single'; spool: InventorySpool }
+  | { type: 'group'; key: string; spools: InventorySpool[]; representative: InventorySpool };
+
+function spoolGroupKey(s: InventorySpool): string {
+  return `${s.material}|${s.subtype || ''}|${s.brand || ''}|${s.color_name || ''}|${s.rgba || ''}|${s.label_weight}`;
+}
 
 // Column definitions for the inventory table
 const COLUMN_CONFIG_KEY = 'bambuddy-inventory-columns';
@@ -49,7 +60,9 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'tag_id', label: 'Tag ID', visible: false },
   { id: 'data_origin', label: 'Data Origin', visible: false },
   { id: 'tag_type', label: 'Linked Tag Type', visible: false },
+  { id: 'stock', label: 'Stock', visible: false },
   { id: 'remaining', label: 'Remaining', visible: true },
+  { id: 'cost_per_kg', label: 'Cost/kg', visible: false },
 ];
 
 function loadColumnConfig(): ColumnConfig[] {
@@ -96,12 +109,13 @@ const MATERIAL_COLORS: Record<string, string> = {
   PET: 'bg-sky-500/20 text-sky-400',
 };
 
-type TFn = (key: string) => string;
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
 
-function formatDate(dateStr: string | null): string {
+function formatInventoryDate(dateStr: string | null, dateFormat: DateFormat = 'system'): string {
   if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const date = parseUTCDate(dateStr);
+  if (!date) return '-';
+  return formatDateInput(date, dateFormat);
 }
 
 type CellCtx = {
@@ -109,6 +123,9 @@ type CellCtx = {
   remaining: number;
   pct: number;
   assignmentMap: Record<number, SpoolAssignment>;
+  currencySymbol: string;
+  dateFormat: DateFormat;
+  t: TFn;
 };
 
 // Column header labels (25 columns — matching SpoolBuddy exactly)
@@ -136,7 +153,9 @@ const columnHeaders: Record<string, (t: TFn) => string> = {
   tag_id: () => 'Tag ID',
   data_origin: () => 'Data Origin',
   tag_type: () => 'Linked Tag Type',
+  stock: (t) => t('inventory.stock'),
   remaining: (t) => t('inventory.remaining'),
+  cost_per_kg: (t) => t('inventory.costPerKg'),
 };
 
 // Column cell renderers (25 columns — matching SpoolBuddy exactly)
@@ -144,14 +163,14 @@ const columnCells: Record<string, (ctx: CellCtx) => ReactNode> = {
   id: ({ spool }) => (
     <span className="text-sm font-medium text-white">{spool.id}</span>
   ),
-  added_time: ({ spool }) => (
-    <span className="text-sm text-bambu-gray">{formatDate(spool.created_at)}</span>
+  added_time: ({ spool, dateFormat }) => (
+    <span className="text-sm text-bambu-gray">{formatInventoryDate(spool.created_at, dateFormat)}</span>
   ),
-  encode_time: ({ spool }) => (
-    <span className="text-sm text-bambu-gray">{formatDate(spool.encode_time)}</span>
+  encode_time: ({ spool, dateFormat }) => (
+    <span className="text-sm text-bambu-gray">{formatInventoryDate(spool.encode_time, dateFormat)}</span>
   ),
-  last_used_time: ({ spool }) => (
-    <span className="text-sm text-bambu-gray">{spool.last_used ? formatDate(spool.last_used) : 'Never'}</span>
+  last_used_time: ({ spool, dateFormat }) => (
+    <span className="text-sm text-bambu-gray">{spool.last_used ? formatInventoryDate(spool.last_used, dateFormat) : 'Never'}</span>
   ),
   rgba: ({ spool }) => (
     <div className="flex items-center justify-center">
@@ -183,12 +202,12 @@ const columnCells: Record<string, (ctx: CellCtx) => ReactNode> = {
     const assignment = assignmentMap[spool.id];
     if (!assignment) return <span className="text-sm text-bambu-gray">-</span>;
     const printerLabel = assignment.printer_name || `Printer ${assignment.printer_id}`;
-    // Bambu slot notation: AMS 0=A, 1=B, 2=C, 3=D; tray 0-based → 1-based
-    const slotLetter = String.fromCharCode(65 + assignment.ams_id);
-    const slotNumber = assignment.tray_id + 1;
+    const isExternal = assignment.ams_id === 254 || assignment.ams_id === 255;
+    const isHt = !isExternal && assignment.ams_id >= 128;
+    const slotLabel = formatSlotLabel(assignment.ams_id, assignment.tray_id, isHt, isExternal);
     return (
       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
-        {printerLabel} {slotLetter}{slotNumber}
+        {printerLabel} {slotLabel}
       </span>
     );
   },
@@ -240,6 +259,16 @@ const columnCells: Record<string, (ctx: CellCtx) => ReactNode> = {
   tag_type: ({ spool }) => (
     <span className="text-sm text-bambu-gray">{spool.tag_type || '-'}</span>
   ),
+  stock: ({ spool, t }) => {
+    if (!spool.slicer_filament) {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-400">
+          {t('inventory.stock')}
+        </span>
+      );
+    }
+    return <span className="text-sm text-bambu-gray">-</span>;
+  },
   remaining: ({ remaining, pct }) => (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-bambu-dark-tertiary rounded-full overflow-hidden">
@@ -250,6 +279,11 @@ const columnCells: Record<string, (ctx: CellCtx) => ReactNode> = {
       </div>
       <span className="text-xs text-bambu-gray min-w-[40px] text-right">{Math.round(remaining)}g</span>
     </div>
+  ),
+  cost_per_kg: ({ spool, currencySymbol }) => (
+    <span className="text-sm text-bambu-gray">
+      {spool.cost_per_kg != null ? `${currencySymbol}${spool.cost_per_kg.toFixed(2)}` : '-'}
+    </span>
   ),
 };
 
@@ -267,7 +301,9 @@ const columnSortValues: Record<string, (spool: InventorySpool, assignmentMap: Re
   location: (s, am) => {
     const a = am[s.id];
     if (!a) return '';
-    return `${a.printer_name || ''} ${String.fromCharCode(65 + a.ams_id)}${a.tray_id + 1}`;
+    const isExt = a.ams_id === 254 || a.ams_id === 255;
+    const isHt = !isExt && a.ams_id >= 128;
+    return `${a.printer_name || ''} ${formatSlotLabel(a.ams_id, a.tray_id, isHt, isExt)}`;
   },
   label_weight: (s) => s.label_weight,
   net: (s) => Math.max(0, s.label_weight - s.weight_used),
@@ -277,6 +313,8 @@ const columnSortValues: Record<string, (spool: InventorySpool, assignmentMap: Re
   note: (s) => (s.note || '').toLowerCase(),
   data_origin: (s) => (s.data_origin || '').toLowerCase(),
   tag_type: (s) => (s.tag_type || '').toLowerCase(),
+  stock: (s) => s.slicer_filament ? 1 : 0,
+  cost_per_kg: (s) => s.cost_per_kg ?? 0,
 };
 
 const SORT_STATE_KEY = 'bambuddy-inventory-sort';
@@ -299,7 +337,29 @@ function saveSortState(state: SortState) {
   } catch { /* ignore */ }
 }
 
-export default function InventoryPage() {
+// Wrapper: when Spoolman is enabled, embed its UI; otherwise show internal inventory
+export default function InventoryPageRouter() {
+  const { data: spoolmanSettings } = useQuery({
+    queryKey: ['spoolman-settings'],
+    queryFn: api.getSpoolmanSettings,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (spoolmanSettings?.spoolman_enabled === 'true' && spoolmanSettings?.spoolman_url) {
+    return (
+      <iframe
+        src={spoolmanSettings.spoolman_url}
+        className="h-full w-full border-0"
+        title="Spoolman"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+      />
+    );
+  }
+
+  return <InventoryPage />;
+}
+
+function InventoryPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -311,11 +371,18 @@ export default function InventoryPage() {
   const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
   const [materialFilter, setMaterialFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'stock' | 'configured'>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [sortState, setSortState] = useState<SortState>(loadSortState);
   const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>(loadColumnConfig);
   const [showColumnModal, setShowColumnModal] = useState(false);
+  const [groupSimilar, setGroupSimilar] = useState(() => {
+    try {
+      return localStorage.getItem('bambuddy-inventory-group') === 'true';
+    } catch { return false; }
+  });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Pagination state (pageSize persisted to localStorage)
   const [pageIndex, setPageIndex] = useState(0);
@@ -329,6 +396,13 @@ export default function InventoryPage() {
     } catch { /* ignore */ }
     return 15;
   });
+
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
+
+  const dateFormat: DateFormat = settings?.date_format || 'system';
 
   const { data: spools, isLoading } = useQuery({
     queryKey: ['inventory-spools'],
@@ -392,6 +466,8 @@ export default function InventoryPage() {
 
   const inPrinterCount = assignments?.length ?? 0;
 
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+
   // Map spool_id -> assignment for location column
   const assignmentMap = useMemo(() => {
     const map: Record<number, SpoolAssignment> = {};
@@ -437,6 +513,13 @@ export default function InventoryPage() {
       filtered = filtered.filter((s) => s.brand === brandFilter);
     }
 
+    // Stock filter
+    if (stockFilter === 'stock') {
+      filtered = filtered.filter((s) => !s.slicer_filament);
+    } else if (stockFilter === 'configured') {
+      filtered = filtered.filter((s) => !!s.slicer_filament);
+    }
+
     // Global search
     if (search) {
       const q = search.toLowerCase();
@@ -451,7 +534,7 @@ export default function InventoryPage() {
     }
 
     return filtered;
-  }, [spools, archiveFilter, usageFilter, materialFilter, brandFilter, search]);
+  }, [spools, archiveFilter, usageFilter, materialFilter, brandFilter, stockFilter, search]);
 
   // Reset page on filter changes
   const resetPage = () => setPageIndex(0);
@@ -461,7 +544,7 @@ export default function InventoryPage() {
   const uniqueBrands = [...new Set(spools?.map((s) => s.brand).filter(Boolean) || [])].sort() as string[];
 
   // Check if any filters are non-default
-  const hasActiveFilters = archiveFilter !== 'active' || usageFilter !== 'all' || !!materialFilter || !!brandFilter || !!search;
+  const hasActiveFilters = archiveFilter !== 'active' || usageFilter !== 'all' || !!materialFilter || !!brandFilter || stockFilter !== 'all' || !!search;
 
   const handleColumnConfigSave = (config: ColumnConfig[]) => {
     setColumnConfig(config);
@@ -505,12 +588,71 @@ export default function InventoryPage() {
     return sorted;
   }, [filteredSpools, sortState, assignmentMap]);
 
+  // Group similar spools when toggle is active
+  const displayItems = useMemo((): DisplayItem[] => {
+    if (!groupSimilar) return sortedSpools.map((s) => ({ type: 'single' as const, spool: s }));
+
+    const groups = new Map<string, InventorySpool[]>();
+
+    for (const spool of sortedSpools) {
+      // Only group unused & unassigned spools
+      if (spool.weight_used > 0 || assignmentMap[spool.id]) {
+        // Will be added as singles in the walk below
+      } else {
+        const key = spoolGroupKey(spool);
+        const arr = groups.get(key);
+        if (arr) arr.push(spool);
+        else groups.set(key, [spool]);
+      }
+    }
+
+    const items: DisplayItem[] = [];
+    const processedKeys = new Set<string>();
+
+    // Walk sortedSpools order so groups appear at the position of their first member
+    for (const spool of sortedSpools) {
+      if (spool.weight_used > 0 || assignmentMap[spool.id]) {
+        items.push({ type: 'single', spool });
+        continue;
+      }
+      const key = spoolGroupKey(spool);
+      if (processedKeys.has(key)) continue;
+      processedKeys.add(key);
+      const members = groups.get(key)!;
+      if (members.length === 1) {
+        items.push({ type: 'single', spool: members[0] });
+      } else {
+        items.push({ type: 'group', key, spools: members, representative: members[0] });
+      }
+    }
+    return items;
+  }, [sortedSpools, groupSimilar, assignmentMap]);
+
   // Pagination (after sorting) — pageSize -1 means "All"
   const showAll = pageSize === -1;
-  const effectivePageSize = showAll ? sortedSpools.length || 1 : pageSize;
-  const totalPages = Math.max(1, Math.ceil(sortedSpools.length / effectivePageSize));
+  const totalDisplayItems = displayItems.length;
+  const effectivePageSize = showAll ? totalDisplayItems || 1 : pageSize;
+  const totalPages = Math.max(1, Math.ceil(totalDisplayItems / effectivePageSize));
   const safePageIndex = showAll ? 0 : Math.min(pageIndex, totalPages - 1);
-  const pagedSpools = showAll ? sortedSpools : sortedSpools.slice(safePageIndex * effectivePageSize, (safePageIndex + 1) * effectivePageSize);
+  const pagedItems = showAll
+    ? displayItems
+    : displayItems.slice(safePageIndex * effectivePageSize, (safePageIndex + 1) * effectivePageSize);
+  const toggleGroupSimilar = () => {
+    const next = !groupSimilar;
+    setGroupSimilar(next);
+    setExpandedGroups(new Set());
+    resetPage();
+    try { localStorage.setItem('bambuddy-inventory-group', String(next)); } catch { /* ignore */ }
+  };
+
+  const toggleGroupExpand = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
@@ -523,6 +665,7 @@ export default function InventoryPage() {
     setUsageFilter('all');
     setMaterialFilter('');
     setBrandFilter('');
+    setStockFilter('all');
     setSearch('');
     resetPage();
   };
@@ -640,6 +783,19 @@ export default function InventoryPage() {
               <span className="hidden sm:inline">{t('inventory.columns')}</span>
             </button>
           )}
+          {/* Group similar toggle */}
+          <button
+            onClick={toggleGroupSimilar}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border rounded-lg transition-colors ${
+              groupSimilar
+                ? 'bg-bambu-green/20 text-bambu-green border-bambu-green/30'
+                : 'text-bambu-gray border-bambu-dark-tertiary hover:bg-bambu-dark-tertiary'
+            }`}
+            title={t('inventory.groupSimilar')}
+          >
+            <Group className="w-4 h-4" />
+            <span className="hidden sm:inline">{t('inventory.groupSimilar')}</span>
+          </button>
           {/* Table / Cards toggle */}
           <div className="flex bg-bambu-dark-primary border border-bambu-dark-tertiary rounded-lg overflow-hidden">
             <button
@@ -733,6 +889,40 @@ export default function InventoryPage() {
           </button>
         </div>
 
+        {/* Stock filter chips */}
+        <div className="flex items-center rounded-lg border border-bambu-dark-tertiary overflow-hidden">
+          <button
+            onClick={() => { setStockFilter('all'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'all'
+                ? 'bg-bambu-green/20 text-bambu-green'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.all')}
+          </button>
+          <button
+            onClick={() => { setStockFilter('stock'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'stock'
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.stock')}
+          </button>
+          <button
+            onClick={() => { setStockFilter('configured'); resetPage(); }}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              stockFilter === 'configured'
+                ? 'bg-bambu-green/20 text-bambu-green'
+                : 'text-bambu-gray hover:bg-bambu-dark-tertiary'
+            }`}
+          >
+            {t('inventory.configured')}
+          </button>
+        </div>
+
         <div className="w-px h-5 bg-bambu-dark-tertiary" />
 
         {/* Material dropdown chip */}
@@ -784,6 +974,7 @@ export default function InventoryPage() {
         {/* Results count */}
         <span className="ml-auto text-xs text-bambu-gray">
           {sortedSpools.length} {sortedSpools.length !== 1 ? t('inventory.spools') : t('inventory.spool')}
+          {groupSimilar && totalDisplayItems < sortedSpools.length && ` (${totalDisplayItems} ${t('inventory.groupedRows')})`}
         </span>
       </div>
 
@@ -794,69 +985,80 @@ export default function InventoryPage() {
         </div>
       ) : viewMode === 'cards' ? (
         /* Cards view */
-        pagedSpools.length > 0 ? (
+        pagedItems.length > 0 ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {pagedSpools.map((spool) => {
+              {pagedItems.map((item) => {
+                if (item.type === 'group') {
+                  const { key, spools: groupSpools, representative: rep } = item;
+                  const colorStyle = rep.rgba ? `#${rep.rgba.substring(0, 6)}` : '#808080';
+                  const isExpanded = expandedGroups.has(key);
+                  return (
+                    <div key={`group-${key}`} className="col-span-full">
+                      {/* Group header card */}
+                      <div
+                        className="bg-bambu-dark-secondary rounded-lg overflow-hidden border border-bambu-green/30 hover:border-bambu-green transition-colors cursor-pointer"
+                        onClick={() => toggleGroupExpand(key)}
+                      >
+                        <div className="h-10 flex items-center px-4 gap-3" style={{ backgroundColor: colorStyle }}>
+                          <span className="bg-white/90 text-gray-800 px-3 py-0.5 rounded-full text-sm font-medium">
+                            {resolveSpoolColorName(rep.color_name, rep.rgba) || '-'}
+                          </span>
+                        </div>
+                        <div className="px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <ChevronDown className={`w-4 h-4 text-bambu-gray transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                            <div>
+                              <h3 className="font-semibold text-white">{rep.material}{rep.subtype ? ` ${rep.subtype}` : ''}</h3>
+                              <p className="text-sm text-bambu-gray">{rep.brand || '-'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-bambu-gray">{formatWeight(rep.label_weight)}</span>
+                            <span className="text-xs font-medium bg-bambu-green/20 text-bambu-green px-2 py-0.5 rounded-full">
+                              {t('inventory.groupedSpools', { count: groupSpools.length })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Expanded individual spools */}
+                      {isExpanded && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-2 ml-4">
+                          {groupSpools.map((spool) => {
+                            const remaining = Math.max(0, spool.label_weight - spool.weight_used);
+                            const pct = spool.label_weight > 0 ? (remaining / spool.label_weight) * 100 : 0;
+                            const spoolColor = spool.rgba ? `#${spool.rgba.substring(0, 6)}` : '#808080';
+                            return (
+                              <SpoolCard
+                                key={spool.id}
+                                spool={spool}
+                                remaining={remaining}
+                                pct={pct}
+                                colorStyle={spoolColor}
+                                onClick={() => setFormModal({ spool })}
+                                t={t}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                const spool = item.spool;
                 const remaining = Math.max(0, spool.label_weight - spool.weight_used);
                 const pct = spool.label_weight > 0 ? (remaining / spool.label_weight) * 100 : 0;
                 const colorStyle = spool.rgba ? `#${spool.rgba.substring(0, 6)}` : '#808080';
                 return (
-                  <div
+                  <SpoolCard
                     key={spool.id}
-                    className={`bg-bambu-dark-secondary rounded-lg overflow-hidden border border-bambu-dark-tertiary hover:border-bambu-green transition-colors cursor-pointer ${spool.archived_at ? 'opacity-50' : ''}`}
+                    spool={spool}
+                    remaining={remaining}
+                    pct={pct}
+                    colorStyle={colorStyle}
                     onClick={() => setFormModal({ spool })}
-                  >
-                    {/* Color header */}
-                    <div className="h-14 flex items-center justify-center" style={{ backgroundColor: colorStyle }}>
-                      <span className="bg-white/90 text-gray-800 px-3 py-0.5 rounded-full text-sm font-medium">
-                        {resolveSpoolColorName(spool.color_name, spool.rgba) || '-'}
-                      </span>
-                    </div>
-                    {/* Content */}
-                    <div className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-white">{spool.material}{spool.subtype ? ` ${spool.subtype}` : ''}</h3>
-                          <p className="text-sm text-bambu-gray">{spool.brand || '-'}</p>
-                        </div>
-                        <span className="text-xs font-mono text-bambu-gray bg-bambu-dark-tertiary px-2 py-1 rounded">#{spool.id}</span>
-                      </div>
-                      {/* Progress */}
-                      <div>
-                        <div className="flex justify-between text-xs text-bambu-gray mb-1">
-                          <span>{t('inventory.remaining')}</span>
-                          <span>{Math.round(pct)}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-bambu-dark-tertiary rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${pct > 50 ? 'bg-bambu-green' : pct > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                              style={{ width: `${Math.min(pct, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-bambu-gray min-w-[40px] text-right">{Math.round(remaining)}g</span>
-                        </div>
-                      </div>
-                      {/* Weight info */}
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-bambu-gray/60">{t('inventory.labelWeight')}: </span>
-                          <span className="text-bambu-gray">{formatWeight(spool.label_weight)}</span>
-                        </div>
-                        <div>
-                          <span className="text-bambu-gray/60">{t('inventory.weightUsed')}: </span>
-                          <span className="text-bambu-gray">{spool.weight_used > 0 ? formatWeight(spool.weight_used) : '-'}</span>
-                        </div>
-                      </div>
-                      {/* Note */}
-                      {spool.note && (
-                        <div className="text-xs text-bambu-gray/60 pt-2 border-t border-bambu-dark-tertiary truncate" title={spool.note}>
-                          {spool.note}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    t={t}
+                  />
                 );
               })}
             </div>
@@ -864,7 +1066,7 @@ export default function InventoryPage() {
             <PaginationBar
               pageIndex={safePageIndex}
               pageSize={pageSize}
-              totalRows={sortedSpools.length}
+              totalRows={totalDisplayItems}
               totalPages={totalPages}
               onPageChange={setPageIndex}
               onPageSizeChange={handlePageSizeChange}
@@ -880,7 +1082,7 @@ export default function InventoryPage() {
         )
       ) : (
         /* Table view */
-        pagedSpools.length > 0 ? (
+        pagedItems.length > 0 ? (
           <div className="bg-bambu-dark-secondary rounded-lg overflow-hidden border border-bambu-dark-tertiary">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -914,58 +1116,51 @@ export default function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedSpools.map((spool) => {
+                  {pagedItems.map((item) => {
+                    if (item.type === 'group') {
+                      const { key, spools: groupSpools, representative: rep } = item;
+                      const isExpanded = expandedGroups.has(key);
+                      const remaining = Math.max(0, rep.label_weight - rep.weight_used);
+                      const pct = rep.label_weight > 0 ? (remaining / rep.label_weight) * 100 : 0;
+                      return (
+                        <SpoolTableGroup
+                          key={`group-${key}`}
+                          spools={groupSpools}
+                          representative={rep}
+                          remaining={remaining}
+                          pct={pct}
+                          isExpanded={isExpanded}
+                          onToggle={() => toggleGroupExpand(key)}
+                          onEdit={(s) => setFormModal({ spool: s })}
+                          onArchive={(id) => setConfirmAction({ type: 'archive', spoolId: id })}
+                          onDelete={(id) => setConfirmAction({ type: 'delete', spoolId: id })}
+                          visibleColumns={visibleColumns}
+                          assignmentMap={assignmentMap}
+                          currencySymbol={currencySymbol}
+                          dateFormat={dateFormat}
+                          t={t}
+                        />
+                      );
+                    }
+                    const spool = item.spool;
                     const remaining = Math.max(0, spool.label_weight - spool.weight_used);
                     const pct = spool.label_weight > 0 ? (remaining / spool.label_weight) * 100 : 0;
                     return (
-                      <tr
+                      <SpoolTableRow
                         key={spool.id}
-                        className={`border-b border-bambu-dark-tertiary/50 hover:bg-bambu-dark-tertiary/30 transition-colors cursor-pointer ${
-                          spool.archived_at ? 'opacity-50' : ''
-                        }`}
-                        onClick={() => setFormModal({ spool })}
-                      >
-                        {visibleColumns.map((colId) => (
-                          <td key={colId} className="py-3 px-4">
-                            {columnCells[colId]?.({ spool, remaining, pct, assignmentMap })}
-                          </td>
-                        ))}
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => setFormModal({ spool })}
-                              className="p-1.5 text-bambu-gray hover:text-white rounded transition-colors"
-                              title={t('inventory.editSpool')}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            {spool.archived_at ? (
-                              <button
-                                onClick={() => restoreMutation.mutate(spool.id)}
-                                className="p-1.5 text-bambu-gray hover:text-bambu-green rounded transition-colors"
-                                title={t('inventory.restore')}
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setConfirmAction({ type: 'archive', spoolId: spool.id })}
-                                className="p-1.5 text-bambu-gray hover:text-yellow-400 rounded transition-colors"
-                                title={t('inventory.archive')}
-                              >
-                                <Archive className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setConfirmAction({ type: 'delete', spoolId: spool.id })}
-                              className="p-1.5 text-bambu-gray hover:text-red-400 rounded transition-colors"
-                              title={t('common.delete')}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                        spool={spool}
+                        remaining={remaining}
+                        pct={pct}
+                        onEdit={() => setFormModal({ spool })}
+                        onRestore={() => restoreMutation.mutate(spool.id)}
+                        onArchive={() => setConfirmAction({ type: 'archive', spoolId: spool.id })}
+                        onDelete={() => setConfirmAction({ type: 'delete', spoolId: spool.id })}
+                        visibleColumns={visibleColumns}
+                        assignmentMap={assignmentMap}
+                        currencySymbol={currencySymbol}
+                        dateFormat={dateFormat}
+                        t={t}
+                      />
                     );
                   })}
                 </tbody>
@@ -976,10 +1171,10 @@ export default function InventoryPage() {
             <div className="flex items-center justify-between px-4 py-3 bg-bambu-dark-tertiary/50 border-t border-bambu-dark-tertiary text-sm">
               <span className="text-bambu-gray">
                 {showAll
-                  ? `${sortedSpools.length} ${sortedSpools.length !== 1 ? t('inventory.spools') : t('inventory.spool')}`
+                  ? `${totalDisplayItems} ${totalDisplayItems !== 1 ? t('inventory.spools') : t('inventory.spool')}`
                   : <>{t('inventory.showing')} {safePageIndex * effectivePageSize + 1} {t('inventory.to')}{' '}
-                    {Math.min((safePageIndex + 1) * effectivePageSize, sortedSpools.length)}{' '}
-                    {t('inventory.of')} {sortedSpools.length} {t('inventory.spools')}</>
+                    {Math.min((safePageIndex + 1) * effectivePageSize, totalDisplayItems)}{' '}
+                    {t('inventory.of')} {totalDisplayItems} {t('inventory.spools')}</>
                 }
               </span>
 
@@ -1051,6 +1246,7 @@ export default function InventoryPage() {
           isOpen={true}
           onClose={() => setFormModal(null)}
           spool={formModal.spool}
+          currencySymbol={currencySymbol}
         />
       )}
 
@@ -1159,6 +1355,210 @@ function PaginationBar({
         )}
       </div>
     </div>
+  );
+}
+
+/* Spool card for cards view */
+function SpoolCard({
+  spool, remaining, pct, colorStyle, onClick, t,
+}: {
+  spool: InventorySpool;
+  remaining: number;
+  pct: number;
+  colorStyle: string;
+  onClick: () => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  return (
+    <div
+      className={`bg-bambu-dark-secondary rounded-lg overflow-hidden border border-bambu-dark-tertiary hover:border-bambu-green transition-colors cursor-pointer ${spool.archived_at ? 'opacity-50' : ''}`}
+      onClick={onClick}
+    >
+      <div className="h-14 flex items-center justify-center" style={{ backgroundColor: colorStyle }}>
+        <span className="bg-white/90 text-gray-800 px-3 py-0.5 rounded-full text-sm font-medium">
+          {resolveSpoolColorName(spool.color_name, spool.rgba) || '-'}
+        </span>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold text-white">
+              {spool.material}{spool.subtype ? ` ${spool.subtype}` : ''}
+            </h3>
+            <p className="text-sm text-bambu-gray">{spool.brand || '-'}</p>
+          </div>
+          <span className="text-xs font-mono text-bambu-gray bg-bambu-dark-tertiary px-2 py-1 rounded">
+            #{spool.id}
+          </span>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs text-bambu-gray mb-1">
+            <span>{t('inventory.remaining')}</span>
+            <span>{Math.round(pct)}%</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-2 bg-bambu-dark-tertiary rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${pct > 50 ? 'bg-bambu-green' : pct > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <span className="text-xs text-bambu-gray min-w-[40px] text-right">
+              {Math.round(remaining)}g
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <span className="text-bambu-gray/60">{t('inventory.labelWeight')}: </span>
+            <span className="text-bambu-gray">{formatWeight(spool.label_weight)}</span>
+          </div>
+          <div>
+            <span className="text-bambu-gray/60">{t('inventory.weightUsed')}: </span>
+            <span className="text-bambu-gray">
+              {spool.weight_used > 0 ? formatWeight(spool.weight_used) : '-'}
+            </span>
+          </div>
+        </div>
+        {spool.note && (
+          <div
+            className="text-xs text-bambu-gray/60 pt-2 border-t border-bambu-dark-tertiary truncate"
+            title={spool.note}
+          >
+            {spool.note}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Single spool row for table view */
+function SpoolTableRow({
+  spool, remaining, pct, onEdit, onRestore, onArchive, onDelete,
+  visibleColumns, assignmentMap, currencySymbol, dateFormat, t,
+}: {
+  spool: InventorySpool;
+  remaining: number;
+  pct: number;
+  onEdit: () => void;
+  onRestore: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  visibleColumns: string[];
+  assignmentMap: Record<number, SpoolAssignment>;
+  currencySymbol: string;
+  dateFormat: DateFormat;
+  t: TFn;
+}) {
+  return (
+    <tr
+      className={`border-b border-bambu-dark-tertiary/50 hover:bg-bambu-dark-tertiary/30 transition-colors cursor-pointer ${
+        spool.archived_at ? 'opacity-50' : ''
+      }`}
+      onClick={onEdit}
+    >
+      {visibleColumns.map((colId) => (
+        <td key={colId} className="py-3 px-4">
+          {columnCells[colId]?.({ spool, remaining, pct, assignmentMap, currencySymbol, dateFormat, t })}
+        </td>
+      ))}
+      <td className="py-3 px-4">
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onEdit} className="p-1.5 text-bambu-gray hover:text-white rounded transition-colors" title={t('inventory.editSpool')}>
+            <Edit2 className="w-4 h-4" />
+          </button>
+          {spool.archived_at ? (
+            <button onClick={onRestore} className="p-1.5 text-bambu-gray hover:text-bambu-green rounded transition-colors" title={t('inventory.restore')}>
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          ) : (
+            <button onClick={onArchive} className="p-1.5 text-bambu-gray hover:text-yellow-400 rounded transition-colors" title={t('inventory.archive')}>
+              <Archive className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onDelete} className="p-1.5 text-bambu-gray hover:text-red-400 rounded transition-colors" title={t('common.delete')}>
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* Grouped spool rows for table view */
+function SpoolTableGroup({
+  spools, representative, remaining, pct, isExpanded, onToggle,
+  onEdit, onArchive, onDelete,
+  visibleColumns, assignmentMap, currencySymbol, dateFormat, t,
+}: {
+  spools: InventorySpool[];
+  representative: InventorySpool;
+  remaining: number;
+  pct: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onEdit: (spool: InventorySpool) => void;
+  onArchive: (id: number) => void;
+  onDelete: (id: number) => void;
+  visibleColumns: string[];
+  assignmentMap: Record<number, SpoolAssignment>;
+  currencySymbol: string;
+  dateFormat: DateFormat;
+  t: TFn;
+}) {
+  return (
+    <>
+      {/* Group header row */}
+      <tr
+        className="border-b border-bambu-dark-tertiary/50 hover:bg-bambu-dark-tertiary/30 transition-colors cursor-pointer bg-bambu-green/5"
+        onClick={onToggle}
+      >
+        {visibleColumns.map((colId, idx) => (
+          <td key={colId} className="py-3 px-4">
+            {idx === 0 ? (
+              <div className="flex items-center gap-2">
+                <ChevronDown className={`w-4 h-4 text-bambu-gray transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                {columnCells[colId]?.({ spool: representative, remaining, pct, assignmentMap, currencySymbol, dateFormat, t })}
+              </div>
+            ) : colId === 'id' ? (
+              <span className="text-xs font-medium bg-bambu-green/20 text-bambu-green px-2 py-0.5 rounded-full">
+                {t('inventory.groupedSpools', { count: spools.length })}
+              </span>
+            ) : (
+              columnCells[colId]?.({ spool: representative, remaining, pct, assignmentMap, currencySymbol, dateFormat, t })
+            )}
+          </td>
+        ))}
+        <td className="py-3 px-4">
+          <span className="text-xs text-bambu-gray">
+            {spools.map((s) => `#${s.id}`).join(', ')}
+          </span>
+        </td>
+      </tr>
+      {/* Expanded individual rows */}
+      {isExpanded && spools.map((spool) => {
+        const r = Math.max(0, spool.label_weight - spool.weight_used);
+        const p = spool.label_weight > 0 ? (r / spool.label_weight) * 100 : 0;
+        return (
+          <SpoolTableRow
+            key={spool.id}
+            spool={spool}
+            remaining={r}
+            pct={p}
+            onEdit={() => onEdit(spool)}
+            onRestore={() => {}}
+            onArchive={() => onArchive(spool.id)}
+            onDelete={() => onDelete(spool.id)}
+            visibleColumns={visibleColumns}
+            assignmentMap={assignmentMap}
+            currencySymbol={currencySymbol}
+            dateFormat={dateFormat}
+            t={t}
+          />
+        );
+      })}
+    </>
   );
 }
 

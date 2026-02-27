@@ -22,6 +22,7 @@ from backend.app.models.user import User
 from backend.app.schemas.spool import (
     SpoolAssignmentCreate,
     SpoolAssignmentResponse,
+    SpoolBulkCreate,
     SpoolCreate,
     SpoolKProfileBase,
     SpoolKProfileResponse,
@@ -482,6 +483,24 @@ async def create_spool(
     return result.scalar_one()
 
 
+@router.post("/spools/bulk", response_model=list[SpoolResponse])
+async def bulk_create_spools(
+    data: SpoolBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+):
+    """Create multiple identical spools."""
+    spools = []
+    for _ in range(data.quantity):
+        spool = Spool(**data.spool.model_dump())
+        db.add(spool)
+        spools.append(spool)
+    await db.commit()
+    ids = [s.id for s in spools]
+    result = await db.execute(select(Spool).options(selectinload(Spool.k_profiles)).where(Spool.id.in_(ids)))
+    return list(result.scalars().all())
+
+
 @router.patch("/spools/{spool_id}", response_model=SpoolResponse)
 async def update_spool(
     spool_id: int,
@@ -495,7 +514,12 @@ async def update_spool(
     if not spool:
         raise HTTPException(404, "Spool not found")
 
-    for field, value in spool_data.model_dump(exclude_unset=True).items():
+    update_data = spool_data.model_dump(exclude_unset=True)
+    # Auto-lock weight when user explicitly sets weight_used
+    if "weight_used" in update_data and "weight_locked" not in update_data:
+        update_data["weight_locked"] = True
+
+    for field, value in update_data.items():
         setattr(spool, field, value)
 
     await db.commit()
@@ -640,9 +664,10 @@ async def assign_spool(
     if spool.archived_at:
         raise HTTPException(400, "Cannot assign an archived spool")
 
-    # 2. Get current AMS tray state for fingerprint
+    # 2. Get current AMS tray state for fingerprint + existing filament ID
     fingerprint_color = None
     fingerprint_type = None
+    current_tray_info_idx = ""
     state = printer_manager.get_status(data.printer_id)
     if state and state.raw_data:
         if data.ams_id == 255:
@@ -653,6 +678,7 @@ async def assign_spool(
                 if isinstance(vt, dict) and int(vt.get("id", 254)) == ext_id:
                     fingerprint_color = vt.get("tray_color", "")
                     fingerprint_type = vt.get("tray_type", "")
+                    current_tray_info_idx = vt.get("tray_info_idx", "")
                     break
         else:
             ams_data = state.raw_data.get("ams", {})
@@ -671,6 +697,7 @@ async def assign_spool(
             if tray:
                 fingerprint_color = tray.get("tray_color", "")
                 fingerprint_type = tray.get("tray_type", "")
+                current_tray_info_idx = tray.get("tray_info_idx", "")
 
     # 3. Upsert assignment (replace if same printer+ams+tray)
     existing = await db.execute(
@@ -708,6 +735,52 @@ async def assign_spool(
             tray_color = spool.rgba or "FFFFFFFF"
             tray_info_idx = spool.slicer_filament or ""
             setting_id = ""
+
+            # Resolve tray_info_idx for the MQTT command.
+            # Priority:
+            #   1. Use the spool's own slicer_filament if set (including
+            #      cloud-synced custom presets like PFUS* / P*).
+            #   2. Reuse the slot's existing tray_info_idx if it's a specific
+            #      (non-generic) preset for the same material.
+            #   3. Fall back to a generic Bambu filament ID.
+            _GENERIC_IDS = {
+                "PLA": "GFL99",
+                "PETG": "GFG99",
+                "ABS": "GFB99",
+                "ASA": "GFB98",
+                "PC": "GFC99",
+                "PA": "GFN99",
+                "NYLON": "GFN99",
+                "TPU": "GFU99",
+                "PVA": "GFS99",
+                "HIPS": "GFS98",
+                "PLA-CF": "GFL98",
+                "PETG-CF": "GFG98",
+                "PA-CF": "GFN98",
+                "PETG HF": "GFG96",
+            }
+            _GENERIC_ID_VALUES = set(_GENERIC_IDS.values())
+
+            if tray_info_idx:
+                logger.info("Spool assign: using spool's slicer_filament=%r", tray_info_idx)
+            elif (
+                current_tray_info_idx
+                and current_tray_info_idx not in _GENERIC_ID_VALUES
+                and fingerprint_type
+                and fingerprint_type.upper() == tray_type.upper()
+            ):
+                logger.info(
+                    "Spool assign: reusing slot's existing tray_info_idx=%r (same material %r)",
+                    current_tray_info_idx,
+                    tray_type,
+                )
+                tray_info_idx = current_tray_info_idx
+            elif tray_type:
+                material = tray_type.upper().strip()
+                generic = _GENERIC_IDS.get(material) or _GENERIC_IDS.get(material.split("-")[0].split(" ")[0]) or ""
+                if generic:
+                    logger.info("Spool assign: falling back to generic %r for material %r", generic, tray_type)
+                    tray_info_idx = generic
 
             # Temperature: use spool overrides if set, else material defaults
             temp_min, temp_max = MATERIAL_TEMPS.get(spool.material.upper(), (200, 240))
@@ -981,6 +1054,11 @@ async def sync_weights_from_ams(
         spool = assignment.spool
         if not spool:
             logger.debug("AMS weight sync: assignment %d has no spool", assignment.id)
+            skipped += 1
+            continue
+
+        if spool.weight_locked:
+            logger.debug("AMS weight sync: spool %d is weight-locked, skipping", spool.id)
             skipped += 1
             continue
 

@@ -20,6 +20,7 @@ class PrintQueueItemCreate(BaseModel):
     target_model: str | None = None  # Target printer model (mutually exclusive with printer_id)
     target_location: str | None = None  # Target location filter (only used with target_model)
     required_filament_types: list[str] | None = None  # Required filament types for model-based assignment
+    filament_overrides: list[dict] | None = None  # Filament overrides for model-based assignment
     # Either archive_id OR library_file_id must be provided
     archive_id: int | None = None
     library_file_id: int | None = None
@@ -45,6 +46,7 @@ class PrintQueueItemUpdate(BaseModel):
     printer_id: int | None = None
     target_model: str | None = None  # Target printer model (mutually exclusive with printer_id)
     target_location: str | None = None  # Target location filter (only used with target_model)
+    filament_overrides: list[dict] | None = None  # Filament overrides for model-based assignment
     position: int | None = None
     scheduled_time: datetime | None = None
     require_previous_success: bool | None = None
@@ -67,6 +69,7 @@ class PrintQueueItemResponse(BaseModel):
     target_model: str | None = None  # Target printer model for model-based assignment
     target_location: str | None = None  # Target location filter for model-based assignment
     required_filament_types: list[str] | None = None  # Required filament types for model-based assignment
+    filament_overrides: list[dict] | None = None  # Filament overrides for model-based assignment
     waiting_reason: str | None = None  # Why a model-based job hasn't started yet
     archive_id: int | None  # None if library_file_id is set (archive created at print start)
     library_file_id: int | None  # For queue items from library files
@@ -98,6 +101,11 @@ class PrintQueueItemResponse(BaseModel):
     printer_name: str | None = None
     print_time_seconds: int | None = None  # Estimated print time from archive or library file
     filament_used_grams: float | None = None  # Estimated print weight from archive or library file
+    filament_type: str | None = None  # e.g. "PLA", "PETG" (from archive/library file)
+    filament_color: str | None = None  # e.g. "#FFFFFF" (from archive/library file)
+    layer_height: float | None = None  # e.g. 0.2 (from archive/library file)
+    nozzle_diameter: float | None = None  # e.g. 0.4 (from archive/library file)
+    sliced_for_model: str | None = None  # e.g. "P1S" (from archive/library file)
 
     # User tracking (Issue #206)
     created_by_id: int | None = None

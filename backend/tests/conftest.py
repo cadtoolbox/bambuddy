@@ -50,6 +50,8 @@ def event_loop():
     """Create an instance of the default event loop for each test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
+    # Drain pending callbacks so aiosqlite threads can finish before loop closes
+    loop.run_until_complete(asyncio.sleep(0.1))
     loop.close()
 
 
@@ -75,6 +77,9 @@ async def test_engine():
         project,
         settings,
         smart_plug,
+        spool,
+        spool_assignment,
+        spool_usage_history,
         user,
     )
 
@@ -86,6 +91,10 @@ async def test_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+    # Allow aiosqlite's background thread to finish processing the close
+    # response before the per-function event loop shuts down, preventing
+    # "RuntimeError: Event loop is closed" in call_soon_threadsafe.
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
@@ -129,6 +138,13 @@ async def async_client(test_engine, db_session) -> AsyncGenerator[AsyncClient, N
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
+
+        # The app lifespan called init_db() which used the module-level engine
+        # (not the test engine), creating aiosqlite connections. Dispose those
+        # connections so their background threads finish before the event loop closes.
+        from backend.app.core.database import engine as real_engine
+
+        await real_engine.dispose()
 
     app.dependency_overrides.clear()
 

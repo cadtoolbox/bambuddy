@@ -11,6 +11,7 @@ class SpoolBase(BaseModel):
     brand: str | None = None
     label_weight: int = 1000
     core_weight: int = 250
+    core_weight_catalog_id: int | None = None
     weight_used: float = 0
     slicer_filament: str | None = None
     slicer_filament_name: str | None = None
@@ -21,10 +22,17 @@ class SpoolBase(BaseModel):
     tray_uuid: str | None = None
     data_origin: str | None = None
     tag_type: str | None = None
+    cost_per_kg: float | None = Field(default=None, ge=0)
+    weight_locked: bool = False
 
 
 class SpoolCreate(SpoolBase):
     pass
+
+
+class SpoolBulkCreate(BaseModel):
+    spool: SpoolCreate
+    quantity: int = Field(default=1, ge=1, le=100)
 
 
 class SpoolUpdate(BaseModel):
@@ -35,6 +43,7 @@ class SpoolUpdate(BaseModel):
     brand: str | None = None
     label_weight: int | None = None
     core_weight: int | None = None
+    core_weight_catalog_id: int | None = None
     weight_used: float | None = None
     slicer_filament: str | None = None
     slicer_filament_name: str | None = None
@@ -45,6 +54,8 @@ class SpoolUpdate(BaseModel):
     tray_uuid: str | None = None
     data_origin: str | None = None
     tag_type: str | None = None
+    cost_per_kg: float | None = Field(default=None, ge=0)
+    weight_locked: bool | None = None
 
 
 class SpoolKProfileBase(BaseModel):

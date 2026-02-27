@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import smtplib
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -208,10 +208,18 @@ class NotificationService:
         client = await self._get_client()
 
         if image_data:
-            # ntfy supports image attachments via multipart form-data
+            # ntfy supports image attachments via multipart form-data.
+            # HTTP headers cannot contain newlines, but ntfy interprets
+            # literal \n (backslash-n) as newlines in the Message header.
             headers["Filename"] = "photo.jpg"
-            headers["Message"] = message
+            headers["Message"] = message.replace("\n", "\\n")
             response = await client.put(url, content=image_data, headers=headers)
+
+            if response.status_code == 400 and "attachments not allowed" in response.text:
+                # Server has attachments disabled — retry without the image
+                headers.pop("Filename", None)
+                headers.pop("Message", None)
+                response = await client.post(url, content=message, headers=headers)
         else:
             response = await client.post(url, content=message, headers=headers)
 
@@ -493,10 +501,10 @@ class NotificationService:
         provider = result.scalar_one_or_none()
         if provider:
             if success:
-                provider.last_success = datetime.utcnow()
+                provider.last_success = datetime.now(timezone.utc)
             else:
                 provider.last_error = error
-                provider.last_error_at = datetime.utcnow()
+                provider.last_error_at = datetime.now(timezone.utc)
             await db.commit()
 
     async def _get_providers_for_event(

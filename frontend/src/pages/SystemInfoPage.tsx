@@ -335,17 +335,18 @@ export function SystemInfoPage() {
               <div>
                 <p className="text-red-400 font-medium mb-1">{t('support.notCollected', 'NOT collected:')}</p>
                 <ul className="text-bambu-gray space-y-0.5">
-                  <li>• {t('support.notItem1', 'Printer names, IPs, serial numbers')}</li>
+                  <li>• {t('support.notItem1', 'Printer names and serial numbers')}</li>
                   <li>• {t('support.notItem2', 'Access codes and passwords')}</li>
                   <li>• {t('support.notItem3', 'Email addresses')}</li>
                   <li>• {t('support.notItem4', 'API keys and tokens')}</li>
                   <li>• {t('support.notItem5', 'Webhook URLs')}</li>
                   <li>• {t('support.notItem6', 'Your hostname or username')}</li>
+                  <li>• {t('support.notItem7', 'IP addresses')}</li>
                 </ul>
               </div>
             </div>
             <p className="text-xs text-bambu-gray/70">
-              {t('support.privacyNote', 'IP addresses in logs are replaced with [IP] and email addresses with [EMAIL].')}
+              {t('support.privacyNote', 'Email addresses in logs are replaced with [EMAIL], printer names with [PRINTER], serial numbers with [SERIAL], and IP addresses with [IP].')}
             </p>
           </div>
 

@@ -5,36 +5,25 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { parseUTCDate } from '../utils/date';
+import { formatRelativeTime } from '../utils/date';
 
 interface PrinterQueueWidgetProps {
   printerId: number;
+  printerModel?: string | null;
   printerState?: string | null;
   plateCleared?: boolean;
+  loadedFilamentTypes?: Set<string>;
+  loadedFilaments?: Set<string>;  // "TYPE:rrggbb" pairs for filament override color matching
 }
 
-function formatRelativeTime(dateString: string | null): string {
-  if (!dateString) return 'ASAP';
-  const date = parseUTCDate(dateString);
-  if (!date) return 'ASAP';
-  const now = new Date();
-  const diff = date.getTime() - now.getTime();
-
-  if (diff < 0) return 'Now';
-  if (diff < 60000) return 'In <1 min';
-  if (diff < 3600000) return `In ${Math.round(diff / 60000)} min`;
-  if (diff < 86400000) return `In ${Math.round(diff / 3600000)}h`;
-  return date.toLocaleDateString();
-}
-
-export function PrinterQueueWidget({ printerId, printerState, plateCleared }: PrinterQueueWidgetProps) {
+export function PrinterQueueWidget({ printerId, printerModel, printerState, plateCleared, loadedFilamentTypes, loadedFilaments }: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const { data: queue } = useQuery({
-    queryKey: ['queue', printerId, 'pending'],
-    queryFn: () => api.getQueue(printerId, 'pending'),
+    queryKey: ['queue', printerId, 'pending', printerModel],
+    queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
     refetchInterval: 30000,
   });
 
@@ -50,8 +39,29 @@ export function PrinterQueueWidget({ printerId, printerState, plateCleared }: Pr
     },
   });
 
-  const nextItem = queue?.[0];
-  const totalPending = queue?.length || 0;
+  // Filter queue to items this printer can actually print (filament type + color check)
+  const compatibleQueue = queue?.filter(item => {
+    // Type check: all required filament types must be loaded
+    if (item.required_filament_types?.length && loadedFilamentTypes?.size) {
+      if (!item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()))) {
+        return false;
+      }
+    }
+    // Color check: if filament overrides specify colors, at least one must match
+    // Mirrors backend _count_override_color_matches() logic
+    if (item.filament_overrides?.length && loadedFilaments?.size) {
+      const hasColorMatch = item.filament_overrides.some(o => {
+        const oType = (o.type || '').toUpperCase();
+        const oColor = (o.color || '').replace('#', '').toLowerCase().slice(0, 6);
+        return loadedFilaments.has(`${oType}:${oColor}`);
+      });
+      if (!hasColorMatch) return false;
+    }
+    return true;
+  });
+
+  const nextItem = compatibleQueue?.[0];
+  const totalPending = compatibleQueue?.length || 0;
 
   if (totalPending === 0) {
     return null;
@@ -84,7 +94,7 @@ export function PrinterQueueWidget({ printerId, printerState, plateCleared }: Pr
         ) : (
           <button
             onClick={() => clearPlateMutation.mutate()}
-            disabled={clearPlateMutation.isPending || !hasPermission('printers:control')}
+            disabled={clearPlateMutation.isPending || !hasPermission('printers:clear_plate')}
             className="w-full py-2 px-3 rounded-lg bg-bambu-green/20 border border-bambu-green/40 text-bambu-green hover:bg-bambu-green/30 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {clearPlateMutation.isPending ? (
@@ -117,7 +127,7 @@ export function PrinterQueueWidget({ printerId, printerState, plateCleared }: Pr
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-bambu-gray flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {formatRelativeTime(nextItem?.scheduled_time || null)}
+            {nextItem?.scheduled_time ? formatRelativeTime(nextItem.scheduled_time, 'system', t) : t('time.waiting')}
           </span>
           {totalPending > 1 && (
             <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">

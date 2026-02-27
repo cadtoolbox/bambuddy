@@ -3,12 +3,12 @@
 import json
 import logging
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import defusedxml.ElementTree as ET
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -169,6 +169,14 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         except json.JSONDecodeError:
             required_filament_types_parsed = None
 
+    # Parse filament_overrides from JSON string
+    filament_overrides_parsed = None
+    if item.filament_overrides:
+        try:
+            filament_overrides_parsed = json.loads(item.filament_overrides)
+        except json.JSONDecodeError:
+            filament_overrides_parsed = None
+
     # Create response with parsed ams_mapping
     item_dict = {
         "id": item.id,
@@ -176,6 +184,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "target_model": item.target_model,
         "target_location": item.target_location,
         "required_filament_types": required_filament_types_parsed,
+        "filament_overrides": filament_overrides_parsed,
         "waiting_reason": item.waiting_reason,
         "archive_id": item.archive_id,
         "library_file_id": item.library_file_id,
@@ -207,6 +216,11 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         response.archive_thumbnail = item.archive.thumbnail_path
         response.print_time_seconds = item.archive.print_time_seconds
         response.filament_used_grams = item.archive.filament_used_grams
+        response.filament_type = item.archive.filament_type
+        response.filament_color = item.archive.filament_color
+        response.layer_height = item.archive.layer_height
+        response.nozzle_diameter = item.archive.nozzle_diameter
+        response.sliced_for_model = item.archive.sliced_for_model
         if item.plate_id:
             archive_path = settings.base_dir / item.archive.file_path
             if archive_path.exists():
@@ -223,10 +237,15 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         if not response.library_file_name:
             response.library_file_name = item.library_file.filename
         response.library_file_thumbnail = item.library_file.thumbnail_path
-        # Get print time from library file metadata if no archive
+        # Get metadata from library file if no archive
         if not item.archive and item.library_file.file_metadata:
             response.print_time_seconds = item.library_file.file_metadata.get("print_time_seconds")
             response.filament_used_grams = item.library_file.file_metadata.get("filament_used_grams")
+            response.filament_type = item.library_file.file_metadata.get("filament_type")
+            response.filament_color = item.library_file.file_metadata.get("filament_color")
+            response.layer_height = item.library_file.file_metadata.get("layer_height")
+            response.nozzle_diameter = item.library_file.file_metadata.get("nozzle_diameter")
+            response.sliced_for_model = item.library_file.file_metadata.get("sliced_for_model")
         if item.plate_id:
             lib_path = Path(item.library_file.file_path)
             library_file_path = lib_path if lib_path.is_absolute() else settings.base_dir / item.library_file.file_path
@@ -248,6 +267,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
 async def list_queue(
     printer_id: int | None = Query(None, description="Filter by printer (-1 for unassigned)"),
     status: str | None = Query(None, description="Filter by status"),
+    target_model: str | None = Query(
+        None, description="Filter by target model (also includes model-based items when combined with printer_id)"
+    ),
     db: AsyncSession = Depends(get_db),
     _: User | None = RequirePermissionIfAuthEnabled(Permission.QUEUE_READ),
 ):
@@ -268,7 +290,31 @@ async def list_queue(
             # Special value: filter for unassigned items
             query = query.where(PrintQueueItem.printer_id.is_(None))
         else:
-            query = query.where(PrintQueueItem.printer_id == printer_id)
+            # Resolve effective model: prefer explicit param, fall back to printer's DB model.
+            # This ensures model-based "Any X" items are returned even when the frontend
+            # doesn't send target_model (e.g. printer.model is NULL on the client side).
+            effective_model = target_model
+            if not effective_model:
+                printer_row = (
+                    await db.execute(select(Printer.model).where(Printer.id == printer_id))
+                ).scalar_one_or_none()
+                effective_model = printer_row
+
+            if effective_model:
+                # Include both printer-specific items AND model-based (unassigned) items
+                query = query.where(
+                    or_(
+                        PrintQueueItem.printer_id == printer_id,
+                        and_(
+                            PrintQueueItem.printer_id.is_(None),
+                            func.lower(PrintQueueItem.target_model) == effective_model.lower(),
+                        ),
+                    )
+                )
+            else:
+                query = query.where(PrintQueueItem.printer_id == printer_id)
+    elif target_model:
+        query = query.where(func.lower(PrintQueueItem.target_model) == target_model.lower())
     if status:
         query = query.where(PrintQueueItem.status == status)
 
@@ -348,6 +394,19 @@ async def add_to_queue(
                 required_filament_types = json.dumps(filament_types)
                 logger.info("Extracted filament types for model-based queue: %s", filament_types)
 
+    # If filament overrides are provided, update required_filament_types to match override types
+    filament_overrides_json = None
+    if data.filament_overrides and target_model_norm:
+        filament_overrides_json = json.dumps(data.filament_overrides)
+        # Update required_filament_types from overrides so scheduler validates against overridden types
+        override_types = sorted({o["type"] for o in data.filament_overrides if "type" in o})
+        if override_types:
+            # Merge with existing types (overrides may only cover some slots)
+            existing_types = set(json.loads(required_filament_types)) if required_filament_types else set()
+            # Replace types for overridden slots, keep others
+            all_types = existing_types | set(override_types)
+            required_filament_types = json.dumps(sorted(all_types))
+
     # Get next position for this printer (or for unassigned/model-based items)
     if data.printer_id is not None:
         result = await db.execute(
@@ -369,6 +428,7 @@ async def add_to_queue(
         target_model=target_model_norm,
         target_location=data.target_location,
         required_filament_types=required_filament_types,
+        filament_overrides=filament_overrides_json,
         archive_id=data.archive_id,
         library_file_id=data.library_file_id,
         scheduled_time=data.scheduled_time,
@@ -586,6 +646,12 @@ async def update_queue_item(
     if "ams_mapping" in update_data:
         update_data["ams_mapping"] = json.dumps(update_data["ams_mapping"]) if update_data["ams_mapping"] else None
 
+    # Serialize filament_overrides to JSON for TEXT column storage
+    if "filament_overrides" in update_data:
+        update_data["filament_overrides"] = (
+            json.dumps(update_data["filament_overrides"]) if update_data["filament_overrides"] else None
+        )
+
     for field, value in update_data.items():
         setattr(item, field, value)
 
@@ -676,7 +742,7 @@ async def cancel_queue_item(
         raise HTTPException(400, f"Cannot cancel item with status '{item.status}'")
 
     item.status = "cancelled"
-    item.completed_at = datetime.now()
+    item.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
     logger.info("Cancelled queue item %s", item_id)
@@ -719,7 +785,7 @@ async def stop_queue_item(
 
     # Update queue item status regardless - if printer is off, print is already stopped
     item.status = "cancelled"
-    item.completed_at = datetime.now()
+    item.completed_at = datetime.now(timezone.utc)
     item.error_message = "Stopped by user" if stop_sent else "Stopped by user (printer was offline)"
     await db.commit()
 

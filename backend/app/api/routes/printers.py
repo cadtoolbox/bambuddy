@@ -5,7 +5,7 @@ import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.auth import RequirePermissionIfAuthEnabled
@@ -89,6 +89,123 @@ async def list_usb_cameras(
 
     cameras = list_usb_cameras()
     return {"cameras": cameras}
+
+
+@router.get("/available-filaments")
+async def get_available_filaments(
+    model: str = Query(..., description="Target printer model"),
+    location: str | None = Query(None, description="Optional location filter"),
+    _=RequirePermissionIfAuthEnabled(Permission.QUEUE_CREATE),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get deduplicated list of filaments loaded across all active printers of a given model.
+
+    Used by the frontend to offer filament override options for model-based queue assignment.
+    """
+    from backend.app.utils.printer_models import normalize_printer_model, normalize_printer_model_id
+
+    # Normalize model name
+    normalized_model = normalize_printer_model(model) or normalize_printer_model_id(model) or model
+
+    query = (
+        select(Printer).where(func.lower(Printer.model) == normalized_model.lower()).where(Printer.is_active == True)  # noqa: E712
+    )
+    if location:
+        query = query.where(Printer.location == location)
+
+    result = await db.execute(query)
+    printers_list = list(result.scalars().all())
+
+    if not printers_list:
+        return []
+
+    # Collect filaments from all matching printers
+    # Dedup key includes extruder_id so same color on different nozzles appears separately
+    seen: set[tuple[str, str, int | None]] = set()  # (type_upper, color_normalized, extruder_id)
+    filaments = []
+
+    for printer in printers_list:
+        status = printer_manager.get_status(printer.id)
+        if not status:
+            continue
+
+        # Get ams_extruder_map for dual-nozzle printers
+        ams_extruder_map = status.raw_data.get("ams_extruder_map", {})
+
+        # AMS trays
+        for ams_unit in status.raw_data.get("ams", []):
+            ams_id = str(ams_unit.get("id", 0))
+            extruder_id = ams_extruder_map.get(ams_id)
+            for tray in ams_unit.get("tray", []):
+                tray_type = tray.get("tray_type")
+                if not tray_type:
+                    continue
+                tray_color = tray.get("tray_color", "")
+                # Normalize color: remove alpha, add hash
+                hex_color = tray_color.replace("#", "")[:6] if tray_color else "808080"
+                color = f"#{hex_color}"
+                tray_info_idx = tray.get("tray_info_idx", "")
+
+                key = (tray_type.upper(), hex_color.lower(), extruder_id)
+                if key not in seen:
+                    seen.add(key)
+                    filaments.append(
+                        {
+                            "type": tray_type,
+                            "color": color,
+                            "tray_info_idx": tray_info_idx,
+                            "extruder_id": extruder_id,
+                        }
+                    )
+
+        # External spools (vt_tray)
+        for vt in status.raw_data.get("vt_tray") or []:
+            vt_type = vt.get("tray_type")
+            if not vt_type:
+                continue
+            vt_color = vt.get("tray_color", "")
+            hex_color = vt_color.replace("#", "")[:6] if vt_color else "808080"
+            color = f"#{hex_color}"
+            tray_info_idx = vt.get("tray_info_idx", "")
+            vt_id = int(vt.get("id", 254))
+            extruder_id = (255 - vt_id) if ams_extruder_map else None
+
+            key = (vt_type.upper(), hex_color.lower(), extruder_id)
+            if key not in seen:
+                seen.add(key)
+                filaments.append(
+                    {
+                        "type": vt_type,
+                        "color": color,
+                        "tray_info_idx": tray_info_idx,
+                        "extruder_id": extruder_id,
+                    }
+                )
+
+    return filaments
+
+
+@router.get("/developer-mode-warnings")
+async def get_developer_mode_warnings(
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if any connected printer lacks developer LAN mode."""
+    result = await db.execute(select(Printer).where(Printer.is_active == True))  # noqa: E712
+    printers = result.scalars().all()
+    statuses = printer_manager.get_all_statuses()
+
+    warnings = []
+    for printer in printers:
+        state = statuses.get(printer.id)
+        if state and state.connected and state.developer_mode is False:
+            warnings.append(
+                {
+                    "printer_id": printer.id,
+                    "name": printer.name,
+                }
+            )
+    return warnings
 
 
 @router.get("/{printer_id}", response_model=PrinterResponse)
@@ -226,7 +343,7 @@ async def get_printer_status(
 
     # Determine cover URL if there's an active print (including paused)
     cover_url = None
-    if state.state in ("RUNNING", "PAUSE", "PAUSED") and state.gcode_file:
+    if state.state in ("RUNNING", "PAUSE") and state.gcode_file:
         cover_url = f"/api/v1/printers/{printer_id}/cover"
 
     # Convert HMS errors to response format
@@ -402,8 +519,9 @@ async def get_printer_status(
 
     # Get AMS mapping from raw_data (which AMS is connected to which nozzle)
     ams_mapping = raw_data.get("ams_mapping", [])
-    # Get per-AMS extruder map: {ams_id: extruder_id} where 0=right, 1=left
-    ams_extruder_map = raw_data.get("ams_extruder_map", {})
+    # Get per-AMS extruder map from state attribute (not raw_data, to avoid race condition
+    # where raw_data gets replaced during MQTT updates and ams_extruder_map is temporarily missing)
+    ams_extruder_map = state.ams_extruder_map or {}
     logger.debug("API returning ams_mapping: %s, ams_extruder_map: %s", ams_mapping, ams_extruder_map)
 
     # tray_now from MQTT is already a global tray ID: (ams_id * 4) + slot_id
@@ -466,6 +584,7 @@ async def get_printer_status(
         big_fan2_speed=state.big_fan2_speed,
         heatbreak_fan_speed=state.heatbreak_fan_speed,
         firmware_version=state.firmware_version,
+        developer_mode=state.developer_mode if state else None,
         plate_cleared=printer_manager.is_plate_cleared(printer_id),
     )
 
@@ -1641,53 +1760,107 @@ async def configure_ams_slot(
     if not client:
         raise HTTPException(status_code=400, detail="Printer not connected")
 
-    # Detect RFID spool before sending commands
-    is_rfid_spool = False
-    state = printer_manager.get_status(printer_id)
-    if state and state.raw_data:
-        from backend.app.api.routes.inventory import _find_tray_in_ams_data
-        from backend.app.services.spool_tag_matcher import is_valid_tag
+    # Resolve tray_info_idx for the MQTT command.
+    # Priority:
+    #   1. Use the provided tray_info_idx if set (including cloud-synced
+    #      custom presets like PFUS* / P*).
+    #   2. Reuse the slot's existing tray_info_idx if it's a specific
+    #      (non-generic) preset for the same material.
+    #   3. Fall back to a generic Bambu filament ID.
+    _GENERIC_FILAMENT_IDS = {
+        "PLA": "GFL99",
+        "PETG": "GFG99",
+        "ABS": "GFB99",
+        "ASA": "GFB98",
+        "PC": "GFC99",
+        "PA": "GFN99",
+        "NYLON": "GFN99",
+        "TPU": "GFU99",
+        "PVA": "GFS99",
+        "HIPS": "GFS98",
+        "PLA-CF": "GFL98",
+        "PETG-CF": "GFG98",
+        "PA-CF": "GFN98",
+        "PETG HF": "GFG96",
+    }
+    _GENERIC_ID_VALUES = set(_GENERIC_FILAMENT_IDS.values())
+    effective_tray_info_idx = tray_info_idx
 
-        ams_data = state.raw_data.get("ams", {})
-        ams_list = (
-            ams_data.get("ams", []) if isinstance(ams_data, dict) else ams_data if isinstance(ams_data, list) else []
-        )
-        current_tray = _find_tray_in_ams_data(ams_list, ams_id, tray_id)
-        if current_tray:
-            is_rfid_spool = is_valid_tag(
-                current_tray.get("tag_uid", ""),
-                current_tray.get("tray_uuid", ""),
+    if not tray_info_idx:
+        # No preset provided — try slot reuse or generic fallback
+        current_tray_info_idx = ""
+        current_tray_type = ""
+        state = printer_manager.get_status(printer_id)
+        if state and state.raw_data:
+            from backend.app.api.routes.inventory import _find_tray_in_ams_data
+
+            if ams_id == 255:
+                vt_tray = state.raw_data.get("vt_tray") or []
+                ext_id = tray_id + 254
+                for vt in vt_tray:
+                    if isinstance(vt, dict) and int(vt.get("id", 254)) == ext_id:
+                        current_tray_info_idx = vt.get("tray_info_idx", "")
+                        current_tray_type = vt.get("tray_type", "")
+                        break
+            else:
+                ams_data = state.raw_data.get("ams", {})
+                ams_list = (
+                    ams_data.get("ams", [])
+                    if isinstance(ams_data, dict)
+                    else ams_data
+                    if isinstance(ams_data, list)
+                    else []
+                )
+                cur_tray = _find_tray_in_ams_data(ams_list, ams_id, tray_id)
+                if cur_tray:
+                    current_tray_info_idx = cur_tray.get("tray_info_idx", "")
+                    current_tray_type = cur_tray.get("tray_type", "")
+
+        if (
+            current_tray_info_idx
+            and current_tray_info_idx not in _GENERIC_ID_VALUES
+            and current_tray_type
+            and current_tray_type.upper() == tray_type.upper()
+        ):
+            logger.info(
+                "[configure_ams_slot] Reusing slot's existing tray_info_idx=%r (same material %r)",
+                current_tray_info_idx,
+                tray_type,
             )
+            effective_tray_info_idx = current_tray_info_idx
+        elif tray_type:
+            material = tray_type.upper().strip()
+            generic = (
+                _GENERIC_FILAMENT_IDS.get(material)
+                or _GENERIC_FILAMENT_IDS.get(material.split("-")[0].split(" ")[0])
+                or ""
+            )
+            if generic:
+                logger.info("[configure_ams_slot] Falling back to generic %r for material %r", generic, tray_type)
+                effective_tray_info_idx = generic
 
     # Send filament setting + K-profile commands
-    filament_id_for_kprofile = kprofile_filament_id if kprofile_filament_id else tray_info_idx
+    filament_id_for_kprofile = kprofile_filament_id if kprofile_filament_id else effective_tray_info_idx
 
-    if is_rfid_spool:
-        # RFID spool: skip ams_set_filament_setting to preserve RFID state (eye icon).
-        # The firmware already has filament config from the RFID tag.
-        logger.info("[configure_ams_slot] RFID spool detected — skipping ams_set_filament_setting")
-    else:
-        # Non-RFID spool: send filament setting (type, color, temp)
-        # When a K-profile is selected, use the K-profile's filament_id as
-        # tray_info_idx so BambuStudio queries the right PA history table.
-        # But always use the PRESET's setting_id (not the K-profile's) —
-        # BambuStudio uses setting_id to identify the filament preset and
-        # overriding it with the K-profile's setting_id confuses the slicer.
-        effective_tray_info_idx = filament_id_for_kprofile if cali_idx >= 0 else tray_info_idx
-        success = client.ams_set_filament_setting(
-            ams_id=ams_id,
-            tray_id=tray_id,
-            tray_info_idx=effective_tray_info_idx,
-            tray_type=tray_type,
-            tray_sub_brands=tray_sub_brands,
-            tray_color=tray_color,
-            nozzle_temp_min=nozzle_temp_min,
-            nozzle_temp_max=nozzle_temp_max,
-            setting_id=setting_id,
-        )
+    # Always send ams_set_filament_setting — the user explicitly clicked
+    # "Configure Slot", so honor that.  Previous versions skipped this for
+    # RFID-tagged slots to preserve the slicer eye icon, but printers cache
+    # stale tag_uid/tray_uuid after a BL spool is removed, causing the check
+    # to false-positive on non-RFID slots and silently drop the command.
+    success = client.ams_set_filament_setting(
+        ams_id=ams_id,
+        tray_id=tray_id,
+        tray_info_idx=effective_tray_info_idx,
+        tray_type=tray_type,
+        tray_sub_brands=tray_sub_brands,
+        tray_color=tray_color,
+        nozzle_temp_min=nozzle_temp_min,
+        nozzle_temp_max=nozzle_temp_max,
+        setting_id=setting_id,
+    )
 
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to send filament configuration command")
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send filament configuration command")
 
     # Method 1: Select existing calibration profile by cali_idx
     # Do NOT include setting_id — BambuStudio never sends it in extrusion_cali_sel,
@@ -1861,7 +2034,7 @@ async def stop_print(
 @router.post("/{printer_id}/clear-plate")
 async def clear_plate(
     printer_id: int,
-    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_CLEAR_PLATE),
     db: AsyncSession = Depends(get_db),
 ):
     """Acknowledge that the build plate has been cleared after a finished/failed print.

@@ -1,8 +1,83 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import delete, or_, select, text
+
+from backend.app.api.routes import (
+    ams_history,
+    api_keys,
+    archives,
+    auth,
+    background_dispatch as background_dispatch_routes,
+    camera,
+    cloud,
+    discovery,
+    external_links,
+    filaments,
+    firmware,
+    github_backup,
+    groups,
+    inventory,
+    kprofiles,
+    library,
+    local_presets,
+    maintenance,
+    metrics,
+    notification_templates,
+    notifications,
+    pending_uploads,
+    print_log,
+    print_queue,
+    printers,
+    projects,
+    settings as settings_routes,
+    smart_plugs,
+    spoolbuddy,
+    spoolman,
+    support,
+    system,
+    updates,
+    users,
+    virtual_printers,
+    webhook,
+    websocket,
+)
+from backend.app.api.routes.maintenance import _get_printer_maintenance_internal, ensure_default_types
+from backend.app.api.routes.support import init_debug_logging
+from backend.app.core.config import APP_VERSION, settings as app_settings
+from backend.app.core.database import async_session, engine, init_db
+from backend.app.core.websocket import ws_manager
+from backend.app.models.smart_plug import SmartPlug
+from backend.app.services.archive import ArchiveService
+from backend.app.services.background_dispatch import background_dispatch
+from backend.app.services.bambu_ftp import download_file_async, get_ftp_retry_settings, with_ftp_retry
+from backend.app.services.bambu_mqtt import PrinterState
+from backend.app.services.github_backup import github_backup_service
+from backend.app.services.homeassistant import homeassistant_service
+from backend.app.services.mqtt_relay import mqtt_relay
+from backend.app.services.mqtt_smart_plug import mqtt_smart_plug_service
+from backend.app.services.notification_service import notification_service
+from backend.app.services.print_scheduler import scheduler as print_scheduler
+from backend.app.services.printer_manager import (
+    init_printer_connections,
+    printer_manager,
+    printer_state_to_dict,
+)
+from backend.app.services.smart_plug_manager import smart_plug_manager
+from backend.app.services.spoolman import close_spoolman_client, get_spoolman_client, init_spoolman_client
+from backend.app.services.spoolman_tracking import (
+    cleanup_tracking as _cleanup_spoolman_tracking,
+    report_usage as _report_spoolman_usage,
+    store_print_data as _store_spoolman_print_data,
+)
+from backend.app.services.tasmota import tasmota_service
 
 
 # =============================================================================
@@ -125,10 +200,8 @@ def check_dependencies():
 check_dependencies()
 # =============================================================================
 
-from fastapi import FastAPI
 
 # Import settings first for logging configuration
-from backend.app.core.config import APP_VERSION, settings as app_settings
 
 # Configure logging based on settings
 # DEBUG=true -> DEBUG level, else use LOG_LEVEL setting
@@ -168,73 +241,7 @@ if not app_settings.debug:
     logging.getLogger("paho.mqtt").setLevel(logging.WARNING)
 
 logging.info("Bambuddy starting - debug=%s, log_level=%s", app_settings.debug, log_level_str)
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, or_, select
 
-from backend.app.api.routes import (
-    ams_history,
-    api_keys,
-    archives,
-    auth,
-    camera,
-    cloud,
-    discovery,
-    external_links,
-    filaments,
-    firmware,
-    github_backup,
-    groups,
-    inventory,
-    kprofiles,
-    library,
-    local_presets,
-    maintenance,
-    metrics,
-    notification_templates,
-    notifications,
-    pending_uploads,
-    print_log,
-    print_queue,
-    printers,
-    projects,
-    settings as settings_routes,
-    smart_plugs,
-    spoolman,
-    support,
-    system,
-    updates,
-    users,
-    webhook,
-    websocket,
-)
-from backend.app.api.routes.maintenance import _get_printer_maintenance_internal, ensure_default_types
-from backend.app.api.routes.support import init_debug_logging
-from backend.app.core.database import async_session, init_db
-from backend.app.core.websocket import ws_manager
-from backend.app.models.smart_plug import SmartPlug
-from backend.app.services.archive import ArchiveService
-from backend.app.services.bambu_ftp import download_file_async, get_ftp_retry_settings, with_ftp_retry
-from backend.app.services.bambu_mqtt import PrinterState
-from backend.app.services.github_backup import github_backup_service
-from backend.app.services.homeassistant import homeassistant_service
-from backend.app.services.mqtt_relay import mqtt_relay
-from backend.app.services.mqtt_smart_plug import mqtt_smart_plug_service
-from backend.app.services.notification_service import notification_service
-from backend.app.services.print_scheduler import scheduler as print_scheduler
-from backend.app.services.printer_manager import (
-    init_printer_connections,
-    printer_manager,
-    printer_state_to_dict,
-)
-from backend.app.services.smart_plug_manager import smart_plug_manager
-from backend.app.services.spoolman import close_spoolman_client, get_spoolman_client, init_spoolman_client
-from backend.app.services.spoolman_tracking import (
-    cleanup_tracking as _cleanup_spoolman_tracking,
-    report_usage as _report_spoolman_usage,
-    store_print_data as _store_spoolman_print_data,
-)
-from backend.app.services.tasmota import tasmota_service
 
 # Track active prints: {(printer_id, filename): archive_id}
 _active_prints: dict[tuple[int, str], int] = {}
@@ -245,9 +252,6 @@ _expected_prints: dict[tuple[int, str], int] = {}
 
 # Track starting energy for prints: {archive_id: starting_kwh}
 _print_energy_start: dict[int, float] = {}
-
-# Track reprints to add costs on completion: {archive_id}
-_reprint_archives: set[int] = set()
 
 # Track AMS mapping for prints: {archive_id: [global_tray_id_per_slot]}
 # Used by usage tracker to map 3MF slots to physical AMS trays
@@ -260,6 +264,10 @@ _last_progress_milestone: dict[int, int] = {}
 # Track HMS errors that have been notified: {printer_id: set of error codes}
 # This prevents sending duplicate notifications for the same error
 _notified_hms_errors: dict[int, set[str]] = {}
+# Track when HMS errors were last seen: {printer_id: timestamp}
+# Used to debounce clearing — prevents flapping errors from re-triggering notifications
+_hms_last_seen: dict[int, float] = {}
+_HMS_CLEAR_GRACE_SECONDS = 30.0
 
 # Track timelapse file baselines at print start: {printer_id: set of video filenames}
 # Used for snapshot-diff detection at print completion
@@ -314,7 +322,8 @@ def register_expected_print(printer_id: int, filename: str, archive_id: int, ams
 
 
 _last_status_broadcast: dict[int, str] = {}
-_nozzle_count_updated: set[int] = set()  # Track printers where we've updated nozzle_count
+# Track printers where we've updated nozzle_count
+_nozzle_count_updated: set[int] = set()
 
 
 async def on_printer_status_change(printer_id: int, state: PrinterState):
@@ -420,6 +429,14 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
         # Reset milestone tracking when print restarts or new print begins
         _last_progress_milestone[printer_id] = 0
 
+    # HMS error codes that should not trigger notifications.
+    # These are infrastructure/auth issues, not actionable print errors.
+    _HMS_NOTIFICATION_SUPPRESS = {
+        "0500_0007",  # MQTT command verification failed (auth/bind issue, not a print error)
+        "0500_4001",  # Failed to connect to Bambu Cloud (network issue)
+        "0500_400E",  # Printing was cancelled (user action, not an error)
+    }
+
     # Check for new HMS errors and send notifications
     current_hms_errors = getattr(state, "hms_errors", []) or []
     if current_hms_errors:
@@ -432,6 +449,7 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
 
         # Update tracking immediately to prevent duplicate notifications from concurrent callbacks
         _notified_hms_errors[printer_id] = current_error_codes
+        _hms_last_seen[printer_id] = time.time()
 
         if new_error_codes:
             # Get the actual new errors for the notification
@@ -471,6 +489,9 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
                         error_code_masked = error_code_int & 0xFFFF
                         short_code = f"{(error.attr >> 16) & 0xFFFF:04X}_{error_code_masked:04X}"
 
+                        if short_code in _HMS_NOTIFICATION_SUPPRESS:
+                            continue
+
                         error_type = f"{module_name} Error"
                         # Look up human-readable description
                         description = get_error_description(short_code)
@@ -504,9 +525,15 @@ async def on_printer_status_change(printer_id: int, state: PrinterState):
                 logging.getLogger(__name__).warning(f"HMS error notification failed: {e}")
 
     else:
-        # No HMS errors - clear tracking so future errors get notified
+        # No HMS errors — only clear tracking after a grace period to prevent
+        # flapping errors (brief hms:[] gaps) from re-triggering notifications.
+        # Some HMS codes (e.g. chamber temp regulation during PETG prints) toggle
+        # on/off every few seconds as conditions fluctuate around thresholds.
         if printer_id in _notified_hms_errors:
-            _notified_hms_errors.pop(printer_id, None)
+            last_seen = _hms_last_seen.get(printer_id, 0)
+            if time.time() - last_seen >= _HMS_CLEAR_GRACE_SECONDS:
+                _notified_hms_errors.pop(printer_id, None)
+                _hms_last_seen.pop(printer_id, None)
 
     await ws_manager.send_printer_status(
         printer_id,
@@ -557,7 +584,21 @@ async def on_ams_change(printer_id: int, ams_data: list):
             result = await db.execute(select(SA).where(SA.printer_id == printer_id).options(selectinload(SA.spool)))
             stale = []
             for assignment in result.scalars().all():
-                current_tray = _find_tray_in_ams_data(ams_data, assignment.ams_id, assignment.tray_id)
+                # External spool assignments (ams_id=255) live in vt_tray, not AMS data
+                if assignment.ams_id == 255:
+                    ps = printer_manager.get_status(printer_id)
+                    vt_tray_raw = ps.raw_data.get("vt_tray", []) if ps else []
+                    ext_id = assignment.tray_id + 254  # 0→254, 1→255
+                    current_tray = None
+                    for vt in vt_tray_raw:
+                        if isinstance(vt, dict) and int(vt.get("id", 254)) == ext_id:
+                            current_tray = vt
+                            break
+                    if not current_tray:
+                        # vt_tray data may not have arrived yet — keep assignment
+                        continue
+                else:
+                    current_tray = _find_tray_in_ams_data(ams_data, assignment.ams_id, assignment.tray_id)
                 if not current_tray:
                     logger.info(
                         "Auto-unlink: spool %d AMS%d-T%d — tray not found in AMS data (slot empty?)",
@@ -693,7 +734,11 @@ async def on_ams_change(printer_id: int, ams_data: list):
                             # The AMS remain% is low-resolution (integer %, i.e. 10g steps for 1kg spool)
                             # and must not overwrite precise values from the usage tracker (3MF/G-code).
                             remain_raw = tray.get("remain")
-                            if remain_raw is not None and existing_assignment.spool:
+                            if (
+                                remain_raw is not None
+                                and existing_assignment.spool
+                                and not existing_assignment.spool.weight_locked
+                            ):
                                 try:
                                     remain_val = int(remain_raw)
                                 except (TypeError, ValueError):
@@ -982,7 +1027,7 @@ def _load_objects_from_archive(archive, printer_id: int, logger) -> None:
         from backend.app.services.archive import extract_printable_objects_from_3mf
 
         file_path = app_settings.base_dir / archive.file_path
-        if file_path.exists() and str(file_path).endswith(".3mf"):
+        if file_path.is_file() and str(file_path).endswith(".3mf"):
             with open(file_path, "rb") as f:
                 threemf_data = f.read()
             # Extract with positions for UI overlay
@@ -1037,10 +1082,10 @@ async def on_print_start(printer_id: int, data: dict):
             from backend.app.api.routes.settings import get_setting
 
             _spoolman_on = await get_setting(db, "spoolman_enabled")
-        if not _spoolman_on or _spoolman_on.lower() != "true":
-            from backend.app.services.usage_tracker import on_print_start as usage_on_print_start
+            if not _spoolman_on or _spoolman_on.lower() != "true":
+                from backend.app.services.usage_tracker import on_print_start as usage_on_print_start
 
-            await usage_on_print_start(printer_id, data, printer_manager)
+                await usage_on_print_start(printer_id, data, printer_manager, db=db)
     except Exception as e:
         logger.warning("Usage tracker on_print_start failed: %s", e)
 
@@ -1218,17 +1263,13 @@ async def on_print_start(printer_id: int, data: dict):
             if archive:
                 # Update archive status to printing
                 archive.status = "printing"
-                archive.started_at = datetime.now()
+                archive.started_at = datetime.now(timezone.utc)
                 await db.commit()
 
                 # Track as active print
                 _active_prints[(printer_id, archive.filename)] = archive.id
                 if subtask_name:
                     _active_prints[(printer_id, f"{subtask_name}.3mf")] = archive.id
-
-                # Mark as reprint so we add cost on completion
-                _reprint_archives.add(archive.id)
-                logger.info("Marked archive %s as reprint for cost addition on completion", archive.id)
 
                 # Set up energy tracking
                 try:
@@ -1517,7 +1558,7 @@ async def on_print_start(printer_id: int, data: dict):
                     file_size=0,
                     print_name=print_name,
                     status="printing",
-                    started_at=datetime.now(),
+                    started_at=datetime.now(timezone.utc),
                     extra_data={"no_3mf_available": True, "original_subtask": subtask_name, "_print_data": data},
                 )
 
@@ -2101,42 +2142,48 @@ async def on_print_complete(printer_id: int, data: dict):
     # auto-start files found in root on power cycle, causing ghost prints.
     # Must run before the archive_id early-return so it executes even when archiving is disabled.
     try:
-        printer_info = printer_manager.get_printer(printer_id)
-        if printer_info and subtask_name:
-            from backend.app.services.bambu_ftp import delete_file_async
+        if subtask_name:
+            async with async_session() as db:
+                from backend.app.models.printer import Printer
 
-            # Try both .3mf and .gcode extensions — the printer may have either
-            for ext in (".3mf", ".gcode"):
-                remote_path = f"/{subtask_name}{ext}"
-                # Retry up to 3 times — the printer may still lock the filesystem briefly after a print ends
-                for attempt in range(1, 4):
-                    try:
-                        delete_result = await delete_file_async(
-                            printer_info.ip_address,
-                            printer_info.access_code,
-                            remote_path,
-                            printer_model=printer_info.model,
-                        )
-                        if delete_result:
-                            logger.info("Deleted %s from printer %s SD card", remote_path, printer_info.name)
-                        break  # Success or file doesn't exist — no need to retry
-                    except Exception as e:
-                        if attempt < 3:
-                            logger.debug(
-                                "SD card cleanup attempt %d/3 failed for %s: %s, retrying in 2s",
+                result = await db.execute(select(Printer).where(Printer.id == printer_id))
+                printer = result.scalar_one_or_none()
+
+            if printer:
+                from backend.app.services.bambu_ftp import delete_file_async
+
+                # Try both .3mf and .gcode extensions — the printer may have either
+                for ext in (".3mf", ".gcode"):
+                    remote_path = f"/{subtask_name}{ext}"
+                    # Retry up to 3 times — the printer may still lock the filesystem briefly after a print ends
+                    for attempt in range(1, 4):
+                        try:
+                            delete_result = await delete_file_async(
+                                printer.ip_address,
+                                printer.access_code,
+                                remote_path,
+                                printer_model=printer.model,
+                            )
+                            if delete_result:
+                                logger.info("Deleted %s from printer %s SD card", remote_path, printer.name)
+                                break
+                        except Exception as e:
+                            delete_result = False
+                            logger.warning(
+                                "SD card cleanup attempt %d/3 raised for %s: %s",
                                 attempt,
                                 remote_path,
                                 e,
                             )
+                        if not delete_result and attempt < 3:
                             await asyncio.sleep(2)
-                        else:
-                            logger.debug(
-                                "SD card cleanup failed after 3 attempts for %s: %s (non-critical)",
+                        elif not delete_result:
+                            logger.warning(
+                                "SD card cleanup failed after 3 attempts for %s (file may linger on SD card)",
                                 remote_path,
-                                e,
                             )
     except Exception as e:
-        logger.debug("SD card file cleanup failed for printer %s: %s (non-critical)", printer_id, e)
+        logger.warning("SD card file cleanup failed for printer %s: %s", printer_id, e)
 
     log_timing("SD card cleanup")
 
@@ -2162,7 +2209,7 @@ async def on_print_complete(printer_id: int, data: dict):
             if queue_item:
                 queue_status = data.get("status", "completed")
                 queue_item.status = queue_status
-                queue_item.completed_at = datetime.now()
+                queue_item.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 logger.info("Updated queue item %s status to %s", queue_item.id, queue_status)
 
@@ -2189,7 +2236,7 @@ async def on_print_complete(printer_id: int, data: dict):
                     pending_count = count_result.scalar() or 0
 
                     if pending_count == 0:
-                        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                         completed_result = await db.execute(
                             select(sa_func.count(PrintQueueItem.id)).where(
                                 PrintQueueItem.status.in_(["completed", "failed", "skipped"]),
@@ -2231,6 +2278,88 @@ async def on_print_complete(printer_id: int, data: dict):
         logging.getLogger(__name__).warning(f"Queue item update failed: {e}")
 
     log_timing("Queue item update")
+
+    # Start bed cooldown monitor (polls bed temp until it drops below threshold)
+    # Must run before archive_id early-return so it fires for all prints (including
+    # prints started from BambuStudio/touchscreen that have no archive).
+    async def _background_bed_cooldown():
+        """Monitor bed temperature after print and notify when cooled."""
+        try:
+            from backend.app.api.routes.settings import get_setting
+
+            # Check threshold setting
+            async with async_session() as db:
+                threshold_str = await get_setting(db, "bed_cooled_threshold")
+            threshold = float(threshold_str) if threshold_str else 35.0
+
+            # Check if any provider has on_bed_cooled enabled (early exit if none)
+            async with async_session() as db:
+                providers = await notification_service._get_providers_for_event(db, "on_bed_cooled", printer_id)
+                if not providers:
+                    logger.debug("[BED-COOL] No providers enabled for bed_cooled on printer %s", printer_id)
+                    return
+
+            logger.info("[BED-COOL] Monitoring bed temp for printer %s (threshold: %.0f°C)", printer_id, threshold)
+
+            max_polls = 120  # 120 * 15s = 30 min timeout
+            for _ in range(max_polls):
+                await asyncio.sleep(15)
+
+                # Check if printer is still connected
+                status = printer_manager.get_status(printer_id)
+                if status is None:
+                    logger.info("[BED-COOL] Printer %s disconnected, stopping monitor", printer_id)
+                    return
+
+                # Check if a new print started (state == RUNNING)
+                if hasattr(status, "state") and status.state == "RUNNING":
+                    logger.info("[BED-COOL] New print started on printer %s, stopping monitor", printer_id)
+                    return
+
+                # Get bed temperature
+                bed_temp = None
+                if hasattr(status, "temperatures") and isinstance(status.temperatures, dict):
+                    bed_temp = status.temperatures.get("bed")
+
+                if bed_temp is None:
+                    continue
+
+                if bed_temp <= threshold:
+                    logger.info(
+                        "[BED-COOL] Bed cooled to %.1f°C on printer %s (threshold: %.0f°C)",
+                        bed_temp,
+                        printer_id,
+                        threshold,
+                    )
+                    printer_info = printer_manager.get_printer(printer_id)
+                    p_name = printer_info.name if printer_info else "Unknown"
+                    async with async_session() as db:
+                        await notification_service.on_bed_cooled(
+                            printer_id=printer_id,
+                            printer_name=p_name,
+                            bed_temp=bed_temp,
+                            threshold=threshold,
+                            filename=filename or subtask_name or "",
+                            db=db,
+                        )
+                    return
+
+            logger.info("[BED-COOL] Timeout waiting for bed to cool on printer %s", printer_id)
+        except asyncio.CancelledError:
+            logger.info("[BED-COOL] Bed cooldown monitor cancelled for printer %s", printer_id)
+        except Exception as e:
+            logger.warning("[BED-COOL] Failed: %s", e)
+        finally:
+            _bed_cooldown_tasks.pop(printer_id, None)
+
+    # Only start bed cooldown for completed prints
+    if data.get("status") == "completed":
+        # Cancel any existing task for this printer
+        existing_task = _bed_cooldown_tasks.pop(printer_id, None)
+        if existing_task and not existing_task.done():
+            existing_task.cancel()
+        task = asyncio.create_task(_background_bed_cooldown())
+        _bed_cooldown_tasks[printer_id] = task
 
     if not archive_id:
         logger.warning("Could not find archive for print complete: filename=%s, subtask=%s", filename, subtask_name)
@@ -2276,21 +2405,12 @@ async def on_print_complete(printer_id: int, data: dict):
             await service.update_archive_status(
                 archive_id,
                 status=status,
-                completed_at=datetime.now() if status in ("completed", "failed", "aborted") else None,
+                completed_at=datetime.now(timezone.utc) if status in ("completed", "failed", "aborted") else None,
                 failure_reason=failure_reason,
             )
             logger.info(
                 "[ARCHIVE] Archive %s status updated to %s, failure_reason=%s", archive_id, status, failure_reason
             )
-
-            # Add cost for reprints (first prints have cost set in archive_print())
-            if status == "completed" and archive_id in _reprint_archives:
-                _reprint_archives.discard(archive_id)
-                try:
-                    await service.add_reprint_cost(archive_id)
-                    logger.info("[ARCHIVE] Added reprint cost for archive %s", archive_id)
-                except Exception as e:
-                    logger.warning("[ARCHIVE] Failed to add reprint cost for archive %s: %s", archive_id, e)
 
             await ws_manager.send_archive_updated(
                 {
@@ -2378,6 +2498,7 @@ async def on_print_complete(printer_id: int, data: dict):
                         }
                     )
                     log_timing("Usage tracker")
+
     except Exception as e:
         logger.warning("Usage tracker on_print_complete failed: %s", e)
 
@@ -2423,7 +2544,7 @@ async def on_print_complete(printer_id: int, data: dict):
 
                         energy_cost_per_kwh = await get_setting(db, "energy_cost_per_kwh")
                         cost_per_kwh = float(energy_cost_per_kwh) if energy_cost_per_kwh else 0.15
-                        energy_cost = round(energy_used * cost_per_kwh, 2)
+                        energy_cost = round(energy_used * cost_per_kwh, 3)
 
                         from backend.app.models.archive import PrintArchive
 
@@ -2468,7 +2589,11 @@ async def on_print_complete(printer_id: int, data: dict):
                             from datetime import datetime
                             from pathlib import Path
 
-                            archive_dir = app_settings.base_dir / Path(archive.file_path).parent
+                            if archive.file_path:
+                                archive_dir = app_settings.base_dir / Path(archive.file_path).parent
+                            else:
+                                logger.warning("[PHOTO-BG] Archive %s has no file_path, using fallback dir", archive_id)
+                                archive_dir = app_settings.archive_dir / str(archive.id)
                             photo_filename = None
 
                             # Check for external camera first
@@ -2736,86 +2861,6 @@ async def on_print_complete(printer_id: int, data: dict):
 
     asyncio.create_task(_background_layer_timelapse())
 
-    # Start bed cooldown monitor (polls bed temp until it drops below threshold)
-    async def _background_bed_cooldown():
-        """Monitor bed temperature after print and notify when cooled."""
-        try:
-            from backend.app.api.routes.settings import get_setting
-
-            # Check threshold setting
-            async with async_session() as db:
-                threshold_str = await get_setting(db, "bed_cooled_threshold")
-            threshold = float(threshold_str) if threshold_str else 35.0
-
-            # Check if any provider has on_bed_cooled enabled (early exit if none)
-            async with async_session() as db:
-                providers = await notification_service._get_providers_for_event(db, "on_bed_cooled", printer_id)
-                if not providers:
-                    logger.debug("[BED-COOL] No providers enabled for bed_cooled on printer %s", printer_id)
-                    return
-
-            logger.info("[BED-COOL] Monitoring bed temp for printer %s (threshold: %.0f°C)", printer_id, threshold)
-
-            max_polls = 120  # 120 * 15s = 30 min timeout
-            for _ in range(max_polls):
-                await asyncio.sleep(15)
-
-                # Check if printer is still connected
-                status = printer_manager.get_status(printer_id)
-                if status is None:
-                    logger.info("[BED-COOL] Printer %s disconnected, stopping monitor", printer_id)
-                    return
-
-                # Check if a new print started (state == RUNNING)
-                if hasattr(status, "state") and status.state == "RUNNING":
-                    logger.info("[BED-COOL] New print started on printer %s, stopping monitor", printer_id)
-                    return
-
-                # Get bed temperature
-                bed_temp = None
-                if hasattr(status, "temperatures") and status.temperatures:
-                    bed_temp = status.temperatures.get("bed")
-
-                if bed_temp is None:
-                    continue
-
-                if bed_temp <= threshold:
-                    logger.info(
-                        "[BED-COOL] Bed cooled to %.1f°C on printer %s (threshold: %.0f°C)",
-                        bed_temp,
-                        printer_id,
-                        threshold,
-                    )
-                    printer_info = printer_manager.get_printer(printer_id)
-                    p_name = printer_info.name if printer_info else "Unknown"
-                    async with async_session() as db:
-                        await notification_service.on_bed_cooled(
-                            printer_id=printer_id,
-                            printer_name=p_name,
-                            bed_temp=bed_temp,
-                            threshold=threshold,
-                            filename=filename or subtask_name or "",
-                            db=db,
-                        )
-                    return
-
-            logger.info("[BED-COOL] Timeout waiting for bed to cool on printer %s", printer_id)
-        except asyncio.CancelledError:
-            logger.info("[BED-COOL] Bed cooldown monitor cancelled for printer %s", printer_id)
-        except Exception as e:
-            logger.warning("[BED-COOL] Failed: %s", e)
-        finally:
-            _bed_cooldown_tasks.pop(printer_id, None)
-
-    # Only start bed cooldown for completed prints
-    if data.get("status") == "completed":
-        # Cancel any existing task for this printer
-        existing_task = _bed_cooldown_tasks.pop(printer_id, None)
-        if existing_task and not existing_task.done():
-            existing_task.cancel()
-        task = asyncio.create_task(_background_bed_cooldown())
-        _bed_cooldown_tasks[printer_id] = task
-
     log_timing("All background tasks scheduled")
 
     # Auto-scan for timelapse if recording was active during the print
@@ -2835,7 +2880,8 @@ _ams_history_task: asyncio.Task | None = None
 AMS_HISTORY_INTERVAL = 300  # Record every 5 minutes
 AMS_HISTORY_RETENTION_DAYS = 30  # Keep data for 30 days
 _ams_cleanup_counter = 0  # Track recordings to trigger periodic cleanup
-_ams_alarm_cooldown: dict[str, datetime] = {}  # Track alarm cooldowns (printer_id:ams_id:type -> last_alarm_time)
+# Track alarm cooldowns (printer_id:ams_id:type -> last_alarm_time)
+_ams_alarm_cooldown: dict[str, datetime] = {}
 AMS_ALARM_COOLDOWN_MINUTES = 60  # Don't send same alarm more than once per hour
 
 
@@ -2940,7 +2986,7 @@ async def record_ams_history():
                         if humidity is not None and humidity > humidity_threshold:
                             cooldown_key = f"{printer.id}:{ams_id}:humidity"
                             last_alarm = _ams_alarm_cooldown.get(cooldown_key)
-                            now = datetime.now()
+                            now = datetime.now(timezone.utc)
                             if (
                                 last_alarm is None
                                 or (now - last_alarm).total_seconds() >= AMS_ALARM_COOLDOWN_MINUTES * 60
@@ -2966,7 +3012,7 @@ async def record_ams_history():
                         if temperature is not None and temperature > temp_threshold:
                             cooldown_key = f"{printer.id}:{ams_id}:temperature"
                             last_alarm = _ams_alarm_cooldown.get(cooldown_key)
-                            now = datetime.now()
+                            now = datetime.now(timezone.utc)
                             if (
                                 last_alarm is None
                                 or (now - last_alarm).total_seconds() >= AMS_ALARM_COOLDOWN_MINUTES * 60
@@ -3004,7 +3050,7 @@ async def record_ams_history():
                     setting = result.scalar_one_or_none()
                     retention_days = int(setting.value) if setting else AMS_HISTORY_RETENTION_DAYS
 
-                    cutoff = datetime.now() - timedelta(days=retention_days)
+                    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
                     result = await db.execute(delete(AMSSensorHistory).where(AMSSensorHistory.recorded_at < cutoff))
                     await db.commit()
                     if result.rowcount > 0:
@@ -3060,7 +3106,7 @@ async def track_printer_runtime():
                 result = await db.execute(select(Printer).where(Printer.is_active.is_(True)))
                 printers = result.scalars().all()
 
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 updated_count = 0
 
                 needs_commit = False
@@ -3132,6 +3178,40 @@ def stop_runtime_tracking():
         _runtime_tracking_task.cancel()
         _runtime_tracking_task = None
         logging.getLogger(__name__).info("Printer runtime tracking stopped")
+
+
+# SpoolBuddy device watchdog
+_spoolbuddy_watchdog_task: asyncio.Task | None = None
+SPOOLBUDDY_WATCHDOG_INTERVAL = 15
+
+
+async def _spoolbuddy_watchdog_loop():
+    """Periodic check for SpoolBuddy devices that have gone offline."""
+    from backend.app.api.routes.spoolbuddy import spoolbuddy_watchdog
+
+    while True:
+        try:
+            await spoolbuddy_watchdog()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.getLogger(__name__).warning("SpoolBuddy watchdog failed: %s", e)
+        await asyncio.sleep(SPOOLBUDDY_WATCHDOG_INTERVAL)
+
+
+def start_spoolbuddy_watchdog():
+    global _spoolbuddy_watchdog_task
+    if _spoolbuddy_watchdog_task is None:
+        _spoolbuddy_watchdog_task = asyncio.create_task(_spoolbuddy_watchdog_loop())
+        logging.getLogger(__name__).info("SpoolBuddy watchdog started")
+
+
+def stop_spoolbuddy_watchdog():
+    global _spoolbuddy_watchdog_task
+    if _spoolbuddy_watchdog_task:
+        _spoolbuddy_watchdog_task.cancel()
+        _spoolbuddy_watchdog_task = None
+        logging.getLogger(__name__).info("SpoolBuddy watchdog stopped")
 
 
 @asynccontextmanager
@@ -3219,6 +3299,9 @@ async def lifespan(app: FastAPI):
     # Start the print scheduler
     asyncio.create_task(print_scheduler.run())
 
+    # Start background dispatch worker for send/start operations
+    await background_dispatch.start()
+
     # Start the smart plug scheduler for time-based on/off
     smart_plug_manager.start_scheduler()
 
@@ -3237,75 +3320,48 @@ async def lifespan(app: FastAPI):
     # Start printer runtime tracking
     start_runtime_tracking()
 
-    # Initialize virtual printer manager
+    # Start SpoolBuddy device watchdog
+    start_spoolbuddy_watchdog()
+
+    # Initialize virtual printer manager and sync from DB
     from backend.app.services.virtual_printer import virtual_printer_manager
 
     virtual_printer_manager.set_session_factory(async_session)
-
-    # Auto-start virtual printer if enabled
-    async with async_session() as db:
-        from backend.app.api.routes.settings import get_setting
-
-        vp_enabled = await get_setting(db, "virtual_printer_enabled")
-        if vp_enabled and vp_enabled.lower() == "true":
-            vp_access_code = await get_setting(db, "virtual_printer_access_code") or ""
-            vp_mode = await get_setting(db, "virtual_printer_mode") or "immediate"
-            vp_model = await get_setting(db, "virtual_printer_model") or ""
-            vp_target_printer_id = await get_setting(db, "virtual_printer_target_printer_id")
-            vp_remote_iface = await get_setting(db, "virtual_printer_remote_interface_ip") or ""
-
-            # Look up printer IP and serial if in proxy mode
-            vp_target_ip = ""
-            vp_target_serial = ""
-            if vp_mode == "proxy" and vp_target_printer_id:
-                from backend.app.models.printer import Printer
-
-                result = await db.execute(select(Printer).where(Printer.id == int(vp_target_printer_id)))
-                printer = result.scalar_one_or_none()
-                if printer:
-                    vp_target_ip = printer.ip_address
-                    vp_target_serial = printer.serial_number
-
-            # Proxy mode requires target IP, other modes require access code
-            can_start = (vp_mode == "proxy" and vp_target_ip) or (vp_mode != "proxy" and vp_access_code)
-
-            if can_start:
-                try:
-                    await virtual_printer_manager.configure(
-                        enabled=True,
-                        access_code=vp_access_code,
-                        mode=vp_mode,
-                        model=vp_model,
-                        target_printer_ip=vp_target_ip,
-                        target_printer_serial=vp_target_serial,
-                        remote_interface_ip=vp_remote_iface,
-                    )
-                    if vp_mode == "proxy":
-                        logging.info("Virtual printer proxy started (target=%s)", vp_target_ip)
-                    else:
-                        logging.info("Virtual printer started (model=%s)", vp_model or "default")
-                except Exception as e:
-                    logging.warning("Failed to start virtual printer: %s", e)
+    try:
+        await virtual_printer_manager.sync_from_db()
+        logging.info("Virtual printer manager synced from database")
+    except Exception as e:
+        logging.warning("Failed to sync virtual printers: %s", e)
 
     yield
 
     # Shutdown
     print_scheduler.stop()
+    await background_dispatch.stop()
     smart_plug_manager.stop_scheduler()
     notification_service.stop_digest_scheduler()
     github_backup_service.stop_scheduler()
     stop_ams_history_recording()
     stop_runtime_tracking()
+    stop_spoolbuddy_watchdog()
     printer_manager.disconnect_all()
     await close_spoolman_client()
 
-    # Stop virtual printer if running
-    if virtual_printer_manager.is_enabled:
-        await virtual_printer_manager.configure(enabled=False)
+    # Stop all virtual printer services
+    await virtual_printer_manager.stop_all()
 
     await mqtt_smart_plug_service.disconnect(timeout=2)
 
     await mqtt_relay.disconnect(timeout=2)
+
+    # Checkpoint WAL and close all database connections
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        logging.info("WAL checkpoint completed")
+    except Exception as e:
+        logging.warning("WAL checkpoint failed: %s", e)
+    await engine.dispose()
 
 
 app = FastAPI(
@@ -3325,7 +3381,8 @@ PUBLIC_API_ROUTES = {
     "/api/v1/auth/status",
     "/api/v1/auth/login",
     "/api/v1/auth/setup",  # Needed for initial setup and recovery
-    "/api/v1/auth/advanced-auth/status",  # Advanced auth status needed for login page
+    # Advanced auth status needed for login page
+    "/api/v1/auth/advanced-auth/status",
     "/api/v1/auth/forgot-password",  # Password reset for advanced auth
     # Version check for updates (no sensitive data)
     "/api/v1/updates/version",
@@ -3356,6 +3413,10 @@ PUBLIC_API_PATTERNS = [
     # Camera (streams loaded via <img> tag)
     "/camera/stream",  # /printers/{id}/camera/stream
     "/camera/snapshot",  # /printers/{id}/camera/snapshot
+    # Slicer token-authenticated downloads — protocol handlers (bambustudioopen://,
+    # orcaslicer://) cannot send auth headers. These endpoints validate a short-lived
+    # download token in the URL path instead.
+    "/dl/",  # /archives/{id}/dl/{token}/{filename}, /library/files/{id}/dl/{token}/{filename}
 ]
 
 
@@ -3473,6 +3534,7 @@ app.include_router(local_presets.router, prefix=app_settings.api_prefix)
 app.include_router(smart_plugs.router, prefix=app_settings.api_prefix)
 app.include_router(print_log.router, prefix=app_settings.api_prefix)
 app.include_router(print_queue.router, prefix=app_settings.api_prefix)
+app.include_router(background_dispatch_routes.router, prefix=app_settings.api_prefix)
 app.include_router(kprofiles.router, prefix=app_settings.api_prefix)
 app.include_router(notifications.router, prefix=app_settings.api_prefix)
 app.include_router(notification_templates.router, prefix=app_settings.api_prefix)
@@ -3494,6 +3556,8 @@ app.include_router(pending_uploads.router, prefix=app_settings.api_prefix)
 app.include_router(firmware.router, prefix=app_settings.api_prefix)
 app.include_router(github_backup.router, prefix=app_settings.api_prefix)
 app.include_router(metrics.router, prefix=app_settings.api_prefix)
+app.include_router(virtual_printers.router, prefix=app_settings.api_prefix)
+app.include_router(spoolbuddy.router, prefix=app_settings.api_prefix)
 
 
 # Serve static files (React build)

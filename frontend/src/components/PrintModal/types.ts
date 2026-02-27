@@ -171,6 +171,8 @@ export interface FilamentMappingProps {
   filamentReqs: FilamentReqsData | undefined;
   manualMappings: Record<number, number>;
   onManualMappingChange: (mappings: Record<number, number>) => void;
+  currencySymbol: string;
+  defaultCostPerKg: number;
 }
 
 /**
@@ -192,4 +194,6 @@ export interface ScheduleOptionsProps {
   dateFormat?: 'system' | 'us' | 'eu' | 'iso';
   /** Time format setting from user preferences */
   timeFormat?: 'system' | '12h' | '24h';
+  /** Whether the user has permission to control printers (for auto power off) */
+  canControlPrinter?: boolean;
 }

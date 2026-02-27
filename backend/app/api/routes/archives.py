@@ -2,6 +2,7 @@ import io
 import json
 import logging
 import zipfile
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -18,6 +19,7 @@ from backend.app.core.database import get_db
 from backend.app.core.permissions import Permission
 from backend.app.models.archive import PrintArchive
 from backend.app.models.filament import Filament
+from backend.app.models.spool_usage_history import SpoolUsageHistory
 from backend.app.models.user import User
 from backend.app.schemas.archive import ArchiveResponse, ArchiveStats, ArchiveUpdate, ReprintRequest
 from backend.app.services.archive import ArchiveService
@@ -570,7 +572,7 @@ async def get_archive_stats(
                     total_energy_kwh += mqtt_data.energy
 
         total_energy_kwh = round(total_energy_kwh, 3)
-        total_energy_cost = round(total_energy_kwh * energy_cost_per_kwh, 2)
+        total_energy_cost = round(total_energy_kwh * energy_cost_per_kwh, 3)
     else:
         # Print mode: sum up per-print energy from archives
         energy_kwh_result = await db.execute(select(func.sum(PrintArchive.energy_kwh)))
@@ -591,7 +593,7 @@ async def get_archive_stats(
         average_time_accuracy=average_accuracy,
         time_accuracy_by_printer=accuracy_by_printer if accuracy_by_printer else None,
         total_energy_kwh=round(total_energy_kwh, 3),
-        total_energy_cost=round(total_energy_cost, 2),
+        total_energy_cost=round(total_energy_cost, 3),
     )
 
 
@@ -827,7 +829,7 @@ async def rescan_archive(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     # Parse the 3MF file
@@ -856,18 +858,34 @@ async def rescan_archive(
     if metadata.get("designer"):
         archive.designer = metadata["designer"]
 
-    # Calculate cost based on filament usage and type
+    # Calculate cost: prefer spool-based cost if available, else catalog-based
+
     if archive.filament_used_grams and archive.filament_type:
-        primary_type = archive.filament_type.split(",")[0].strip()
-        filament_result = await db.execute(select(Filament).where(Filament.type == primary_type).limit(1))
-        filament = filament_result.scalar_one_or_none()
-        if filament:
-            archive.cost = round((archive.filament_used_grams / 1000) * filament.cost_per_kg, 2)
+        usage_result = await db.execute(
+            select(func.sum(SpoolUsageHistory.cost)).where(SpoolUsageHistory.archive_id == archive.id)
+        )
+        usage_cost = usage_result.scalar()
+        if usage_cost is not None and usage_cost > 0:
+            archive.cost = float(Decimal(str(usage_cost)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
         else:
-            # Use default filament cost from settings
-            default_cost_setting = await get_setting(db, "default_filament_cost")
-            default_cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
-            archive.cost = round((archive.filament_used_grams / 1000) * default_cost_per_kg, 2)
+            primary_type = archive.filament_type.split(",")[0].strip()
+            filament_result = await db.execute(select(Filament).where(Filament.type == primary_type).limit(1))
+            filament = filament_result.scalar_one_or_none()
+            if filament:
+                archive.cost = float(
+                    Decimal(str((archive.filament_used_grams / 1000) * filament.cost_per_kg)).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                )
+            else:
+                # Use default filament cost from settings
+                default_cost_setting = await get_setting(db, "default_filament_cost")
+                default_cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
+                archive.cost = float(
+                    Decimal(str((archive.filament_used_grams / 1000) * default_cost_per_kg)).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                )
 
     await db.commit()
     await db.refresh(archive)
@@ -880,6 +898,7 @@ async def recalculate_all_costs(
     _: User | None = RequirePermissionIfAuthEnabled(Permission.ARCHIVES_UPDATE_ALL),
 ):
     """Recalculate costs for all archives based on filament usage and prices."""
+
     from backend.app.api.routes.settings import get_setting
 
     result = await db.execute(select(PrintArchive))
@@ -893,15 +912,38 @@ async def recalculate_all_costs(
     default_cost_setting = await get_setting(db, "default_filament_cost")
     default_cost_per_kg = float(default_cost_setting) if default_cost_setting else 25.0
 
+    # Pre-fetch all usage costs by archive_id
+    usage_costs_result = await db.execute(
+        select(SpoolUsageHistory.archive_id, func.sum(SpoolUsageHistory.cost)).group_by(SpoolUsageHistory.archive_id)
+    )
+    usage_costs = usage_costs_result.fetchall()
+    cost_map = {row[0]: row[1] for row in usage_costs if row[0] is not None and row[1] is not None and row[1] > 0}
+
     updated = 0
     for archive in archives:
-        if archive.filament_used_grams and archive.filament_type:
-            primary_type = archive.filament_type.split(",")[0].strip()
-            cost_per_kg = filaments.get(primary_type, default_cost_per_kg)
-            new_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
-            if archive.cost != new_cost:
-                archive.cost = new_cost
-                updated += 1
+        usage_cost = cost_map.get(archive.id)
+        if usage_cost is not None:
+            new_cost = round(usage_cost, 2)
+        else:
+            # Fallback: sum costs for old records by print_name
+            usage_result = await db.execute(
+                select(func.sum(SpoolUsageHistory.cost)).where(
+                    SpoolUsageHistory.print_name == archive.print_name,
+                    SpoolUsageHistory.archive_id.is_(None),
+                )
+            )
+            fallback_cost = usage_result.scalar()
+            if fallback_cost is not None and fallback_cost > 0:
+                new_cost = round(fallback_cost, 2)
+            elif archive.filament_used_grams and archive.filament_type:
+                primary_type = archive.filament_type.split(",")[0].strip()
+                cost_per_kg = filaments.get(primary_type, default_cost_per_kg)
+                new_cost = round((archive.filament_used_grams / 1000) * cost_per_kg, 2)
+            else:
+                new_cost = None
+        if new_cost is not None and archive.cost != new_cost:
+            archive.cost = new_cost
+            updated += 1
 
     await db.commit()
     return {"message": f"Recalculated costs for {updated} archives", "updated": updated}
@@ -924,7 +966,7 @@ async def rescan_all_archives(
     for archive in archives:
         try:
             file_path = settings.base_dir / archive.file_path
-            if not file_path.exists():
+            if not file_path.is_file():
                 errors.append({"id": archive.id, "error": "File not found"})
                 continue
 
@@ -994,7 +1036,7 @@ async def backfill_content_hashes(
     for archive in archives:
         try:
             file_path = settings.base_dir / archive.file_path
-            if not file_path.exists():
+            if not file_path.is_file():
                 errors.append({"id": archive.id, "error": "File not found"})
                 continue
 
@@ -1053,7 +1095,7 @@ async def download_archive(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     # Use inline disposition to let browser/OS handle file association
@@ -1074,14 +1116,70 @@ async def download_archive_with_filename(
     db: AsyncSession = Depends(get_db),
     _: User | None = RequirePermissionIfAuthEnabled(Permission.ARCHIVES_READ),
 ):
-    """Download the 3MF file with filename in URL (for Bambu Studio protocol)."""
+    """Download the 3MF file with filename in URL."""
     service = ArchiveService(db)
     archive = await service.get_archive(archive_id)
     if not archive:
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
+        raise HTTPException(404, "File not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=archive.filename,
+        media_type="application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+    )
+
+
+@router.post("/{archive_id}/slicer-token")
+async def create_archive_slicer_token(
+    archive_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.ARCHIVES_READ),
+):
+    """Create a short-lived download token for opening files in slicer applications.
+
+    Slicer protocol handlers (bambustudioopen://, orcaslicer://) cannot send
+    auth headers, so they use this token in the URL path instead.
+    """
+    from backend.app.core.auth import create_slicer_download_token
+
+    service = ArchiveService(db)
+    archive = await service.get_archive(archive_id)
+    if not archive:
+        raise HTTPException(404, "Archive not found")
+
+    token = create_slicer_download_token("archive", archive_id)
+    return {"token": token}
+
+
+@router.get("/{archive_id}/dl/{token}/{filename}")
+async def download_archive_for_slicer(
+    archive_id: int,
+    token: str,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Download 3MF file using a slicer download token.
+
+    Token-authenticated (no auth headers needed). The token is short-lived
+    and single-use, created by POST /{archive_id}/slicer-token.
+    Filename is at the end of the URL so slicers can detect the file format.
+    """
+    from backend.app.core.auth import verify_slicer_download_token
+
+    if not verify_slicer_download_token(token, "archive", archive_id):
+        raise HTTPException(403, "Invalid or expired download token")
+
+    service = ArchiveService(db)
+    archive = await service.get_archive(archive_id)
+    if not archive:
+        raise HTTPException(404, "Archive not found")
+
+    file_path = settings.base_dir / archive.file_path
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     return FileResponse(
@@ -1340,11 +1438,11 @@ async def scan_timelapse(
     # Strategy 4: If only one timelapse exists and archive was recently completed, use it
     # This handles cases where printer clock is wrong or timezone issues exist
     if not matching_file and len(video_files) == 1:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         archive_completed = archive.completed_at or archive.created_at
         if archive_completed:
-            time_since_completion = datetime.now() - archive_completed
+            time_since_completion = datetime.now(timezone.utc) - archive_completed
             # If archive was completed within the last hour, assume the single timelapse is for it
             if time_since_completion < timedelta(hours=1):
                 matching_file = video_files[0]
@@ -1724,8 +1822,7 @@ async def upload_photo(
         raise HTTPException(400, "File must be an image (.jpg, .jpeg, .png, .webp)")
 
     # Get archive directory
-    file_path = settings.base_dir / archive.file_path
-    archive_dir = file_path.parent
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
     photos_dir = archive_dir / "photos"
     photos_dir.mkdir(exist_ok=True)
 
@@ -1766,8 +1863,8 @@ async def get_photo(
     if not archive:
         raise HTTPException(404, "Archive not found")
 
-    file_path = settings.base_dir / archive.file_path
-    photo_path = file_path.parent / "photos" / filename
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
+    photo_path = archive_dir / "photos" / filename
 
     if not photo_path.exists():
         raise HTTPException(404, "Photo not found")
@@ -1802,8 +1899,8 @@ async def delete_photo(
         raise HTTPException(404, "Photo not found")
 
     # Delete file
-    file_path = settings.base_dir / archive.file_path
-    photo_path = file_path.parent / "photos" / filename
+    archive_dir = settings.base_dir / Path(archive.file_path).parent
+    photo_path = archive_dir / "photos" / filename
     if photo_path.exists():
         photo_path.unlink()
 
@@ -1893,7 +1990,7 @@ async def get_archive_capabilities(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     has_model = False
@@ -2111,7 +2208,7 @@ async def get_gcode(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     try:
@@ -2153,7 +2250,7 @@ async def get_plate_preview(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "File not found")
 
     try:
@@ -2314,7 +2411,7 @@ async def get_archive_plates(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     plates = []
@@ -2333,7 +2430,8 @@ async def get_archive_plates(
                 for gf in gcode_files:
                     # "Metadata/plate_5.gcode" -> 5
                     try:
-                        plate_str = gf[15:-6]  # Remove "Metadata/plate_" and ".gcode"
+                        # Remove "Metadata/plate_" and ".gcode"
+                        plate_str = gf[15:-6]
                         plate_indices.append(int(plate_str))
                     except ValueError:
                         pass  # Skip gcode file with non-numeric plate index
@@ -2581,7 +2679,7 @@ async def get_plate_thumbnail(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     try:
@@ -2620,7 +2718,7 @@ async def get_filament_requirements(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     filaments = []
@@ -2736,14 +2834,9 @@ async def reprint_archive(
         )
     ),
 ):
-    """Send an archived 3MF file to a printer and start printing."""
-    from backend.app.main import register_expected_print
+    """Dispatch an archived 3MF file for send/start on a printer."""
     from backend.app.models.printer import Printer
-    from backend.app.services.bambu_ftp import (
-        get_ftp_retry_settings,
-        upload_file_async,
-        with_ftp_retry,
-    )
+    from backend.app.services.background_dispatch import DispatchEnqueueRejected, background_dispatch
     from backend.app.services.printer_manager import printer_manager
 
     user, can_modify_all = auth_result
@@ -2773,139 +2866,54 @@ async def reprint_archive(
     if not printer_manager.is_connected(printer_id):
         raise HTTPException(400, "Printer is not connected")
 
-    # Get the sliced 3MF file path
     if not archive.file_path:
         raise HTTPException(
             404,
             "No 3MF file available for this archive. "
             "The file could not be downloaded from the printer when the print was recorded.",
         )
+
+    # Validate archive file exists
     file_path = settings.base_dir / archive.file_path
     if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
-    # Upload file to printer via FTP
-    from backend.app.services.bambu_ftp import delete_file_async
+    plate_name = body.plate_name
+    if not plate_name and body.plate_id is not None:
+        plate_name = f"Plate {body.plate_id}"
 
-    # Use a clean filename to avoid issues with double extensions like .gcode.3mf
-    # The printer might reject filenames with unusual extensions
-    base_name = archive.filename
-    if base_name.endswith(".gcode.3mf"):
-        base_name = base_name[:-10]  # Remove .gcode.3mf
-    elif base_name.endswith(".3mf"):
-        base_name = base_name[:-4]  # Remove .3mf
-    remote_filename = f"{base_name}.3mf"
-    remote_path = f"/{remote_filename}"
+    dispatch_source_name = archive.filename
+    if plate_name:
+        dispatch_source_name = f"{archive.filename} • {plate_name}"
 
-    # Get FTP retry settings
-    ftp_retry_enabled, ftp_retry_count, ftp_retry_delay, ftp_timeout = await get_ftp_retry_settings()
+    try:
+        dispatch_result = await background_dispatch.dispatch_reprint_archive(
+            archive_id=archive_id,
+            archive_name=dispatch_source_name,
+            printer_id=printer_id,
+            printer_name=printer.name,
+            options=body.model_dump(exclude_none=True),
+            requested_by_user_id=user.id if user else None,
+            requested_by_username=user.username if user else None,
+        )
+    except DispatchEnqueueRejected as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
     logger.info(
-        f"Reprint FTP upload starting: printer={printer.name} ({printer.model}), "
-        f"ip={printer.ip_address}, file={remote_filename}, local_path={file_path}, "
-        f"retry_enabled={ftp_retry_enabled}, retry_count={ftp_retry_count}, timeout={ftp_timeout}"
-    )
-
-    # Delete existing file if present (avoids 553 error)
-    logger.debug("Deleting existing file %s if present...", remote_path)
-    delete_result = await delete_file_async(
-        printer.ip_address,
-        printer.access_code,
-        remote_path,
-        socket_timeout=ftp_timeout,
-        printer_model=printer.model,
-    )
-    logger.debug("Delete result: %s", delete_result)
-
-    if ftp_retry_enabled:
-        uploaded = await with_ftp_retry(
-            upload_file_async,
-            printer.ip_address,
-            printer.access_code,
-            file_path,
-            remote_path,
-            socket_timeout=ftp_timeout,
-            printer_model=printer.model,
-            max_retries=ftp_retry_count,
-            retry_delay=ftp_retry_delay,
-            operation_name=f"Upload for reprint to {printer.name}",
-        )
-    else:
-        uploaded = await upload_file_async(
-            printer.ip_address,
-            printer.access_code,
-            file_path,
-            remote_path,
-            socket_timeout=ftp_timeout,
-            printer_model=printer.model,
-        )
-
-    if not uploaded:
-        logger.error(
-            f"FTP upload failed for reprint: printer={printer.name}, model={printer.model}, "
-            f"ip={printer.ip_address}, file={remote_filename}. "
-            "Check logs above for storage diagnostics and specific error codes."
-        )
-        raise HTTPException(
-            500,
-            "Failed to upload file to printer. Check if SD card is inserted and properly formatted (FAT32/exFAT). "
-            "See server logs for detailed diagnostics.",
-        )
-
-    # Register this as an expected print so we don't create a duplicate archive
-    register_expected_print(printer_id, remote_filename, archive_id, ams_mapping=body.ams_mapping)
-
-    # Use plate_id from request if provided, otherwise auto-detect from 3MF file
-    if body.plate_id is not None:
-        plate_id = body.plate_id
-    else:
-        # Auto-detect plate ID from 3MF file (legacy behavior for single-plate files)
-        plate_id = 1
-        try:
-            with zipfile.ZipFile(file_path, "r") as zf:
-                for name in zf.namelist():
-                    if name.startswith("Metadata/plate_") and name.endswith(".gcode"):
-                        # Extract plate number from "Metadata/plate_X.gcode"
-                        plate_str = name[15:-6]  # Remove "Metadata/plate_" and ".gcode"
-                        plate_id = int(plate_str)
-                        break
-        except (ValueError, zipfile.BadZipFile, OSError):
-            pass  # Default to plate 1 if detection fails
-
-    logger.info(
-        f"Reprint archive {archive_id}: plate_id={plate_id}, "
-        f"ams_mapping={body.ams_mapping}, bed_levelling={body.bed_levelling}, "
-        f"flow_cali={body.flow_cali}, vibration_cali={body.vibration_cali}, "
-        f"layer_inspect={body.layer_inspect}, timelapse={body.timelapse}"
-    )
-
-    # Start the print with options
-    started = printer_manager.start_print(
+        "Dispatched reprint archive %s for printer %s (dispatch_job_id=%s, dispatch_position=%s)",
+        archive_id,
         printer_id,
-        remote_filename,
-        plate_id,
-        ams_mapping=body.ams_mapping,
-        timelapse=body.timelapse,
-        bed_levelling=body.bed_levelling,
-        flow_cali=body.flow_cali,
-        vibration_cali=body.vibration_cali,
-        layer_inspect=body.layer_inspect,
-        use_ams=body.use_ams,
+        dispatch_result["dispatch_job_id"],
+        dispatch_result["dispatch_position"],
     )
-
-    if not started:
-        raise HTTPException(500, "Failed to start print")
-
-    # Track who started this print (Issue #206)
-    if user:
-        printer_manager.set_current_print_user(printer_id, user.id, user.username)
-        logger.info("Reprint started by user: %s", user.username)
 
     return {
-        "status": "printing",
+        "status": "dispatched",
         "printer_id": printer_id,
         "archive_id": archive_id,
         "filename": archive.filename,
+        "dispatch_job_id": dispatch_result["dispatch_job_id"],
+        "dispatch_position": dispatch_result["dispatch_position"],
     }
 
 
@@ -2930,7 +2938,7 @@ async def get_project_page(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)
@@ -2955,7 +2963,7 @@ async def update_project_page(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)
@@ -2987,7 +2995,7 @@ async def get_project_image(
         raise HTTPException(404, "Archive not found")
 
     file_path = settings.base_dir / archive.file_path
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(404, "Archive file not found")
 
     parser = ProjectPageParser(file_path)
@@ -3093,7 +3101,63 @@ async def download_source_3mf_for_slicer(
     db: AsyncSession = Depends(get_db),
     _: User | None = RequirePermissionIfAuthEnabled(Permission.ARCHIVES_READ),
 ):
-    """Download source 3MF with filename in URL (for Bambu Studio compatibility)."""
+    """Download source 3MF with filename in URL."""
+    result = await db.execute(select(PrintArchive).where(PrintArchive.id == archive_id))
+    archive = result.scalar_one_or_none()
+    if not archive:
+        raise HTTPException(404, "Archive not found")
+
+    if not archive.source_3mf_path:
+        raise HTTPException(404, "No source 3MF attached to this archive")
+
+    source_path = settings.base_dir / archive.source_3mf_path
+    if not source_path.exists():
+        raise HTTPException(404, "Source 3MF file not found on disk")
+
+    return FileResponse(
+        path=source_path,
+        filename=filename if filename.endswith(".3mf") else f"{filename}.3mf",
+        media_type="application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+    )
+
+
+@router.post("/{archive_id}/source-slicer-token")
+async def create_source_slicer_token(
+    archive_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.ARCHIVES_READ),
+):
+    """Create a short-lived download token for opening source 3MF in slicer."""
+    from backend.app.core.auth import create_slicer_download_token
+
+    result = await db.execute(select(PrintArchive).where(PrintArchive.id == archive_id))
+    archive = result.scalar_one_or_none()
+    if not archive:
+        raise HTTPException(404, "Archive not found")
+    if not archive.source_3mf_path:
+        raise HTTPException(404, "No source 3MF attached to this archive")
+
+    token = create_slicer_download_token("source", archive_id)
+    return {"token": token}
+
+
+@router.get("/{archive_id}/source-dl/{token}/{filename}")
+async def download_source_3mf_for_slicer_with_token(
+    archive_id: int,
+    token: str,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Download source 3MF using a slicer download token.
+
+    Token-authenticated (no auth headers needed). The token is short-lived
+    and single-use, created by POST /{archive_id}/source-slicer-token.
+    """
+    from backend.app.core.auth import verify_slicer_download_token
+
+    if not verify_slicer_download_token(token, "source", archive_id):
+        raise HTTPException(403, "Invalid or expired download token")
+
     result = await db.execute(select(PrintArchive).where(PrintArchive.id == archive_id))
     archive = result.scalar_one_or_none()
     if not archive:

@@ -23,12 +23,14 @@ import {
   Box,
 } from 'lucide-react';
 import { api } from '../api/client';
+import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
 import { ModelViewer } from './ModelViewer';
 import { GcodeViewer } from './GcodeViewer';
 import type { PlateMetadata } from '../types/plates';
 import { useToast } from '../contexts/ToastContext';
+import { formatFileSize } from '../utils/file';
 
 interface FileManagerModalProps {
   printerId: number;
@@ -235,14 +237,6 @@ function PrinterFileViewerModal({ printerId, filePath, filename, onClose }: Prin
   );
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
 function formatStorageSize(bytes: number): string {
   if (bytes === 0) return '0 GB';
   const gb = bytes / (1024 * 1024 * 1024);
@@ -252,6 +246,7 @@ function formatStorageSize(bytes: number): string {
   const mb = bytes / (1024 * 1024);
   return `${mb.toFixed(0)} MB`;
 }
+
 
 function getFileIcon(filename: string, isDirectory: boolean) {
   if (isDirectory) return Folder;
@@ -567,13 +562,13 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
                       case 'size-desc':
                         return b.size - a.size;
                       case 'date-asc': {
-                        const aTime = a.mtime ? new Date(a.mtime).getTime() : 0;
-                        const bTime = b.mtime ? new Date(b.mtime).getTime() : 0;
+                        const aTime = a.mtime ? parseUTCDate(a.mtime)?.getTime() ?? 0 : 0;
+                        const bTime = b.mtime ? parseUTCDate(b.mtime)?.getTime() ?? 0 : 0;
                         return aTime - bTime;
                       }
                       case 'date-desc': {
-                        const aTime = a.mtime ? new Date(a.mtime).getTime() : 0;
-                        const bTime = b.mtime ? new Date(b.mtime).getTime() : 0;
+                        const aTime = a.mtime ? parseUTCDate(a.mtime)?.getTime() ?? 0 : 0;
+                        const bTime = b.mtime ? parseUTCDate(b.mtime)?.getTime() ?? 0 : 0;
                         return bTime - aTime;
                       }
                       default:

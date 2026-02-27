@@ -46,7 +46,7 @@ import {
 
 import { useNavigate } from 'react-router-dom';
 import { api, discoveryApi, firmwareApi } from '../api/client';
-import { formatDateOnly, formatETA, formatDuration } from '../utils/date';
+import { formatDateOnly, formatETA, formatDuration, parseUTCDate } from '../utils/date';
 import type { Printer, PrinterCreate, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -64,6 +64,7 @@ import { ConfigureAmsSlotModal } from '../components/ConfigureAmsSlotModal';
 import { useToast } from '../contexts/ToastContext';
 import { ChamberLight } from '../components/icons/ChamberLight';
 import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
+import { getGlobalTrayId } from '../utils/amsHelpers';
 
 // Complete Bambu Lab filament color mapping by tray_id_name
 // Source: https://github.com/queengooborg/Bambu-Lab-RFID-Library
@@ -1096,6 +1097,7 @@ function getPrinterImage(model: string | null | undefined): string {
   if (modelLower.includes('x1e')) return '/img/printers/x1e.png';
   if (modelLower.includes('x1c') || modelLower.includes('x1carbon')) return '/img/printers/x1c.png';
   if (modelLower.includes('x1')) return '/img/printers/x1c.png';
+  if (modelLower.includes('h2dpro') || modelLower.includes('h2d-pro')) return '/img/printers/h2dpro.png';
   if (modelLower.includes('h2d')) return '/img/printers/h2d.png';
   if (modelLower.includes('h2c')) return '/img/printers/h2c.png';
   if (modelLower.includes('h2s')) return '/img/printers/h2d.png';
@@ -1538,6 +1540,45 @@ function PrinterCard({
     return Array.from(ids);
   }, [status?.ams, status?.vt_tray, status?.nozzle_rack]);
 
+  // Collect loaded filament types for queue widget filtering
+  const loadedFilamentTypes = useMemo(() => {
+    const types = new Set<string>();
+    if (status?.ams) {
+      for (const ams of status.ams) {
+        for (const tray of ams.tray || []) {
+          if (tray.tray_type) types.add(tray.tray_type.toUpperCase());
+        }
+      }
+    }
+    for (const vt of status?.vt_tray ?? []) {
+      if (vt.tray_type) types.add(vt.tray_type.toUpperCase());
+    }
+    return types;
+  }, [status?.ams, status?.vt_tray]);
+
+  // Collect loaded filament type+color pairs for queue widget override matching
+  // Format: "TYPE:rrggbb" (e.g., "PETG:ffffff") — mirrors backend _count_override_color_matches()
+  const loadedFilaments = useMemo(() => {
+    const filaments = new Set<string>();
+    if (status?.ams) {
+      for (const ams of status.ams) {
+        for (const tray of ams.tray || []) {
+          if (tray.tray_type && tray.tray_color) {
+            const color = tray.tray_color.replace('#', '').toLowerCase().slice(0, 6);
+            filaments.add(`${tray.tray_type.toUpperCase()}:${color}`);
+          }
+        }
+      }
+    }
+    for (const vt of status?.vt_tray ?? []) {
+      if (vt.tray_type && vt.tray_color) {
+        const color = vt.tray_color.replace('#', '').toLowerCase().slice(0, 6);
+        filaments.add(`${vt.tray_type.toUpperCase()}:${color}`);
+      }
+    }
+    return filaments;
+  }, [status?.ams, status?.vt_tray]);
+
   // Fetch cloud filament info for tooltips (name includes color, also has K value)
   const { data: filamentInfo } = useQuery({
     queryKey: ['filamentInfo', trayInfoIds],
@@ -1774,7 +1815,7 @@ function PrinterCard({
 
   // Query for printable objects (for skip functionality)
   // Fetch when printing with 2+ objects OR when modal is open
-  const isPrintingWithObjects = (status?.state === 'RUNNING' || status?.state === 'PAUSE' || status?.state === 'PAUSED') && (status?.printable_objects_count ?? 0) >= 2;
+  const isPrintingWithObjects = (status?.state === 'RUNNING' || status?.state === 'PAUSE') && (status?.printable_objects_count ?? 0) >= 2;
   const { data: objectsData } = useQuery({
     queryKey: ['printableObjects', printer.id],
     queryFn: () => api.getPrintableObjects(printer.id),
@@ -2367,16 +2408,16 @@ function PrinterCard({
                   {/* Skip Objects button - top right corner, always visible */}
                   <button
                     onClick={() => setShowSkipObjectsModal(true)}
-                    disabled={!(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') || (status.printable_objects_count ?? 0) < 2 || !hasPermission('printers:control')}
+                    disabled={!(status.state === 'RUNNING' || status.state === 'PAUSE') || (status.printable_objects_count ?? 0) < 2 || !hasPermission('printers:control')}
                     className={`absolute top-2 right-2 p-1.5 rounded transition-colors z-10 ${
-                      (status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED') && (status.printable_objects_count ?? 0) >= 2 && hasPermission('printers:control')
+                      (status.state === 'RUNNING' || status.state === 'PAUSE') && (status.printable_objects_count ?? 0) >= 2 && hasPermission('printers:control')
                         ? 'text-bambu-gray hover:text-white hover:bg-white/10'
                         : 'text-bambu-gray/30 cursor-not-allowed'
                     }`}
                     title={
                       !hasPermission('printers:control')
                         ? t('printers.permission.noControl')
-                        : !(status.state === 'RUNNING' || status.state === 'PAUSE' || status.state === 'PAUSED')
+                        : !(status.state === 'RUNNING' || status.state === 'PAUSE')
                           ? t('printers.skipObjects.onlyWhilePrinting')
                           : (status.printable_objects_count ?? 0) >= 2
                             ? t('printers.skipObjects.tooltip')
@@ -2471,7 +2512,7 @@ function PrinterCard({
                 </div>
 
                 {/* Queue Widget - always visible when there are pending items */}
-                <PrinterQueueWidget printerId={printer.id} printerState={status.state} plateCleared={status.plate_cleared} />
+                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} loadedFilamentTypes={loadedFilamentTypes} loadedFilaments={loadedFilaments} />
               </>
             )}
 
@@ -2571,7 +2612,7 @@ function PrinterCard({
             {viewMode === 'expanded' && (() => {
               // Determine print state for control buttons
               const isRunning = status.state === 'RUNNING';
-              const isPaused = status.state === 'PAUSED' || status.state === 'PAUSE';
+              const isPaused = status.state === 'PAUSE';
               const isPrinting = isRunning || isPaused;
               const isControlBusy = stopPrintMutation.isPending || pausePrintMutation.isPending || resumePrintMutation.isPending;
 
@@ -2761,24 +2802,23 @@ function PrinterCard({
                                 // Get saved slot preset mapping (for user-configured slots)
                                 const slotPreset = slotPresets?.[globalTrayId];
 
-                                // Fill level fallback chain: AMS remain → Spoolman → Inventory spool
+                                // Fill level fallback chain: Spoolman → Inventory → AMS remain
                                 const trayTag = tray?.tray_uuid?.toUpperCase();
                                 const linkedSpool = trayTag ? linkedSpools?.[trayTag] : undefined;
                                 const spoolmanFill = getSpoolmanFillLevel(linkedSpool);
                                 const inventoryAssignment = onGetAssignment?.(printer.id, ams.id, slotIdx);
                                 const inventoryFill = (() => {
                                   const sp = inventoryAssignment?.spool;
-                                  if (sp && sp.label_weight > 0 && sp.weight_used > 0) {
+                                  if (sp && sp.label_weight > 0 && sp.weight_used != null) {
                                     return Math.round(Math.max(0, sp.label_weight - sp.weight_used) / sp.label_weight * 100);
                                   }
                                   return null;
                                 })();
-                                const effectiveFill = hasFillLevel && tray.remain > 0
-                                  ? tray.remain
-                                  : (spoolmanFill ?? inventoryFill ?? (hasFillLevel ? tray.remain : null));
-                                const fillSource = (hasFillLevel && tray.remain === 0 && (spoolmanFill !== null || inventoryFill !== null))
-                                  ? (spoolmanFill !== null ? 'spoolman' as const : 'inventory' as const)
-                                  : 'ams' as const;
+                                const effectiveFill = spoolmanFill ?? inventoryFill ?? (hasFillLevel ? tray.remain : null);
+                                const fillSource = spoolmanFill !== null ? 'spoolman' as const
+                                  : inventoryFill !== null ? 'inventory' as const
+                                  : hasFillLevel ? 'ams' as const
+                                  : undefined;
 
                                 // Build filament data for hover card
                                 const filamentData = tray?.tray_type ? {
@@ -2815,7 +2855,7 @@ function PrinterCard({
                                     </div>
                                     {/* Fill bar */}
                                     <div className="mt-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
-                                      {effectiveFill !== null && effectiveFill >= 0 && tray ? (
+                                      {effectiveFill !== null && effectiveFill >= 0 && tray && (
                                         <div
                                           className="h-full rounded-full transition-all"
                                           style={{
@@ -2823,9 +2863,7 @@ function PrinterCard({
                                             backgroundColor: getFillBarColor(effectiveFill),
                                           }}
                                         />
-                                      ) : tray?.tray_type ? (
-                                        <div className="h-full w-full rounded-full bg-white/50 dark:bg-gray-500/40" />
-                                      ) : null}
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -2906,6 +2944,7 @@ function PrinterCard({
                                               material: assignment.spool.material,
                                               brand: assignment.spool.brand,
                                               color_name: assignment.spool.color_name,
+                                              remainingWeightGrams: Math.max(0, Math.round(assignment.spool.label_weight - assignment.spool.weight_used)),
                                             } : null,
                                             onAssignSpool: filamentData.vendor !== 'Bambu Lab' ? () => setAssignSpoolModal({
                                               printerId: printer.id,
@@ -2977,15 +3016,14 @@ function PrinterCard({
                         const hasFillLevel = tray?.tray_type && tray.remain >= 0;
                         const isEmpty = !tray?.tray_type;
                         // Check if this is the currently loaded tray
-                        // Global tray ID = ams.id * 4 + tray.id
-                        const globalTrayId = ams.id * 4 + (tray?.id ?? 0);
+                        const globalTrayId = getGlobalTrayId(ams.id, tray?.id ?? 0, false);
                         const isActive = effectiveTrayNow === globalTrayId;
                         // Get cloud preset info if available
                         const cloudInfo = tray?.tray_info_idx ? filamentInfo?.[tray.tray_info_idx] : null;
                         // Get saved slot preset mapping (for user-configured slots)
                         const slotPreset = slotPresets?.[globalTrayId];
 
-                        // Fill level fallback chain: AMS remain → Spoolman → Inventory spool
+                        // Fill level fallback chain: Spoolman → Inventory → AMS remain
                         const htTrayTag = tray?.tray_uuid?.toUpperCase();
                         const htLinkedSpool = htTrayTag ? linkedSpools?.[htTrayTag] : undefined;
                         const htSpoolmanFill = getSpoolmanFillLevel(htLinkedSpool);
@@ -2993,17 +3031,16 @@ function PrinterCard({
                         const htInventoryAssignment = onGetAssignment?.(printer.id, ams.id, htTraySlotId);
                         const htInventoryFill = (() => {
                           const sp = htInventoryAssignment?.spool;
-                          if (sp && sp.label_weight > 0 && sp.weight_used > 0) {
+                          if (sp && sp.label_weight > 0 && sp.weight_used != null) {
                             return Math.round(Math.max(0, sp.label_weight - sp.weight_used) / sp.label_weight * 100);
                           }
                           return null;
                         })();
-                        const htEffectiveFill = hasFillLevel && tray.remain > 0
-                          ? tray.remain
-                          : (htSpoolmanFill ?? htInventoryFill ?? (hasFillLevel ? tray.remain : null));
-                        const htFillSource = (hasFillLevel && tray.remain === 0 && (htSpoolmanFill !== null || htInventoryFill !== null))
-                          ? (htSpoolmanFill !== null ? 'spoolman' as const : 'inventory' as const)
-                          : 'ams' as const;
+                        const htEffectiveFill = htSpoolmanFill ?? htInventoryFill ?? (hasFillLevel ? tray.remain : null);
+                        const htFillSource = htSpoolmanFill !== null ? 'spoolman' as const
+                          : htInventoryFill !== null ? 'inventory' as const
+                          : hasFillLevel ? 'ams' as const
+                          : undefined;
 
                         // Build filament data for hover card
                         const filamentData = tray?.tray_type ? {
@@ -3041,7 +3078,7 @@ function PrinterCard({
                             </div>
                             {/* Fill bar */}
                             <div className="mt-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
-                              {htEffectiveFill !== null && htEffectiveFill >= 0 ? (
+                              {htEffectiveFill !== null && htEffectiveFill >= 0 && (
                                 <div
                                   className="h-full rounded-full transition-all"
                                   style={{
@@ -3049,9 +3086,7 @@ function PrinterCard({
                                     backgroundColor: getFillBarColor(htEffectiveFill),
                                   }}
                                 />
-                              ) : tray?.tray_type ? (
-                                <div className="h-full w-full rounded-full bg-white/50 dark:bg-gray-500/40" />
-                              ) : null}
+                              )}
                             </div>
                           </div>
                         );
@@ -3144,6 +3179,7 @@ function PrinterCard({
                                           material: assignment.spool.material,
                                           brand: assignment.spool.brand,
                                           color_name: assignment.spool.color_name,
+                                          remainingWeightGrams: Math.max(0, Math.round(assignment.spool.label_weight - assignment.spool.weight_used)),
                                         } : null,
                                         onAssignSpool: filamentData.vendor !== 'Bambu Lab' ? () => setAssignSpoolModal({
                                           printerId: printer.id,
@@ -3236,7 +3272,13 @@ function PrinterCard({
                           <div className={`grid ${status.vt_tray.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5`}>
                             {[...status.vt_tray].sort((a, b) => (a.id ?? 254) - (b.id ?? 254)).map((extTray) => {
                               const extTrayId = extTray.id ?? 254;
-                              const isExtActive = effectiveTrayNow === extTrayId;
+                              // On dual-nozzle (H2C/H2D), tray_now=254 means "external spool"
+                              // generically — use active_extruder to determine L vs R:
+                              // extruder 1=left → Ext-L (id=254), extruder 0=right → Ext-R (id=255)
+                              const isExtActive = isDualNozzle && effectiveTrayNow === 254
+                                ? (extTrayId === 254 && status.active_extruder === 1) ||
+                                  (extTrayId === 255 && status.active_extruder === 0)
+                                : effectiveTrayNow === extTrayId;
                               const slotTrayId = extTrayId - 254; // 0 or 1
                               const extLabel = isDualNozzle
                                 ? (extTrayId === 254 ? t('printers.extL') : t('printers.extR'))
@@ -3250,12 +3292,17 @@ function PrinterCard({
                               const extInventoryAssignment = onGetAssignment?.(printer.id, 255, slotTrayId);
                               const extInventoryFill = (() => {
                                 const sp = extInventoryAssignment?.spool;
-                                if (sp && sp.label_weight > 0 && sp.weight_used > 0) {
+                                if (sp && sp.label_weight > 0 && sp.weight_used != null) {
                                   return Math.round(Math.max(0, sp.label_weight - sp.weight_used) / sp.label_weight * 100);
                                 }
                                 return null;
                               })();
-                              const extEffectiveFill = extSpoolmanFill ?? extInventoryFill ?? null;
+                              const extHasFillLevel = extTray.tray_type && extTray.remain >= 0;
+                              const extEffectiveFill = extSpoolmanFill ?? extInventoryFill ?? (extHasFillLevel ? extTray.remain : null);
+                              const extFillSource = extSpoolmanFill !== null ? 'spoolman' as const
+                                : extInventoryFill !== null ? 'inventory' as const
+                                : extHasFillLevel ? 'ams' as const
+                                : undefined;
 
                               const extFilamentData = {
                                 vendor: (isBambuLabSpool(extTray) ? 'Bambu Lab' : 'Generic') as 'Bambu Lab' | 'Generic',
@@ -3266,9 +3313,7 @@ function PrinterCard({
                                 fillLevel: extEffectiveFill,
                                 trayUuid: extTray.tray_uuid || null,
                                 tagUid: extTray.tag_uid || null,
-                                fillSource: extSpoolmanFill !== null ? 'spoolman' as const
-                                  : extInventoryFill !== null ? 'inventory' as const
-                                  : undefined,
+                                fillSource: extFillSource,
                               };
 
                               const isEmpty = !extTray.tray_type;
@@ -3286,7 +3331,7 @@ function PrinterCard({
                                     {extTray.tray_type || '—'}
                                   </div>
                                   <div className="mt-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
-                                    {extEffectiveFill !== null && extEffectiveFill >= 0 && !isEmpty ? (
+                                    {extEffectiveFill !== null && extEffectiveFill >= 0 && !isEmpty && (
                                       <div
                                         className="h-full rounded-full transition-all"
                                         style={{
@@ -3294,9 +3339,7 @@ function PrinterCard({
                                           backgroundColor: getFillBarColor(extEffectiveFill),
                                         }}
                                       />
-                                    ) : !isEmpty ? (
-                                      <div className="h-full w-full rounded-full bg-white/50 dark:bg-gray-500/40" />
-                                    ) : null}
+                                    )}
                                   </div>
                                   {extLabel && <div className="text-[7px] text-white/40 mt-0.5 truncate">{extLabel}</div>}
                                 </div>
@@ -3330,6 +3373,7 @@ function PrinterCard({
                                             material: assignment.spool.material,
                                             brand: assignment.spool.brand,
                                             color_name: assignment.spool.color_name,
+                                            remainingWeightGrams: Math.max(0, Math.round(assignment.spool.label_weight - assignment.spool.weight_used)),
                                           } : null,
                                           onAssignSpool: () => setAssignSpoolModal({
                                             printerId: printer.id,
@@ -3734,7 +3778,7 @@ function PrinterCard({
                         )}
                         {/* Timestamp */}
                         <p className="text-[10px] text-bambu-gray/60">
-                          {ref.timestamp ? new Date(ref.timestamp).toLocaleDateString() : ''}
+                          {ref.timestamp ? parseUTCDate(ref.timestamp)?.toLocaleDateString() ?? '' : ''}
                         </p>
                       </div>
                     ))}

@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, FolderOpen, X, Menu, Info, Plug, Bug, LogOut, Key, Loader2, Disc3, type LucideIcon } from 'lucide-react';
+import { Printer, Archive, Calendar, BarChart3, Cloud, Settings, Sun, Moon, ChevronLeft, ChevronRight, Keyboard, Github, GripVertical, ArrowUpCircle, Wrench, FolderKanban, FolderOpen, X, Menu, Info, Plug, Bug, LogOut, Key, Loader2, Disc3, ShieldAlert, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { SwitchbarPopover } from './SwitchbarPopover';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { api, supportApi, pendingUploadsApi } from '../api/client';
 import { getIconByName } from './IconPicker';
 import { useIsSidebarCompact } from '../hooks/useIsSidebarCompact';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Card, CardHeader, CardContent } from './Card';
+import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
 
 interface NavItem {
@@ -119,13 +120,6 @@ export function Layout() {
     refetchInterval: 60 * 60 * 1000, // Check every hour
   });
 
-  // Fetch Spoolman settings to determine if inventory should be hidden
-  const { data: spoolmanSettings } = useQuery({
-    queryKey: ['spoolman-settings'],
-    queryFn: api.getSpoolmanSettings,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Fetch external links for sidebar
   const { data: externalLinks } = useQuery({
     queryKey: ['external-links'],
@@ -149,6 +143,15 @@ export function Layout() {
     refetchInterval: 60 * 1000, // Refresh every minute
   });
 
+  // Check developer LAN mode warnings
+  const { data: devModeWarnings } = useQuery({
+    queryKey: ['developer-mode-warnings'],
+    queryFn: api.getDeveloperModeWarnings,
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
   // Fetch pending queue items count for badge
   const { data: queueItems } = useQuery({
     queryKey: ['queue', 'pending'],
@@ -169,6 +172,29 @@ export function Layout() {
   });
   const pendingUploadsCount = pendingUploadsData?.count ?? 0;
 
+  // Check if any printer with pending queue items needs plate clearing
+  const queuePrinterIds = useMemo(() => {
+    const ids = new Set<number>();
+    queueItems?.forEach(item => {
+      if (item.printer_id) ids.add(item.printer_id);
+    });
+    return Array.from(ids);
+  }, [queueItems]);
+
+  const printerStatusQueries = useQueries({
+    queries: queuePrinterIds.map(id => ({
+      queryKey: ['printerStatus', id],
+      queryFn: () => api.getPrinterStatus(id),
+      staleTime: 30 * 1000, // WebSocket keeps this warm
+    })),
+  });
+
+  const needsClearPlate = printerStatusQueries.some(result => {
+    const status = result.data;
+    if (!status) return false;
+    return (status.state === 'FINISH' || status.state === 'FAILED') && !status.plate_cleared;
+  });
+
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);
   useEffect(() => {
@@ -176,7 +202,7 @@ export function Layout() {
       setDebugDuration(null);
       return;
     }
-    const enabledAt = new Date(debugLoggingState.enabled_at).getTime();
+    const enabledAt = parseUTCDate(debugLoggingState.enabled_at)?.getTime() ?? Date.now();
     const updateDuration = () => {
       setDebugDuration(Math.floor((Date.now() - enabledAt) / 1000));
     };
@@ -195,15 +221,11 @@ export function Layout() {
     const result: string[] = [];
     const seen = new Set<string>();
 
-    // Determine if settings should be hidden (user role and auth enabled)
-    const hideSettings = authEnabled && user?.role === 'user';
-    // Hide inventory when Spoolman mode is active
-    const hideInventory = spoolmanSettings?.spoolman_enabled === 'true';
-
+    // Determine if settings should be hidden (no settings:read permission)
+    const hideSettings = authEnabled && !hasPermission('settings:read');
     // Add items in stored order
     for (const id of sidebarOrder) {
       if (hideSettings && id === 'settings') continue;
-      if (hideInventory && id === 'inventory') continue;
       if (navItemsMap.has(id) || extLinksMap.has(id)) {
         result.push(id);
         seen.add(id);
@@ -213,7 +235,6 @@ export function Layout() {
     // Add any new internal nav items not in stored order
     for (const item of defaultNavItems) {
       if (hideSettings && item.id === 'settings') continue;
-      if (hideInventory && item.id === 'inventory') continue;
       if (!seen.has(item.id)) {
         result.push(item.id);
         seen.add(item.id);
@@ -523,6 +544,7 @@ export function Layout() {
                 const showArchiveBadge = id === 'archives' && pendingUploadsCount > 0;
                 const badgeCount = showQueueBadge ? pendingQueueCount : showArchiveBadge ? pendingUploadsCount : 0;
                 const showBadge = showQueueBadge || showArchiveBadge;
+                const showClearPlateDot = id === 'printers' && needsClearPlate;
 
                 return (
                   <li
@@ -557,6 +579,9 @@ export function Layout() {
                       )}
                       <div className="relative">
                         <Icon className="w-5 h-5 flex-shrink-0" />
+                        {showClearPlateDot && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-yellow-500 rounded-full border-2 border-bambu-dark-secondary" />
+                        )}
                         {showBadge && (
                           <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold rounded-full ${
                             showArchiveBadge ? 'bg-blue-500 text-white' : 'bg-yellow-500 text-black'
@@ -804,6 +829,24 @@ export function Layout() {
               >
                 {t('support.manageLogs', { defaultValue: 'Manage' })}
               </button>
+            </div>
+          </div>
+        )}
+        {devModeWarnings && devModeWarnings.length > 0 && (
+          <div className="bg-orange-500/20 border-b border-orange-500/30 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <ShieldAlert className="w-4 h-4 text-orange-500" />
+              <span className="text-orange-200">
+                {t('printers.developerModeWarning', {
+                  names: devModeWarnings.map(w => w.name).join(', '),
+                  defaultValue: `Developer LAN mode is not enabled on: ${devModeWarnings.map(w => w.name).join(', ')}. Some features may not work.`
+                })}
+              </span>
+              <a href="https://wiki.bambulab.com/en/knowledge-sharing/enable-developer-mode"
+                 target="_blank" rel="noopener noreferrer"
+                 className="text-orange-400 hover:text-orange-300 font-medium underline ml-2">
+                {t('printers.howToEnable', { defaultValue: 'How to enable' })}
+              </a>
             </div>
           </div>
         )}

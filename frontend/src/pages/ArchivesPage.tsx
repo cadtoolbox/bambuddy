@@ -48,10 +48,12 @@ import {
   User,
   Play,
   ClipboardList,
+  Coins,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { openInSlicer, type SlicerType } from '../utils/slicer';
 import { formatDateTime, formatDateOnly, parseUTCDate, type TimeFormat, formatDuration } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
 import { useIsMobile } from '../hooks/useIsMobile';
 import type { Archive, ProjectListItem } from '../api/client';
 import { Card, CardContent } from '../components/Card';
@@ -74,14 +76,9 @@ import { PendingUploadsPanel } from '../components/PendingUploadsPanel';
 import { TagManagementModal } from '../components/TagManagementModal';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { formatFileSize } from '../utils/file';
 
 type TFunction = (key: string, options?: Record<string, unknown>) => string;
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /**
  * Check if an archive filename represents a sliced/printable file.
@@ -105,6 +102,36 @@ function getArchiveFileType(filename: string | null | undefined): string | undef
 
 // formatDate imported from '../utils/date' - handles UTC conversion
 
+/**
+ * Open an archive file in the slicer.
+ * Fetches a short-lived download token, then builds a token-authenticated URL
+ * that bypasses auth middleware (slicer protocol handlers can't send auth headers).
+ */
+async function openInSlicerWithToken(
+  archiveId: number,
+  filename: string,
+  resourceType: 'file' | 'source',
+  slicer: SlicerType,
+): Promise<void> {
+  try {
+    if (resourceType === 'source') {
+      const { token } = await api.createSourceSlicerToken(archiveId);
+      const path = api.getSourceSlicerDownloadUrl(archiveId, token, filename);
+      openInSlicer(`${window.location.origin}${path}`, slicer);
+    } else {
+      const { token } = await api.createArchiveSlicerToken(archiveId);
+      const path = api.getArchiveSlicerDownloadUrl(archiveId, token, filename);
+      openInSlicer(`${window.location.origin}${path}`, slicer);
+    }
+  } catch {
+    // Fallback to direct URL (works when auth is disabled)
+    const path = resourceType === 'source'
+      ? api.getSource3mfForSlicer(archiveId, filename)
+      : api.getArchiveForSlicer(archiveId, filename);
+    openInSlicer(`${window.location.origin}${path}`, slicer);
+  }
+}
+
 function ArchiveCard({
   archive,
   printerName,
@@ -115,6 +142,7 @@ function ArchiveCard({
   isHighlighted,
   timeFormat = 'system',
   preferredSlicer = 'bambu_studio',
+  currency,
   t,
 }: {
   archive: Archive;
@@ -126,6 +154,7 @@ function ArchiveCard({
   isHighlighted?: boolean;
   timeFormat?: TimeFormat;
   preferredSlicer?: SlicerType;
+  currency: string;
   t: TFunction;
 }) {
   // Debug: log when card is highlighted
@@ -337,8 +366,7 @@ function ArchiveCard({
         icon: <ExternalLink className="w-4 h-4" />,
         onClick: () => {
           const filename = archive.print_name || archive.filename || 'model';
-          const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-          openInSlicer(downloadUrl, preferredSlicer);
+          openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
         },
         disabled: !archive.file_path,
         title: !archive.file_path ? t('archives.card.noFileForReprint') : undefined,
@@ -349,8 +377,7 @@ function ArchiveCard({
         icon: <ExternalLink className="w-4 h-4" />,
         onClick: () => {
           const filename = archive.print_name || archive.filename || 'model';
-          const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-          openInSlicer(downloadUrl, preferredSlicer);
+          openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
         },
       },
     ]),
@@ -738,8 +765,7 @@ function ArchiveCard({
               e.stopPropagation();
               // Open source 3MF in Bambu Studio - use filename in URL for slicer compatibility
               const sourceName = (archive.print_name || archive.filename || 'source').replace(/\.gcode\.3mf$/i, '') + '_source';
-              const downloadUrl = `${window.location.origin}${api.getSource3mfForSlicer(archive.id, sourceName)}`;
-              openInSlicer(downloadUrl, preferredSlicer);
+              openInSlicerWithToken(archive.id, sourceName, 'source', preferredSlicer);
             }}
             title={t('archives.card.openSource3mf')}
           >
@@ -897,6 +923,12 @@ function ArchiveCard({
               {archive.filament_used_grams.toFixed(1)}g
             </div>
           )}
+          {archive.cost != null && (
+            <div className="flex items-center gap-1.5 text-bambu-gray">
+              <Coins className="w-3 h-3" />
+              {currency}{archive.cost.toFixed(2)}
+            </div>
+          )}
           {(archive.layer_height || archive.total_layers) && (
             <div className="flex items-center gap-1.5 text-bambu-gray">
               <Layers className="w-3 h-3" />
@@ -1008,8 +1040,7 @@ function ArchiveCard({
                 className="min-w-0 p-1 sm:p-1.5"
                 onClick={() => {
                   const filename = archive.print_name || archive.filename || 'model';
-                  const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-                  openInSlicer(downloadUrl, preferredSlicer);
+                  openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
                 }}
                 title={t('archives.card.openInBambuStudio')}
               >
@@ -1024,8 +1055,7 @@ function ArchiveCard({
               className="flex-1 min-w-0"
               onClick={() => {
                 const filename = archive.print_name || archive.filename || 'model';
-                const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-                openInSlicer(downloadUrl, preferredSlicer);
+                openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
               }}
               title={t('archives.card.openInBambuStudioToSlice')}
             >
@@ -1546,8 +1576,7 @@ function ArchiveListRow({
         icon: <ExternalLink className="w-4 h-4" />,
         onClick: () => {
           const filename = archive.print_name || archive.filename || 'model';
-          const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-          openInSlicer(downloadUrl, preferredSlicer);
+          openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
         },
         disabled: !archive.file_path,
         title: !archive.file_path ? t('archives.card.noFileForReprint') : undefined,
@@ -1558,8 +1587,7 @@ function ArchiveListRow({
         icon: <ExternalLink className="w-4 h-4" />,
         onClick: () => {
           const filename = archive.print_name || archive.filename || 'model';
-          const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-          openInSlicer(downloadUrl, preferredSlicer);
+          openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
         },
       },
     ]),
@@ -1900,8 +1928,7 @@ function ArchiveListRow({
             size="sm"
             onClick={() => {
               const filename = archive.print_name || archive.filename || 'model';
-              const downloadUrl = `${window.location.origin}${api.getArchiveForSlicer(archive.id, filename)}`;
-              openInSlicer(downloadUrl, preferredSlicer);
+              openInSlicerWithToken(archive.id, filename, 'file', preferredSlicer);
             }}
             title={t('archives.card.openInBambuStudio')}
           >
@@ -2366,6 +2393,7 @@ export function ArchivesPage() {
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
   const preferredSlicer: SlicerType = settings?.preferred_slicer || 'bambu_studio';
+  const currency = getCurrencySymbol(settings?.currency || 'USD');
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
@@ -3178,6 +3206,7 @@ export function ArchivesPage() {
               isHighlighted={archive.id === highlightedArchiveId}
               timeFormat={timeFormat}
               preferredSlicer={preferredSlicer}
+              currency={currency}
               t={t}
             />
           ))}
