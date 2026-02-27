@@ -695,8 +695,6 @@ class BambuMQTTClient:
         # and store them on the corresponding raw AMS unit for the status route.
         # Always cache regardless of whether AMS data has arrived yet — get_version
         # often arrives before the first push_status, so caching must be unconditional.
-        if not hasattr(self, '_ams_version_cache') or self._ams_version_cache is None:
-            self._ams_version_cache = {}
         ams_raw = self.state.raw_data.get("ams")
         for module in modules:
             if not isinstance(module, dict):
@@ -754,6 +752,7 @@ class BambuMQTTClient:
                         self.serial_number,
                         ams_id,
                     )
+
     def _apply_ams_version_cache(self, ams_list: list) -> None:
         """Apply cached AMS firmware/SN (from get_version) onto an AMS list in-place.
 
@@ -763,8 +762,8 @@ class BambuMQTTClient:
         """
         if not ams_list or not isinstance(ams_list, list):
             return
-        cache = getattr(self, '_ams_version_cache', None)
-        if not cache or not isinstance(cache, dict):
+        cache = self._ams_version_cache
+        if not cache:
             return
         for unit in ams_list:
             if not isinstance(unit, dict):
@@ -1386,7 +1385,7 @@ class BambuMQTTClient:
 
         # Apply cached AMS firmware/SN from get_version (handles ordering and id type mismatches)
         self._apply_ams_version_cache(merged_ams)
-# Update timestamp for RFID refresh detection (frontend can detect "new data arrived")
+        # Update timestamp for RFID refresh detection (frontend can detect "new data arrived")
         self.state.last_ams_update = time.time()
         logger.debug("[%s] Merged AMS data: %s new units, %s total", self.serial_number, len(ams_list), len(merged_ams))
 
