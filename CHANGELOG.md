@@ -20,6 +20,7 @@ All notable changes to Bambuddy will be documented in this file.
 
 ### Improved
 - **Queue API Returns More Print Metadata** ([#524](https://github.com/maziggy/bambuddy/issues/524)) — The `GET /api/v1/queue` and `GET /api/v1/queue/{id}` endpoints now include `filament_type`, `filament_color`, `layer_height`, `nozzle_diameter`, and `sliced_for_model` from the archive or library file. Previously these fields were only available via the archive endpoints, requiring an extra API call.
+- **Spool Form Profile Dropdown Truncates Long Names** ([#534](https://github.com/maziggy/bambuddy/issues/534)) — Long filament profile names (e.g., "Polymaker Panchroma Matte PLA 0.4 nozzle P1S") were truncated in the spool creation form's preset dropdown because filament ID codes displayed alongside each name consumed horizontal space. Removed the inline filament codes from dropdown items (the selected code is still shown below the input after selection) and widened the modal from `max-w-lg` to `max-w-xl` to give profile names more room.
 
 ## [0.2.1b3] - 2026-02-23
 
