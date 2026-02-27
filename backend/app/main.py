@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, text
 
 from backend.app.api.routes import (
     ams_history,
@@ -52,7 +52,7 @@ from backend.app.api.routes import (
 from backend.app.api.routes.maintenance import _get_printer_maintenance_internal, ensure_default_types
 from backend.app.api.routes.support import init_debug_logging
 from backend.app.core.config import APP_VERSION, settings as app_settings
-from backend.app.core.database import async_session, init_db
+from backend.app.core.database import async_session, engine, init_db
 from backend.app.core.websocket import ws_manager
 from backend.app.models.smart_plug import SmartPlug
 from backend.app.services.archive import ArchiveService
@@ -3353,6 +3353,15 @@ async def lifespan(app: FastAPI):
     await mqtt_smart_plug_service.disconnect(timeout=2)
 
     await mqtt_relay.disconnect(timeout=2)
+
+    # Checkpoint WAL and close all database connections
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        logging.info("WAL checkpoint completed")
+    except Exception as e:
+        logging.warning("WAL checkpoint failed: %s", e)
+    await engine.dispose()
 
 
 app = FastAPI(
