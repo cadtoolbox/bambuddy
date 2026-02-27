@@ -363,4 +363,169 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       });
     });
   });
+
+  describe('filament override color filtering', () => {
+    const whitePetgOverrideItem = [
+      {
+        id: 20,
+        printer_id: null,
+        archive_id: 20,
+        position: 1,
+        status: 'pending',
+        archive_name: 'White PETG Print',
+        printer_name: null,
+        print_time_seconds: 3600,
+        scheduled_time: null,
+        required_filament_types: ['PETG'],
+        filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#FFFFFF' }],
+      },
+    ];
+
+    it('hides widget when override color does not match loaded filaments', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(whitePetgOverrideItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set(['PETG:0000ff'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('White PETG Print')).not.toBeInTheDocument();
+    });
+
+    it('shows widget when override color matches loaded filaments', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(whitePetgOverrideItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set(['PETG:ffffff'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('White PETG Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+
+    it('normalizes override color format (strips # and lowercases)', async () => {
+      const upperCaseColorItem = [
+        {
+          id: 21,
+          printer_id: null,
+          archive_id: 21,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Red PLA Print',
+          printer_name: null,
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [{ slot_id: 1, type: 'PLA', color: '#FF0000' }],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(upperCaseColorItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Red PLA Print')).toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when no loadedFilaments prop is provided (no color filtering)', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(whitePetgOverrideItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('White PETG Print')).toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when queue item has no filament overrides', async () => {
+      // Default mockQueueItems have no filament_overrides
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilaments={new Set(['PLA:000000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('First Print')).toBeInTheDocument();
+      });
+    });
+
+    it('matches any override when multiple overrides exist', async () => {
+      const multiOverrideItem = [
+        {
+          id: 22,
+          printer_id: null,
+          archive_id: 22,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Multi Color Print',
+          printer_name: null,
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000' },
+            { slot_id: 2, type: 'PLA', color: '#00FF00' },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(multiOverrideItem))
+      );
+
+      // Printer has green PLA but not red — should still match (at least one override)
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:00ff00'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Multi Color Print')).toBeInTheDocument();
+      });
+    });
+  });
 });
