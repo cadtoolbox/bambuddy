@@ -342,7 +342,7 @@ class VirtualPrinterInstance:
             with zipfile.ZipFile(file_path, "r") as zf:
                 if "Metadata/slice_info.config" in zf.namelist():
                     content = zf.read("Metadata/slice_info.config").decode()
-                    root = ET.fromstring(content)  # noqa: S314
+                    root = ET.fromstring(content)  # noqa: S314  # nosec B314
                     plate = root.find(".//plate")
                     if plate is not None:
                         for meta in plate.findall("metadata"):
