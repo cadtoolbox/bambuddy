@@ -15,6 +15,7 @@ from backend.app.core.permissions import Permission
 from backend.app.models.printer import Printer
 from backend.app.models.slot_preset import SlotPresetMapping
 from backend.app.models.ams_label import AmsLabel
+
 from backend.app.schemas.printer import (
     AMSTray,
     AMSUnit,
@@ -1710,75 +1711,7 @@ async def delete_slot_preset(
     return {"success": True}
 
 
-# ─── AMS Label (friendly name) routes ────────────────────────────────────────
-
-@router.get("/{printer_id}/ams-labels")
-async def get_ams_labels(
-    printer_id: int,
-    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get all user-defined AMS labels for a printer, keyed by AMS unit ID."""
-    result = await db.execute(select(AmsLabel).where(AmsLabel.printer_id == printer_id))
-    labels = result.scalars().all()
-    return {lbl.ams_id: lbl.label for lbl in labels}
-
-
-@router.put("/{printer_id}/ams-labels/{ams_id}")
-async def save_ams_label(
-    printer_id: int,
-    ams_id: int,
-    label: str = Query(..., max_length=100),
-    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_UPDATE),
-    db: AsyncSession = Depends(get_db),
-):
-    """Create or update the friendly name for a specific AMS unit."""
-    # Verify printer exists
-    result = await db.execute(select(Printer).where(Printer.id == printer_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(404, "Printer not found")
-
-    result = await db.execute(
-        select(AmsLabel).where(
-            AmsLabel.printer_id == printer_id,
-            AmsLabel.ams_id == ams_id,
-        )
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing:
-        existing.label = label
-    else:
-        db.add(AmsLabel(printer_id=printer_id, ams_id=ams_id, label=label))
-
-    await db.commit()
-    return {"ams_id": ams_id, "label": label}
-
-
-@router.delete("/{printer_id}/ams-labels/{ams_id}")
-async def delete_ams_label(
-    printer_id: int,
-    ams_id: int,
-    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_UPDATE),
-    db: AsyncSession = Depends(get_db),
-):
-    """Delete the friendly name for a specific AMS unit, reverting to the auto label."""
-    result = await db.execute(
-        select(AmsLabel).where(
-            AmsLabel.printer_id == printer_id,
-            AmsLabel.ams_id == ams_id,
-        )
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing:
-        await db.delete(existing)
-        await db.commit()
-
-    return {"success": True}
-
-
-
+@router.post("/{printer_id}/slots/{ams_id}/{tray_id}/configure")
 async def configure_ams_slot(
     printer_id: int,
     ams_id: int,
@@ -2027,6 +1960,71 @@ async def reset_ams_slot(
         "message": f"Reset AMS {ams_id} tray {tray_id}",
     }
 
+
+@router.get("/{printer_id}/ams-labels")
+async def get_ams_labels(
+    printer_id: int,
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all user-defined AMS labels for a printer, keyed by AMS unit ID."""
+    result = await db.execute(select(AmsLabel).where(AmsLabel.printer_id == printer_id))
+    labels = result.scalars().all()
+    return {lbl.ams_id: lbl.label for lbl in labels}
+
+
+@router.put("/{printer_id}/ams-labels/{ams_id}")
+async def save_ams_label(
+    printer_id: int,
+    ams_id: int,
+    label: str = Query(..., max_length=100),
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_UPDATE),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create or update the friendly name for a specific AMS unit."""
+    # Verify printer exists
+    result = await db.execute(select(Printer).where(Printer.id == printer_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(404, "Printer not found")
+
+    result = await db.execute(
+        select(AmsLabel).where(
+            AmsLabel.printer_id == printer_id,
+            AmsLabel.ams_id == ams_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.label = label
+    else:
+        db.add(AmsLabel(printer_id=printer_id, ams_id=ams_id, label=label))
+
+    await db.commit()
+    return {"ams_id": ams_id, "label": label}
+
+
+@router.delete("/{printer_id}/ams-labels/{ams_id}")
+async def delete_ams_label(
+    printer_id: int,
+    ams_id: int,
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_UPDATE),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the friendly name for a specific AMS unit, reverting to the auto label."""
+    result = await db.execute(
+        select(AmsLabel).where(
+            AmsLabel.printer_id == printer_id,
+            AmsLabel.ams_id == ams_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        await db.commit()
+
+    return {"success": True}
 
 @router.post("/{printer_id}/debug/simulate-print-complete")
 async def debug_simulate_print_complete(
