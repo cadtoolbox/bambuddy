@@ -373,6 +373,8 @@ async def _get_printer_maintenance_internal(
 
             # Calculate days for reference
             if last_performed_at:
+                if last_performed_at.tzinfo is None:
+                    last_performed_at = last_performed_at.replace(tzinfo=timezone.utc)
                 days_since = (now - last_performed_at).total_seconds() / 86400.0
             else:
                 days_since = None
