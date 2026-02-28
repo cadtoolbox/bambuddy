@@ -131,14 +131,23 @@ async def heartbeat_loop(config: Config, api: APIClient, start_time: float, shar
         if result:
             cmd = result.get("pending_command")
             if cmd == "tare":
-                logger.info("Tare command received from backend")
-                # Tare is handled by scale_reader — need cross-task communication
-                # For now, update calibration from backend response
+                scale = shared.get("scale")
+                if scale and scale.ok:
+                    new_offset = await asyncio.to_thread(scale.tare)
+                    logger.info("Tare executed: offset=%d", new_offset)
+                    await api.update_tare(config.device_id, new_offset)
+                    config.tare_offset = new_offset
+                else:
+                    logger.warning("Tare command received but scale not available")
+
             tare = result.get("tare_offset", config.tare_offset)
             cal = result.get("calibration_factor", config.calibration_factor)
             if tare != config.tare_offset or cal != config.calibration_factor:
                 config.tare_offset = tare
                 config.calibration_factor = cal
+                scale = shared.get("scale")
+                if scale:
+                    scale.update_calibration(tare, cal)
                 logger.info("Calibration updated from backend: tare=%d, factor=%.6f", tare, cal)
 
 

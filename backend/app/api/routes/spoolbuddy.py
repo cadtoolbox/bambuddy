@@ -21,6 +21,7 @@ from backend.app.schemas.spoolbuddy import (
     HeartbeatResponse,
     ScaleReadingRequest,
     SetCalibrationFactorRequest,
+    SetTareRequest,
     TagRemovedRequest,
     TagScannedRequest,
     UpdateSpoolWeightRequest,
@@ -303,6 +304,29 @@ async def tare_scale(
     device.pending_command = "tare"
     await db.commit()
     return {"status": "ok", "message": "Tare command queued"}
+
+
+@router.post("/devices/{device_id}/calibration/set-tare")
+async def set_tare_offset(
+    device_id: str,
+    req: SetTareRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+):
+    """Store tare offset reported by the daemon after executing a tare."""
+    result = await db.execute(select(SpoolBuddyDevice).where(SpoolBuddyDevice.device_id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not registered")
+
+    device.tare_offset = req.tare_offset
+    await db.commit()
+
+    logger.info("SpoolBuddy %s tare offset set to %d", device_id, req.tare_offset)
+    return CalibrationResponse(
+        tare_offset=device.tare_offset,
+        calibration_factor=device.calibration_factor,
+    )
 
 
 @router.post("/devices/{device_id}/calibration/set-factor")
