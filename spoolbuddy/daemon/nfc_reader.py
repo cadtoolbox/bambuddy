@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 MISS_THRESHOLD = 3  # Consecutive misses before declaring tag removed
 ERROR_RECOVERY_THRESHOLD = 10  # Consecutive errors before attempting RF reset
-RF_CYCLE_INTERVAL = 60.0  # Seconds between preventive RF cycles (when idle)
 
 
 class NFCState(Enum):
@@ -25,7 +24,6 @@ class NFCReader:
         self._miss_count = 0
         self._ok = False
         self._error_count = 0
-        self._last_rf_cycle = 0.0
         self._poll_count = 0
         self._last_status_log = 0.0
 
@@ -47,23 +45,6 @@ class NFCReader:
         self._nfc.rf_on()
         time.sleep(0.030)
         self._nfc.set_transceive_mode()
-        self._last_rf_cycle = time.monotonic()
-
-    def _rf_cycle(self):
-        """RF off/on cycle to recover from stuck state."""
-        try:
-            self._nfc.rf_off()
-            time.sleep(0.010)
-            self._nfc.load_rf_config(0x00, 0x80)
-            time.sleep(0.005)
-            self._nfc.rf_on()
-            time.sleep(0.020)
-            self._nfc.set_transceive_mode()
-            self._last_rf_cycle = time.monotonic()
-            return True
-        except Exception as e:
-            logger.warning("NFC RF cycle failed: %s", e)
-            return False
 
     def _full_reset(self):
         """Full hardware reset + RF init to recover from stuck state."""
@@ -114,20 +95,19 @@ class NFCReader:
             )
             self._last_status_log = now
 
-        # Preventive full hardware reset when idle (prevents reader drift into
-        # stuck state where activate_type_a() silently returns None without errors)
-        if self._state == NFCState.IDLE and now - self._last_rf_cycle >= RF_CYCLE_INTERVAL:
+        if self._state == NFCState.IDLE:
+            # Full hardware reset before every idle poll. Each activate_type_a()
+            # call that returns None corrupts the PN5180 state — subsequent calls
+            # silently fail even when a tag is present. Only a full RST pin toggle
+            # recovers the reader. ~240ms overhead per poll, giving ~1.8 Hz poll
+            # rate which is fine for a spool tag reader.
             try:
                 self._init_rf()
-                logger.debug("Preventive NFC hardware reset completed")
             except Exception as e:
-                logger.warning("Preventive NFC reset failed: %s", e)
-
-        # RF field cycle only when a tag is present — after a successful SELECT,
-        # the card stays in ACTIVE state and won't respond to the next WUPA/REQA.
-        # Toggling RF forces it back to IDLE. Skip when idle (no prior SELECT)
-        # to avoid degrading the reader state with continuous unnecessary cycling.
-        if self._state == NFCState.TAG_PRESENT:
+                logger.warning("NFC pre-poll reset failed: %s", e)
+        else:
+            # Tag present: light RF cycle to reset card from ACTIVE back to IDLE
+            # state after previous SELECT, so it responds to the next WUPA/REQA.
             try:
                 self._nfc.rf_off()
                 time.sleep(0.003)
