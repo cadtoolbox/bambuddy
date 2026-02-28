@@ -139,6 +139,8 @@ async def heartbeat_loop(config: Config, api: APIClient, start_time: float, shar
                     config.tare_offset = new_offset
                 else:
                     logger.warning("Tare command received but scale not available")
+                # Skip calibration sync — this heartbeat response predates the tare
+                continue
 
             tare = result.get("tare_offset", config.tare_offset)
             cal = result.get("calibration_factor", config.calibration_factor)
