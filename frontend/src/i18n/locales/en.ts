@@ -429,6 +429,16 @@ export default {
     clickToViewHmsErrors: 'Click to view HMS errors',
     estimatedCompletion: 'Estimated completion time',
     slotOptions: 'Slot options',
+    // AMS hover popup
+    amsPopup: {
+      friendlyName: 'AMS Name',
+      friendlyNamePlaceholder: 'e.g. AMS Friendly Name',
+      serialNumber: 'Serial Number',
+      firmwareVersion: 'Firmware',
+      save: 'Save',
+      clear: 'Clear',
+      noEditPermission: 'You do not have permission to rename AMS units',
+    },
     // Firmware modal
     firmwareModal: {
       title: 'Firmware Update',

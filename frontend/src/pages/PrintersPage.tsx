@@ -1393,6 +1393,186 @@ function mapModelCode(ssdpModel: string | null): string {
   return modelMap[ssdpModel] || ssdpModel;
 }
 
+// ─── AMS Name Hover Card ──────────────────────────────────────────────────────
+// Wraps the AMS label (e.g. "AMS-A") and shows a popup with:
+//  • User-defined friendly name (editable, protected by printers:update)
+//  • AMS serial number
+//  • AMS firmware version
+function AmsNameHoverCard({
+  ams,
+  printerId,
+  label,
+  amsLabels,
+  canEdit,
+  onSaved,
+  children,
+}: {
+  ams: import('../api/client').AMSUnit;
+  printerId: number;
+  label: string;           // auto-generated label, e.g. "AMS-A"
+  amsLabels?: Record<number, string>;
+  canEdit: boolean;
+  onSaved: () => void;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const [isVisible, setIsVisible] = useState(false);
+  const [position, setPosition] = useState<'top' | 'bottom'>('top');
+  const [editValue, setEditValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync edit field when popup opens
+  useEffect(() => {
+    if (isVisible) {
+      setEditValue(amsLabels?.[ams.id] ?? '');
+      setSaveError(null);
+      if (triggerRef.current && cardRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const spaceAbove = rect.top - 56;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setPosition(spaceAbove < cardRef.current.offsetHeight + 12 && spaceBelow > spaceAbove ? 'bottom' : 'top');
+      }
+    }
+  }, [isVisible, amsLabels, ams.id]);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setIsVisible(true), 80);
+  };
+  const handleMouseLeave = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (!isInputFocused) {
+      timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+    }
+  };
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
+
+  const handleSave = async () => {
+    if (!canEdit) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const trimmed = editValue.trim();
+      if (trimmed) {
+        await api.saveAmsLabel(printerId, ams.id, trimmed);
+      } else {
+        await api.deleteAmsLabel(printerId, ams.id);
+      }
+      onSaved();
+      setIsVisible(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div
+      ref={triggerRef}
+      className="relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+
+      {isVisible && (
+        <div
+          ref={cardRef}
+          className={`
+            absolute left-0 z-50
+            ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}
+            animate-in fade-in-0 zoom-in-95 duration-150
+          `}
+          style={{ maxWidth: 'calc(100vw - 24px)' }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="w-52 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-xl overflow-hidden backdrop-blur-sm p-2.5 space-y-2">
+            {/* AMS auto-label */}
+            <div className="text-[10px] uppercase tracking-wider text-bambu-gray font-medium">{label}</div>
+
+            {/* Serial number */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] tracking-wide text-bambu-gray font-medium shrink-0">
+                {t('printers.amsPopup.serialNumber')}
+              </span>
+              <span className="text-[10px] text-white font-mono truncate">{ams.serial_number || '—'}</span>
+            </div>
+
+            {/* Firmware version */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] tracking-wide text-bambu-gray font-medium shrink-0">
+                {t('printers.amsPopup.firmwareVersion')}
+              </span>
+              <span className="text-[10px] text-white font-mono truncate">{ams.sw_ver || '—'}</span>
+            </div>
+
+            {/* Divider */}
+            <div className="h-px bg-bambu-dark-tertiary/50" />
+
+            {/* Friendly name editor */}
+            <div className="space-y-1">
+              <span className="text-[10px] text-bambu-gray font-medium block">
+                {t('printers.amsPopup.friendlyName')}
+              </span>
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => canEdit && setEditValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => {
+                  setIsInputFocused(false);
+                  if (!triggerRef.current?.matches(':hover') && !cardRef.current?.matches(':hover')) {
+                    timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+                  }
+                }}
+                placeholder={canEdit ? t('printers.amsPopup.friendlyNamePlaceholder') : (amsLabels?.[ams.id] || '—')}
+                disabled={!canEdit}
+                title={!canEdit ? t('printers.amsPopup.noEditPermission') : undefined}
+                className="w-full bg-bambu-dark border border-bambu-dark-tertiary rounded px-2 py-1 text-xs text-white placeholder-bambu-gray/60 focus:outline-none focus:border-bambu-green disabled:opacity-50 disabled:cursor-not-allowed"
+                maxLength={100}
+              />
+              {canEdit && (
+                <div className="space-y-1">
+                  {saveError && (
+                    <p className="text-[10px] text-red-400 break-words">{saveError}</p>
+                  )}
+                  <div className="flex gap-1 justify-end">
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="px-2 py-0.5 text-[10px] bg-bambu-green text-white rounded hover:bg-bambu-green/80 disabled:opacity-50"
+                    >
+                      {t('printers.amsPopup.save')}
+                    </button>
+                    {amsLabels?.[ams.id] && (
+                      <button
+                        onClick={() => { setEditValue(''); setSaveError(null); }}
+                        disabled={isSaving}
+                        className="px-2 py-0.5 text-[10px] bg-bambu-dark-tertiary text-bambu-gray rounded hover:bg-bambu-dark-tertiary/70 disabled:opacity-50"
+                      >
+                        {t('printers.amsPopup.clear')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function PrinterCard({
   printer,
   hideIfDisconnected,
@@ -1593,6 +1773,13 @@ function PrinterCard({
     queryKey: ['slotPresets', printer.id],
     queryFn: () => api.getSlotPresets(printer.id),
     staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Fetch user-defined AMS friendly names from the database
+  const { data: amsLabels, refetch: refetchAmsLabels } = useQuery({
+    queryKey: ['amsLabels', printer.id],
+    queryFn: () => api.getAmsLabels(printer.id),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Cache WiFi signal to prevent it disappearing on updates
@@ -2768,9 +2955,19 @@ function PrinterCard({
                             {/* Header: Label + Stats (no icon) */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-white font-medium">
-                                  {getAmsLabel(ams.id, ams.tray.length)}
-                                </span>
+                                {/* AMS name — hover to see serial, firmware, and edit friendly name */}
+                                <AmsNameHoverCard
+                                  ams={ams}
+                                  printerId={printer.id}
+                                  label={getAmsLabel(ams.id, ams.tray.length)}
+                                  amsLabels={amsLabels}
+                                  canEdit={hasPermission('printers:update')}
+                                  onSaved={refetchAmsLabels}
+                                >
+                                  <span className="text-[10px] text-white font-medium cursor-default select-none">
+                                    {amsLabels?.[ams.id] || getAmsLabel(ams.id, ams.tray.length)}
+                                  </span>
+                                </AmsNameHoverCard>
                                 {isDualNozzle && (isLeftNozzle || isRightNozzle) && (
                                   <NozzleBadge side={isLeftNozzle ? 'L' : 'R'} />
                                 )}
@@ -2863,14 +3060,23 @@ function PrinterCard({
                                   <div
                                     className={`bg-bambu-dark-tertiary rounded p-1 text-center ${isEmpty ? 'opacity-50' : ''} ${isActive ? 'ring-2 ring-bambu-green ring-offset-1 ring-offset-bambu-dark' : ''}`}
                                   >
+                                    {/* Filament color circle with 1-based slot number centered inside */}
                                     <div
-                                      className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2"
+                                      className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2 flex items-center justify-center"
                                       style={{
                                         backgroundColor: tray?.tray_color ? `#${tray.tray_color}` : (tray?.tray_type ? '#333' : 'transparent'),
                                         borderColor: isEmpty ? '#666' : 'rgba(255,255,255,0.1)',
                                         borderStyle: isEmpty ? 'dashed' : 'solid',
                                       }}
-                                    />
+                                    >
+                                      {/* Slot number: font color is inverted relative to filament color */}
+                                      <span
+                                        className="text-[6px] font-bold leading-none select-none"
+                                        style={{ color: tray?.tray_color && isLightFilamentColor(tray.tray_color) ? '#000' : '#fff' }}
+                                      >
+                                        {slotIdx + 1}
+                                      </span>
+                                    </div>
                                     <div className="text-[9px] text-white font-bold truncate">
                                       {tray?.tray_type || '—'}
                                     </div>
@@ -3086,14 +3292,23 @@ function PrinterCard({
                           <div
                             className={`bg-bambu-dark-tertiary rounded p-1 text-center ${isEmpty ? 'opacity-50' : ''} ${isActive ? 'ring-2 ring-bambu-green ring-offset-1 ring-offset-bambu-dark' : ''}`}
                           >
+                            {/* Filament color circle with 1-based slot number centered inside */}
                             <div
-                              className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2"
+                              className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2 flex items-center justify-center"
                               style={{
                                 backgroundColor: tray?.tray_color ? `#${tray.tray_color}` : (tray?.tray_type ? '#333' : 'transparent'),
                                 borderColor: isEmpty ? '#666' : 'rgba(255,255,255,0.1)',
                                 borderStyle: isEmpty ? 'dashed' : 'solid',
                               }}
-                            />
+                            >
+                              {/* Slot number: font color is inverted relative to filament color */}
+                              <span
+                                className="text-[6px] font-bold leading-none select-none"
+                                style={{ color: tray?.tray_color && isLightFilamentColor(tray.tray_color) ? '#000' : '#fff' }}
+                              >
+                                1
+                              </span>
+                            </div>
                             <div className="text-[9px] text-white font-bold truncate">
                               {tray?.tray_type || '—'}
                             </div>
@@ -3116,9 +3331,19 @@ function PrinterCard({
                           <div key={ams.id} className="p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
                             {/* Row 1: Label + Nozzle */}
                             <div className="flex items-center gap-1 mb-2">
-                              <span className="text-[10px] text-white font-medium">
-                                {getAmsLabel(ams.id, ams.tray.length)}
-                              </span>
+                              {/* AMS name — hover to see serial, firmware, and edit friendly name */}
+                              <AmsNameHoverCard
+                                ams={ams}
+                                printerId={printer.id}
+                                label={getAmsLabel(ams.id, ams.tray.length)}
+                                amsLabels={amsLabels}
+                                canEdit={hasPermission('printers:update')}
+                                onSaved={refetchAmsLabels}
+                              >
+                                <span className="text-[10px] text-white font-medium cursor-default select-none">
+                                  {amsLabels?.[ams.id] || getAmsLabel(ams.id, ams.tray.length)}
+                                </span>
+                              </AmsNameHoverCard>
                               {isDualNozzle && (isLeftNozzle || isRightNozzle) && (
                                 <NozzleBadge side={isLeftNozzle ? 'L' : 'R'} />
                               )}
@@ -3340,14 +3565,23 @@ function PrinterCard({
                               const isEmpty = !extTray.tray_type;
                               const extSlotContent = (
                                 <div className={`bg-bambu-dark-tertiary rounded p-1 text-center ${isEmpty ? 'opacity-50' : ''} ${isExtActive ? 'ring-2 ring-bambu-green ring-offset-1 ring-offset-bambu-dark' : ''}`}>
+                                  {/* Filament color circle with 1-based slot number centered inside */}
                                   <div
-                                    className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2"
+                                    className="w-3.5 h-3.5 rounded-full mx-auto mb-0.5 border-2 flex items-center justify-center"
                                     style={{
                                       backgroundColor: extTray.tray_color ? `#${extTray.tray_color}` : (extTray.tray_type ? '#333' : 'transparent'),
                                       borderColor: isEmpty ? '#666' : 'rgba(255,255,255,0.1)',
                                       borderStyle: isEmpty ? 'dashed' : 'solid',
                                     }}
-                                  />
+                                  >
+                                    {/* Slot number: font color is inverted relative to filament color */}
+                                    <span
+                                      className="text-[6px] font-bold leading-none select-none"
+                                      style={{ color: extTray.tray_color && isLightFilamentColor(extTray.tray_color) ? '#000' : '#fff' }}
+                                    >
+                                      {slotTrayId + 1}
+                                    </span>
+                                  </div>
                                   <div className={`text-[9px] font-bold truncate ${isEmpty ? 'text-white/40' : 'text-white'}`}>
                                     {extTray.tray_type || '—'}
                                   </div>

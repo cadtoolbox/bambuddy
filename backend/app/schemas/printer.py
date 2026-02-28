@@ -138,6 +138,8 @@ class AMSUnit(BaseModel):
     temp: float | None = None
     is_ams_ht: bool = False  # True for AMS-HT (single spool), False for regular AMS (4 spools)
     tray: list[AMSTray] = []
+    serial_number: str = ""  # AMS unit serial number (sn from MQTT)
+    sw_ver: str = ""         # AMS firmware version (from get_version info.module)
 
 
 class NozzleInfoResponse(BaseModel):

@@ -392,6 +392,16 @@ export default {
     },
     estimatedCompletion: '完了予定時刻',
     slotOptions: 'スロットオプション',
+    // AMS hover popup
+    amsPopup: {
+      friendlyName: 'AMS名',
+      friendlyNamePlaceholder: '例: AMS フレンドリー名',
+      serialNumber: 'シリアル番号',
+      firmwareVersion: 'ファームウェア',
+      save: '保存',
+      clear: 'クリア',
+      noEditPermission: 'AMS ユニットの名前を変更する権限がありません',
+    },
     firmwareModal: {
       title: 'ファームウェアアップデート',
       titleUpToDate: 'ファームウェア情報',
