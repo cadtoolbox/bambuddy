@@ -23,6 +23,7 @@ function ScaleCalibration({ device, weight, weightStable, rawAdc }: {
   const [calibrating, setCalibrating] = useState(false);
   const [calStep, setCalStep] = useState<'idle' | 'tare' | 'weight'>('idle');
   const [knownWeight, setKnownWeight] = useState('500');
+  const [tareRawAdc, setTareRawAdc] = useState<number | null>(null);
   const [taring, setTaring] = useState(false);
 
   const numpadPress = (key: string) => {
@@ -54,6 +55,8 @@ function ScaleCalibration({ device, weight, weightStable, rawAdc }: {
     if (calStep === 'tare') {
       setCalibrating(true);
       try {
+        // Capture raw ADC before taring — this is our zero reference
+        setTareRawAdc(rawAdc);
         await spoolbuddyApi.tare(device.device_id);
         setCalStep('weight');
       } catch (e) {
@@ -66,7 +69,7 @@ function ScaleCalibration({ device, weight, weightStable, rawAdc }: {
       if (rawAdc === null || !weightNum || weightNum <= 0) return;
       setCalibrating(true);
       try {
-        await spoolbuddyApi.setCalibrationFactor(device.device_id, weightNum, rawAdc);
+        await spoolbuddyApi.setCalibrationFactor(device.device_id, weightNum, rawAdc, tareRawAdc ?? undefined);
         setCalStep('idle');
       } catch (e) {
         console.error('Failed to calibrate:', e);
@@ -123,7 +126,7 @@ function ScaleCalibration({ device, weight, weightStable, rawAdc }: {
           </button>
         </div>
       ) : (
-        <div className="border border-zinc-700 rounded-lg p-3 space-y-3">
+        <div className="border border-zinc-700 rounded-lg p-3 space-y-2">
           <div className="text-sm font-medium text-zinc-200">
             {calStep === 'tare'
               ? t('spoolbuddy.settings.calStep1', 'Step 1: Remove all items from the scale')
@@ -131,17 +134,19 @@ function ScaleCalibration({ device, weight, weightStable, rawAdc }: {
           </div>
 
           {calStep === 'weight' && (
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-400">{t('spoolbuddy.settings.knownWeight', 'Known weight (g)')}</label>
-              <div className="bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-right text-lg font-mono text-zinc-100 min-h-[44px]">
-                {knownWeight || '0'}<span className="text-zinc-500 ml-1">g</span>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{t('spoolbuddy.settings.knownWeight', 'Known weight (g)')}</span>
+                <div className="flex-1 bg-zinc-900 border border-zinc-600 rounded px-3 py-1.5 text-right text-base font-mono text-zinc-100">
+                  {knownWeight || '0'}<span className="text-zinc-500 ml-1">g</span>
+                </div>
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1">
                 {['7','8','9','backspace','4','5','6','.','1','2','3','0'].map((key) => (
                   <button
                     key={key}
                     onClick={() => numpadPress(key)}
-                    className={`py-3 rounded-lg text-base font-medium transition-colors min-h-[48px] ${
+                    className={`py-2 rounded text-sm font-medium transition-colors min-h-[36px] ${
                       key === 'backspace'
                         ? 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
                         : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border border-zinc-700'

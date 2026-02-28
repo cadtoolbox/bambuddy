@@ -342,11 +342,14 @@ async def set_calibration_factor(
     if not device:
         raise HTTPException(status_code=404, detail="Device not registered")
 
-    raw_delta = req.raw_adc - device.tare_offset
+    tare = req.tare_raw_adc if req.tare_raw_adc is not None else device.tare_offset
+    raw_delta = req.raw_adc - tare
     if raw_delta == 0:
         raise HTTPException(status_code=400, detail="Raw ADC value equals tare offset — place weight on scale")
 
     device.calibration_factor = req.known_weight_grams / raw_delta
+    if req.tare_raw_adc is not None:
+        device.tare_offset = tare
     await db.commit()
 
     logger.info(
@@ -355,7 +358,7 @@ async def set_calibration_factor(
         device.calibration_factor,
         req.known_weight_grams,
         req.raw_adc,
-        device.tare_offset,
+        tare,
     )
     return CalibrationResponse(
         tare_offset=device.tare_offset,

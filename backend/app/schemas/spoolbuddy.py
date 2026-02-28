@@ -99,6 +99,7 @@ class SetTareRequest(BaseModel):
 class SetCalibrationFactorRequest(BaseModel):
     known_weight_grams: float = Field(..., gt=0)
     raw_adc: int
+    tare_raw_adc: int | None = None
 
 
 class CalibrationResponse(BaseModel):
