@@ -114,9 +114,14 @@ class NFCReader:
             )
             self._last_status_log = now
 
-        # Preventive RF cycle when idle (prevents reader drift)
+        # Preventive full hardware reset when idle (prevents reader drift into
+        # stuck state where activate_type_a() silently returns None without errors)
         if self._state == NFCState.IDLE and now - self._last_rf_cycle >= RF_CYCLE_INTERVAL:
-            self._rf_cycle()
+            try:
+                self._init_rf()
+                logger.debug("Preventive NFC hardware reset completed")
+            except Exception as e:
+                logger.warning("Preventive NFC reset failed: %s", e)
 
         try:
             result = self._nfc.activate_type_a()
