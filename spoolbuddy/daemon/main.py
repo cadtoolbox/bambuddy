@@ -33,11 +33,12 @@ def _get_ip() -> str:
         return "unknown"
 
 
-async def nfc_poll_loop(config: Config, api: APIClient):
+async def nfc_poll_loop(config: Config, api: APIClient, shared: dict):
     """Continuous NFC polling loop — runs in asyncio with blocking reads offloaded."""
     from .nfc_reader import NFCReader
 
     nfc = NFCReader()
+    shared["nfc"] = nfc
     if not nfc.ok:
         logger.warning("NFC reader not available, skipping NFC polling")
         return
@@ -65,7 +66,7 @@ async def nfc_poll_loop(config: Config, api: APIClient):
         nfc.close()
 
 
-async def scale_poll_loop(config: Config, api: APIClient):
+async def scale_poll_loop(config: Config, api: APIClient, shared: dict):
     """Continuous scale reading loop — reads at 100ms, reports at 1s intervals."""
     from .scale_reader import ScaleReader
 
@@ -73,6 +74,7 @@ async def scale_poll_loop(config: Config, api: APIClient):
         tare_offset=config.tare_offset,
         calibration_factor=config.calibration_factor,
     )
+    shared["scale"] = scale
     if not scale.ok:
         logger.warning("Scale not available, skipping scale polling")
         return
@@ -107,7 +109,7 @@ async def scale_poll_loop(config: Config, api: APIClient):
         scale.close()
 
 
-async def heartbeat_loop(config: Config, api: APIClient, start_time: float):
+async def heartbeat_loop(config: Config, api: APIClient, start_time: float, shared: dict):
     """Periodic heartbeat to keep device registered and pick up commands."""
 
     ip = _get_ip()
@@ -115,11 +117,13 @@ async def heartbeat_loop(config: Config, api: APIClient, start_time: float):
     while True:
         await asyncio.sleep(config.heartbeat_interval)
 
+        nfc = shared.get("nfc")
+        scale = shared.get("scale")
         uptime = int(time.monotonic() - start_time)
         result = await api.heartbeat(
             device_id=config.device_id,
-            nfc_ok=True,
-            scale_ok=True,
+            nfc_ok=nfc.ok if nfc else False,
+            scale_ok=scale.ok if scale else False,
             uptime_s=uptime,
             ip_address=ip,
         )
@@ -164,11 +168,12 @@ async def main():
 
     logger.info("Device registered, starting poll loops")
 
+    shared: dict = {}
     try:
         await asyncio.gather(
-            nfc_poll_loop(config, api),
-            scale_poll_loop(config, api),
-            heartbeat_loop(config, api, start_time),
+            nfc_poll_loop(config, api, shared),
+            scale_poll_loop(config, api, shared),
+            heartbeat_loop(config, api, start_time, shared),
         )
     except KeyboardInterrupt:
         logger.info("Shutting down")
