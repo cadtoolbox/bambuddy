@@ -123,6 +123,18 @@ class NFCReader:
             except Exception as e:
                 logger.warning("Preventive NFC reset failed: %s", e)
 
+        # Brief RF field cycle before each poll to reset card state.
+        # After a successful SELECT, the card stays in ACTIVE state and won't
+        # respond to the next WUPA/REQA. Toggling RF forces all cards back to
+        # IDLE so they respond to the next activation attempt.
+        try:
+            self._nfc.rf_off()
+            time.sleep(0.003)
+            self._nfc.rf_on()
+            time.sleep(0.010)
+        except Exception:
+            pass  # Will be caught by activate_type_a() error handling below
+
         try:
             result = self._nfc.activate_type_a()
         except Exception as e:
