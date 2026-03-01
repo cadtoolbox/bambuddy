@@ -711,7 +711,7 @@ class BambuMQTTClient:
 
             # Always cache so _apply_ams_version_cache can apply it when AMS data arrives
             if sw_ver or sn:
-                self._ams_version_cache[ams_id] = {'sw_ver': sw_ver, 'sn': sn}
+                self._ams_version_cache[ams_id] = {"sw_ver": sw_ver, "sn": sn}
 
             # Also directly update any AMS unit already present in raw_data
             if ams_raw and isinstance(ams_raw, list):
@@ -725,9 +725,7 @@ class BambuMQTTClient:
                     if unit_id == ams_id:
                         if sw_ver:
                             ams_unit["sw_ver"] = sw_ver
-                            logger.debug(
-                                "[%s] AMS %s firmware: %s", self.serial_number, ams_id, sw_ver
-                            )
+                            logger.debug("[%s] AMS %s firmware: %s", self.serial_number, ams_id, sw_ver)
                         # Only set sn from version info if not already present in AMS data
                         if sn and not ams_unit.get("sn"):
                             ams_unit["sn"] = sn
@@ -768,7 +766,7 @@ class BambuMQTTClient:
         for unit in ams_list:
             if not isinstance(unit, dict):
                 continue
-            raw_id = unit.get('id')
+            raw_id = unit.get("id")
             try:
                 unit_id = int(raw_id) if raw_id is not None else None
             except (ValueError, TypeError):
@@ -778,14 +776,13 @@ class BambuMQTTClient:
             cached = cache.get(unit_id)
             if not cached:
                 continue
-            sw_ver = cached.get('sw_ver') or ''
-            sn = cached.get('sn') or ''
-            if sw_ver and not unit.get('sw_ver'):
-                unit['sw_ver'] = sw_ver
+            sw_ver = cached.get("sw_ver") or ""
+            sn = cached.get("sn") or ""
+            if sw_ver and not unit.get("sw_ver"):
+                unit["sw_ver"] = sw_ver
             # Only set sn if not already present in AMS data
-            if sn and not unit.get('sn') and not unit.get('serial_number'):
-                unit['sn'] = sn
-
+            if sn and not unit.get("sn") and not unit.get("serial_number"):
+                unit["sn"] = sn
 
     def _parse_xcam_data(self, xcam_data):
         """Parse xcam data for camera settings and AI detection options."""
@@ -1333,6 +1330,10 @@ class BambuMQTTClient:
                             merged_trays.append(new_tray)
                     # Update ams_unit with merged trays
                     ams_unit = {**ams_unit, "tray": merged_trays}
+                elif existing_unit:
+                    # Partial update without tray data: merge new fields into existing
+                    # unit to preserve tray, sn, sw_ver, and other accumulated data.
+                    ams_unit = {**existing_unit, **ams_unit}
                 existing_by_id[ams_id] = ams_unit
 
         # Convert back to list, sorted by ID for consistent ordering
@@ -1380,8 +1381,6 @@ class BambuMQTTClient:
                 logger.debug("[%s] Could not parse tray_exist_bits: %s", self.serial_number, e)
 
         self.state.raw_data["ams"] = merged_ams
-
-        
 
         # Apply cached AMS firmware/SN from get_version (handles ordering and id type mismatches)
         self._apply_ams_version_cache(merged_ams)

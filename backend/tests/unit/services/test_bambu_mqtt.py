@@ -605,6 +605,95 @@ class TestAMSDataMerging:
         assert ams_data[1]["tray"][0]["tray_type"] == "PLA", "B1 should still have PLA"
 
 
+class TestAMSVersionInfo:
+    """Tests for AMS serial number and firmware version reading from get_version."""
+
+    @pytest.fixture
+    def mqtt_client(self):
+        from backend.app.services.bambu_mqtt import BambuMQTTClient
+
+        return BambuMQTTClient(
+            ip_address="192.168.1.100",
+            serial_number="TEST123",
+            access_code="12345678",
+        )
+
+    def _version_payload(self, ams_sn="AMS_SN_001", ams_fw="00.00.06.96"):
+        return {
+            "command": "get_version",
+            "module": [
+                {"name": "ota", "sw_ver": "01.08.05.00"},
+                {"name": "ams/0", "sw_ver": ams_fw, "sn": ams_sn},
+            ],
+        }
+
+    def _full_ams_payload(self):
+        return {
+            "ams": [
+                {
+                    "id": 0,
+                    "humidity": "3",
+                    "temp": "25.5",
+                    "tray": [{"id": 0, "tray_type": "PLA", "remain": 80}],
+                }
+            ]
+        }
+
+    def test_ams_sn_and_fw_set_when_get_version_arrives_after_ams_data(self, mqtt_client):
+        """get_version after AMS data: sn and sw_ver are set directly on the unit."""
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+        mqtt_client._handle_version_info(self._version_payload())
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "AMS_SN_001"
+        assert ams[0].get("sw_ver") == "00.00.06.96"
+
+    def test_ams_sn_and_fw_set_when_get_version_arrives_before_ams_data(self, mqtt_client):
+        """get_version before AMS data: cache applied when AMS data arrives."""
+        mqtt_client._handle_version_info(self._version_payload())
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "AMS_SN_001"
+        assert ams[0].get("sw_ver") == "00.00.06.96"
+
+    def test_partial_ams_update_without_tray_preserves_sn_and_fw(self, mqtt_client):
+        """Partial AMS update (no tray key) must not lose sn or sw_ver."""
+        mqtt_client._handle_version_info(self._version_payload())
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+
+        # Partial update: only humidity changed, no tray key
+        mqtt_client._handle_ams_data({"ams": [{"id": 0, "humidity": "4"}]})
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "AMS_SN_001", "sn must survive partial update"
+        assert ams[0].get("sw_ver") == "00.00.06.96", "sw_ver must survive partial update"
+        assert ams[0].get("humidity") == "4", "humidity must be updated"
+
+    def test_partial_ams_update_without_tray_preserves_tray_data(self, mqtt_client):
+        """Partial AMS update (no tray key) must not lose existing tray data."""
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+
+        # Partial update without tray
+        mqtt_client._handle_ams_data({"ams": [{"id": 0, "humidity": "4"}]})
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert len(ams[0].get("tray", [])) == 1, "tray data must survive partial update"
+        assert ams[0]["tray"][0]["tray_type"] == "PLA", "tray_type must be preserved"
+
+    def test_get_version_before_ams_then_partial_update_preserves_sn_and_tray(self, mqtt_client):
+        """Full sequence: get_version → full AMS → partial AMS update."""
+        mqtt_client._handle_version_info(self._version_payload())
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+        mqtt_client._handle_ams_data({"ams": [{"id": 0, "humidity": "5"}]})
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "AMS_SN_001"
+        assert ams[0].get("sw_ver") == "00.00.06.96"
+        assert ams[0].get("humidity") == "5"
+        assert len(ams[0].get("tray", [])) == 1
+
+
 class TestNozzleRackData:
     """Tests for nozzle rack data parsing from H2 series device.nozzle.info."""
 
