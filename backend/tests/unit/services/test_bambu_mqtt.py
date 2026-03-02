@@ -2303,3 +2303,87 @@ class TestDeveloperModeDetection:
                 }
             )
         assert mqtt_client.state.developer_mode is False
+
+
+class TestAMSVersionBroadcast:
+    """Tests for AMS version info broadcasting via on_state_change."""
+
+    @pytest.fixture
+    def mqtt_client(self):
+        """Create a BambuMQTTClient instance for testing."""
+        from backend.app.services.bambu_mqtt import BambuMQTTClient
+
+        client = BambuMQTTClient(
+            ip_address="192.168.1.100",
+            serial_number="TEST123",
+            access_code="12345678",
+        )
+        return client
+
+    def test_on_state_change_fires_with_ota_and_ams(self, mqtt_client):
+        """on_state_change fires when both OTA and AMS modules are present."""
+        callback_count = []
+        mqtt_client.on_state_change = lambda state: callback_count.append(1)
+
+        mqtt_client._handle_version_info(
+            {
+                "command": "get_version",
+                "module": [
+                    {"name": "ota", "sw_ver": "01.08.05.00"},
+                    {"name": "ams/0", "sw_ver": "00.00.06.14", "sn": "AMS0SN001"},
+                ],
+            }
+        )
+
+        assert len(callback_count) == 1
+
+    def test_on_state_change_fires_with_ams_only_no_ota(self, mqtt_client):
+        """on_state_change fires when AMS modules are present but no OTA module.
+
+        Regression test: previously state_changed was only set inside the OTA block,
+        so get_version responses without an OTA entry silently dropped AMS version data
+        without triggering on_state_change.
+        """
+        callback_count = []
+        mqtt_client.on_state_change = lambda state: callback_count.append(1)
+
+        mqtt_client._handle_version_info(
+            {
+                "command": "get_version",
+                "module": [
+                    {"name": "ams/0", "sw_ver": "00.00.06.14", "sn": "AMS0SN001"},
+                ],
+            }
+        )
+
+        assert len(callback_count) == 1
+
+    def test_on_state_change_not_fired_when_no_relevant_modules(self, mqtt_client):
+        """on_state_change is NOT fired when there are no OTA or AMS modules."""
+        callback_count = []
+        mqtt_client.on_state_change = lambda state: callback_count.append(1)
+
+        mqtt_client._handle_version_info(
+            {
+                "command": "get_version",
+                "module": [
+                    {"name": "esp32", "sw_ver": "1.2.3"},
+                ],
+            }
+        )
+
+        assert len(callback_count) == 0
+
+    def test_ams_version_cached_without_ota(self, mqtt_client):
+        """AMS version data is cached even when no OTA module is present."""
+        mqtt_client._handle_version_info(
+            {
+                "command": "get_version",
+                "module": [
+                    {"name": "ams/1", "sw_ver": "00.00.06.20", "sn": "AMS1SN999"},
+                ],
+            }
+        )
+
+        assert mqtt_client._ams_version_cache[1]["sw_ver"] == "00.00.06.20"
+        assert mqtt_client._ams_version_cache[1]["sn"] == "AMS1SN999"
