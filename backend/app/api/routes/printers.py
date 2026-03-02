@@ -16,6 +16,7 @@ from backend.app.models.ams_label import AmsLabel
 from backend.app.models.printer import Printer
 from backend.app.models.slot_preset import SlotPresetMapping
 from backend.app.schemas.printer import (
+    AmsLabelBody,
     AMSTray,
     AMSUnit,
     HMSErrorResponse,
@@ -2019,8 +2020,7 @@ async def get_ams_labels(
 async def save_ams_label(
     printer_id: int,
     ams_id: int,
-    label: str = Query(..., max_length=100),
-    ams_serial: str = Query(default="", max_length=50),
+    body: AmsLabelBody,
     _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_UPDATE),
     db: AsyncSession = Depends(get_db),
 ):
@@ -2037,7 +2037,7 @@ async def save_ams_label(
         raise HTTPException(404, "Printer not found")
 
     # Determine the serial key to store under
-    serial_key = ams_serial.strip() if ams_serial else f"p{printer_id}a{ams_id}"
+    serial_key = body.ams_serial.strip() if body.ams_serial else f"p{printer_id}a{ams_id}"
 
     result = await db.execute(
         select(AmsLabel).where(AmsLabel.ams_serial_number == serial_key)
@@ -2045,13 +2045,13 @@ async def save_ams_label(
     existing = result.scalar_one_or_none()
 
     if existing:
-        existing.label = label
+        existing.label = body.label
         existing.ams_id = ams_id
     else:
-        db.add(AmsLabel(ams_serial_number=serial_key, ams_id=ams_id, label=label))
+        db.add(AmsLabel(ams_serial_number=serial_key, ams_id=ams_id, label=body.label))
 
     await db.commit()
-    return {"ams_id": ams_id, "label": label}
+    return {"ams_id": ams_id, "label": body.label}
 
 
 @router.delete("/{printer_id}/ams-labels/{ams_id}")
