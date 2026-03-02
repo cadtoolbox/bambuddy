@@ -22,6 +22,13 @@ import paho.mqtt.client as mqtt
 
 logger = logging.getLogger(__name__)
 
+# AMS module name prefixes used in get_version responses.
+# The numeric suffix after '/' is the AMS unit ID as reported in push_status.
+#   "ams/<id>"  – original AMS (X1C, X1E, P1S, …)
+#   "n3f/<id>"  – AMS 2 Pro (H2D Pro and similar)
+#   "n3s/<id>"  – AMS HT (H2D Pro and similar; IDs typically start at 128)
+_AMS_MODULE_PREFIXES = ("ams/", "n3f/", "n3s/")
+
 
 @dataclass
 class MQTTLogEntry:
@@ -657,9 +664,14 @@ class BambuMQTTClient:
         """Handle version info response from get_version command.
 
         Parses firmware version from the 'ota' module in the module list.
-        Also extracts AMS unit firmware versions from 'ams/<id>' modules and
-        stores them on the corresponding AMS unit in raw_data so the status
-        route can expose them to the frontend.
+        Also extracts AMS unit firmware versions from AMS modules and stores
+        them on the corresponding AMS unit in raw_data so the status route can
+        expose them to the frontend.
+
+        AMS module naming conventions (numeric suffix is the AMS unit ID):
+        - ``ams/<id>``  – original AMS
+        - ``n3f/<id>``  – AMS 2 Pro (H2D Pro and similar)
+        - ``n3s/<id>``  – AMS HT (H2D Pro and similar)
 
         Message format:
         {
@@ -668,6 +680,8 @@ class BambuMQTTClient:
                 {"name": "ota", "sw_ver": "01.08.05.00"},
                 {"name": "rv1126", "sw_ver": "00.00.14.74"},
                 {"name": "ams/0", "sw_ver": "00.00.06.96", "sn": "ABC123"},
+                {"name": "n3f/0", "sw_ver": "03.00.21.29", "sn": "19C06A552504488"},
+                {"name": "n3s/128", "sw_ver": "03.00.21.29", "sn": "19F06A561801096"},
                 ...
             ]
         }
@@ -690,8 +704,8 @@ class BambuMQTTClient:
                     state_changed = True
                 break
 
-        # Extract AMS unit firmware versions from ams/<id> modules (e.g. "ams/0")
-        # and store them on the corresponding raw AMS unit for the status route.
+        # Extract AMS unit firmware versions from AMS modules.
+        # See module-level _AMS_MODULE_PREFIXES for supported naming conventions.
         # Always cache regardless of whether AMS data has arrived yet — get_version
         # often arrives before the first push_status, so caching must be unconditional.
         ams_raw = self.state.raw_data.get("ams")
@@ -699,7 +713,7 @@ class BambuMQTTClient:
             if not isinstance(module, dict):
                 continue
             name = module.get("name", "")
-            if not name.startswith("ams/"):
+            if not any(name.startswith(prefix) for prefix in _AMS_MODULE_PREFIXES):
                 continue
             try:
                 ams_id = int(name.split("/", 1)[1])

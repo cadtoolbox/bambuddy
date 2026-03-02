@@ -619,11 +619,34 @@ class TestAMSVersionInfo:
         )
 
     def _version_payload(self, ams_sn="AMS_SN_001", ams_fw="00.00.06.96"):
+        """Simulate X1E / X1C style: original AMS uses 'ams/<id>' module names."""
         return {
             "command": "get_version",
             "module": [
                 {"name": "ota", "sw_ver": "01.08.05.00"},
                 {"name": "ams/0", "sw_ver": ams_fw, "sn": ams_sn},
+            ],
+        }
+
+    def _n3f_version_payload(self):
+        """Simulate H2D Pro style: AMS 2 Pro uses 'n3f/<id>' module names."""
+        return {
+            "command": "get_version",
+            "module": [
+                {"name": "ota", "sw_ver": "01.01.00.00"},
+                {"name": "n3f/0", "sw_ver": "03.00.21.29", "sn": "19C06A552504488"},
+                {"name": "n3f/1", "sw_ver": "03.00.21.29", "sn": "19C06A561900803"},
+            ],
+        }
+
+    def _n3s_version_payload(self):
+        """Simulate H2D Pro style: AMS HT uses 'n3s/<id>' module names (IDs start at 128)."""
+        return {
+            "command": "get_version",
+            "module": [
+                {"name": "ota", "sw_ver": "01.01.00.00"},
+                {"name": "n3s/128", "sw_ver": "03.00.21.29", "sn": "19F06A561801096"},
+                {"name": "n3s/129", "sw_ver": "03.00.21.29", "sn": "19F06A561900183"},
             ],
         }
 
@@ -715,6 +738,82 @@ class TestAMSVersionInfo:
         last = captured_ams[-1]
         assert last["sn"] == "AMS_SN_001", "sn must be set before on_state_change fires"
         assert last["sw_ver"] == "00.00.06.96", "sw_ver must be set before on_state_change fires"
+
+    # ------------------------------------------------------------------
+    # Tests for alternate AMS module naming (H2D Pro: n3f/X and n3s/X)
+    # ------------------------------------------------------------------
+
+    def test_n3f_ams_sn_and_fw_set_after_ams_data(self, mqtt_client):
+        """AMS 2 Pro (n3f/<id>) modules: sn and sw_ver applied when version arrives after AMS data."""
+        mqtt_client._handle_ams_data(
+            {
+                "ams": [
+                    {"id": 0, "humidity": "3", "temp": "25.0", "tray": []},
+                    {"id": 1, "humidity": "3", "temp": "25.0", "tray": []},
+                ]
+            }
+        )
+        mqtt_client._handle_version_info(self._n3f_version_payload())
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "19C06A552504488"
+        assert ams[0].get("sw_ver") == "03.00.21.29"
+        assert ams[1].get("sn") == "19C06A561900803"
+        assert ams[1].get("sw_ver") == "03.00.21.29"
+
+    def test_n3f_ams_sn_and_fw_set_before_ams_data(self, mqtt_client):
+        """AMS 2 Pro (n3f/<id>) modules: cache applied when AMS data arrives after version info."""
+        mqtt_client._handle_version_info(self._n3f_version_payload())
+        mqtt_client._handle_ams_data(
+            {
+                "ams": [
+                    {"id": 0, "humidity": "3", "temp": "25.0", "tray": []},
+                    {"id": 1, "humidity": "3", "temp": "25.0", "tray": []},
+                ]
+            }
+        )
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "19C06A552504488"
+        assert ams[0].get("sw_ver") == "03.00.21.29"
+        assert ams[1].get("sn") == "19C06A561900803"
+        assert ams[1].get("sw_ver") == "03.00.21.29"
+
+    def test_n3s_ams_sn_and_fw_set_after_ams_data(self, mqtt_client):
+        """AMS HT (n3s/<id>) modules with IDs >= 128: sn and sw_ver applied correctly."""
+        mqtt_client._handle_ams_data(
+            {
+                "ams": [
+                    {"id": 128, "humidity": "3", "temp": "25.0", "tray": []},
+                    {"id": 129, "humidity": "3", "temp": "25.0", "tray": []},
+                ]
+            }
+        )
+        mqtt_client._handle_version_info(self._n3s_version_payload())
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "19F06A561801096"
+        assert ams[0].get("sw_ver") == "03.00.21.29"
+        assert ams[1].get("sn") == "19F06A561900183"
+        assert ams[1].get("sw_ver") == "03.00.21.29"
+
+    def test_n3s_ams_sn_and_fw_set_before_ams_data(self, mqtt_client):
+        """AMS HT (n3s/<id>) modules: cache applied when AMS data arrives after version info."""
+        mqtt_client._handle_version_info(self._n3s_version_payload())
+        mqtt_client._handle_ams_data(
+            {
+                "ams": [
+                    {"id": 128, "humidity": "3", "temp": "25.0", "tray": []},
+                    {"id": 129, "humidity": "3", "temp": "25.0", "tray": []},
+                ]
+            }
+        )
+
+        ams = mqtt_client.state.raw_data.get("ams", [])
+        assert ams[0].get("sn") == "19F06A561801096"
+        assert ams[0].get("sw_ver") == "03.00.21.29"
+        assert ams[1].get("sn") == "19F06A561900183"
+        assert ams[1].get("sw_ver") == "03.00.21.29"
 
 
 class TestNozzleRackData:
