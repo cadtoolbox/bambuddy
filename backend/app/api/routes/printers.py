@@ -1996,17 +1996,21 @@ async def get_ams_labels(
                 labels[aid] = lbl.label
 
     # Also fetch labels stored under synthetic keys for this printer (backward compat)
+    # Collect all synthetic keys first, then query with a single IN clause.
     if state and state.raw_data:
-        for ams_unit in state.raw_data.get("ams", []):
-            aid = int(ams_unit.get("id", 0))
-            if aid not in labels:
-                synthetic = f"p{printer_id}a{aid}"
-                result = await db.execute(
-                    select(AmsLabel).where(AmsLabel.ams_serial_number == synthetic)
-                )
-                row = result.scalar_one_or_none()
-                if row:
-                    labels[aid] = row.label
+        synthetic_key_to_aid: dict[str, int] = {
+            f"p{printer_id}a{int(ams_unit.get('id', 0))}": int(ams_unit.get("id", 0))
+            for ams_unit in state.raw_data.get("ams", [])
+            if int(ams_unit.get("id", 0)) not in labels
+        }
+        if synthetic_key_to_aid:
+            result = await db.execute(
+                select(AmsLabel).where(AmsLabel.ams_serial_number.in_(synthetic_key_to_aid.keys()))
+            )
+            for lbl in result.scalars().all():
+                aid = synthetic_key_to_aid.get(lbl.ams_serial_number)
+                if aid is not None:
+                    labels[aid] = lbl.label
 
     return labels
 
