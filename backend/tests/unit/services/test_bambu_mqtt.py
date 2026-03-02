@@ -693,6 +693,29 @@ class TestAMSVersionInfo:
         assert ams[0].get("humidity") == "5"
         assert len(ams[0].get("tray", [])) == 1
 
+    def test_state_change_callback_includes_ams_sn_and_fw(self, mqtt_client):
+        """on_state_change must fire AFTER AMS sn/sw_ver are written to raw_data.
+
+        Previously the callback fired inside the ota-module loop, before the
+        second loop set sn/sw_ver on the AMS unit dicts.  The WebSocket
+        broadcast therefore went out with empty serial/firmware fields.
+        """
+        captured_ams = []
+
+        def capture_state(state):
+            ams = state.raw_data.get("ams", [])
+            if ams:
+                captured_ams.append({"sn": ams[0].get("sn"), "sw_ver": ams[0].get("sw_ver")})
+
+        mqtt_client.on_state_change = capture_state
+        mqtt_client._handle_ams_data(self._full_ams_payload())
+        mqtt_client._handle_version_info(self._version_payload())
+
+        assert captured_ams, "on_state_change must be called when get_version is processed"
+        last = captured_ams[-1]
+        assert last["sn"] == "AMS_SN_001", "sn must be set before on_state_change fires"
+        assert last["sw_ver"] == "00.00.06.96", "sw_ver must be set before on_state_change fires"
+
 
 class TestNozzleRackData:
     """Tests for nozzle rack data parsing from H2 series device.nozzle.info."""

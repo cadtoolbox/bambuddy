@@ -676,6 +676,7 @@ class BambuMQTTClient:
         if not isinstance(modules, list):
             return
 
+        state_changed = False
         for module in modules:
             if not isinstance(module, dict):
                 continue
@@ -686,9 +687,7 @@ class BambuMQTTClient:
                     self.state.firmware_version = version
                     if old_version != version:
                         logger.info("[%s] Firmware version: %s", self.serial_number, version)
-                    # Trigger state change callback
-                    if self.on_state_change:
-                        self.on_state_change(self.state)
+                    state_changed = True
                 break
 
         # Extract AMS unit firmware versions from ams/<id> modules (e.g. "ams/0")
@@ -730,6 +729,11 @@ class BambuMQTTClient:
                         if sn and not ams_unit.get("sn"):
                             ams_unit["sn"] = sn
                         break
+
+        # Trigger state change callback AFTER both loops so AMS sn/sw_ver are
+        # included in the broadcast (not just the printer firmware version).
+        if state_changed and self.on_state_change:
+            self.on_state_change(self.state)
 
         # Warn if any AMS unit is still missing serial number or firmware version
         # after processing the version info response.
