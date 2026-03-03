@@ -7,6 +7,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../utils';
 import { AmsNameHoverCard } from '../../pages/PrintersPage';
+import { api } from '../../api/client';
+
+vi.mock('../../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/client')>();
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      saveAmsLabel: vi.fn().mockResolvedValue(undefined),
+      deleteAmsLabel: vi.fn().mockResolvedValue(undefined),
+    },
+  };
+});
 
 const mockAms = {
   id: 1,
@@ -34,6 +47,7 @@ function renderCard(canEdit = true) {
 describe('AmsNameHoverCard', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -116,5 +130,39 @@ describe('AmsNameHoverCard', () => {
 
     // Card should still be visible because input is focused
     expect(screen.getByText('AMS-A')).toBeInTheDocument();
+  });
+
+  it('Clear button calls deleteAmsLabel directly and closes the popup', async () => {
+    const onSaved = vi.fn();
+    render(
+      <AmsNameHoverCard
+        ams={mockAms as never}
+        printerId={1}
+        label="AMS-A"
+        amsLabels={{ 1: 'My AMS' }}
+        canEdit={true}
+        onSaved={onSaved}
+      >
+        <span>trigger</span>
+      </AmsNameHoverCard>,
+    );
+
+    const trigger = screen.getByText('trigger').parentElement as HTMLElement;
+    fireEvent.mouseEnter(trigger);
+    vi.advanceTimersByTime(100);
+
+    await waitFor(() => {
+      expect(screen.getByText('AMS-A')).toBeInTheDocument();
+    });
+
+    // Click the Clear button
+    const clearButton = screen.getByRole('button', { name: /clear/i });
+    fireEvent.click(clearButton);
+
+    await waitFor(() => {
+      expect(vi.mocked(api.deleteAmsLabel)).toHaveBeenCalledWith(1, 1, 'SN-AMS-001');
+      expect(onSaved).toHaveBeenCalled();
+      expect(screen.queryByText('AMS-A')).not.toBeInTheDocument();
+    });
   });
 });
