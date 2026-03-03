@@ -1374,7 +1374,7 @@ function mapModelCode(ssdpModel: string | null): string {
 //  • User-defined friendly name (editable, protected by printers:update)
 //  • AMS serial number
 //  • AMS firmware version
-function AmsNameHoverCard({
+export function AmsNameHoverCard({
   ams,
   printerId,
   label,
@@ -1503,7 +1503,10 @@ function AmsNameHoverCard({
                 onChange={(e) => canEdit && setEditValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                 onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
+                onBlur={() => {
+                  setIsInputFocused(false);
+                  timeoutRef.current = setTimeout(() => setIsVisible(false), 200);
+                }}
                 placeholder={canEdit ? t('printers.amsPopup.friendlyNamePlaceholder') : (amsLabels?.[ams.id] || '—')}
                 disabled={!canEdit}
                 title={!canEdit ? t('printers.amsPopup.noEditPermission') : undefined}
