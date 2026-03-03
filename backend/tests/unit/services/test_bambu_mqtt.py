@@ -2303,3 +2303,99 @@ class TestDeveloperModeDetection:
                 }
             )
         assert mqtt_client.state.developer_mode is False
+
+
+class TestAMSVersionInfoWarnings:
+    """Tests that AMS missing-field warnings are emitted only once per connection."""
+
+    @pytest.fixture
+    def mqtt_client(self):
+        """Create a BambuMQTTClient instance for testing."""
+        from backend.app.services.bambu_mqtt import BambuMQTTClient
+
+        client = BambuMQTTClient(
+            ip_address="192.168.1.100",
+            serial_number="TEST123",
+            access_code="12345678",
+        )
+        return client
+
+    def _set_ams_raw(self, client, units):
+        """Helper to populate raw_data with AMS units."""
+        if "ams" not in client.state.raw_data:
+            client.state.raw_data["ams"] = []
+        client.state.raw_data["ams"] = units
+
+    def _version_msg(self, ams_modules=None):
+        """Build a minimal get_version data dict."""
+        modules = [{"name": "ota", "sw_ver": "01.00.00.00"}]
+        if ams_modules:
+            modules.extend(ams_modules)
+        return {"module": modules}
+
+    def test_missing_sn_warns_once(self, mqtt_client, caplog):
+        """Warning for missing AMS serial number fires only on the first call."""
+        import logging
+
+        self._set_ams_raw(mqtt_client, [{"id": 0, "sw_ver": "1.0.0"}])
+        msg = self._version_msg()
+
+        with caplog.at_level(logging.WARNING):
+            mqtt_client._handle_version_info(msg)
+            mqtt_client._handle_version_info(msg)
+            mqtt_client._handle_version_info(msg)
+
+        sn_warnings = [r for r in caplog.records if "serial number" in r.message and "AMS unit 0" in r.message]
+        assert len(sn_warnings) == 1
+
+    def test_missing_sw_ver_warns_once(self, mqtt_client, caplog):
+        """Warning for missing AMS firmware version fires only on the first call."""
+        import logging
+
+        self._set_ams_raw(mqtt_client, [{"id": 0, "sn": "ABC123"}])
+        msg = self._version_msg()
+
+        with caplog.at_level(logging.WARNING):
+            mqtt_client._handle_version_info(msg)
+            mqtt_client._handle_version_info(msg)
+            mqtt_client._handle_version_info(msg)
+
+        fw_warnings = [r for r in caplog.records if "firmware version" in r.message and "AMS unit 0" in r.message]
+        assert len(fw_warnings) == 1
+
+    def test_warned_set_reset_on_reconnect(self, mqtt_client, caplog):
+        """After reconnect (_ams_version_warned cleared), warnings fire again."""
+        import logging
+
+        self._set_ams_raw(mqtt_client, [{"id": 0, "sw_ver": "1.0.0"}])
+        msg = self._version_msg()
+
+        with caplog.at_level(logging.WARNING):
+            # First connection - warn once
+            mqtt_client._handle_version_info(msg)
+            first_count = len([r for r in caplog.records if "serial number" in r.message])
+
+            # Simulate reconnect by clearing the warned set (as _on_connect does)
+            mqtt_client._ams_version_warned = set()
+            caplog.clear()
+
+            # Second connection - should warn again
+            mqtt_client._handle_version_info(msg)
+            second_count = len([r for r in caplog.records if "serial number" in r.message])
+
+        assert first_count == 1
+        assert second_count == 1
+
+    def test_no_warning_when_both_fields_present(self, mqtt_client, caplog):
+        """No warnings when AMS unit has both sn and sw_ver."""
+        import logging
+
+        self._set_ams_raw(mqtt_client, [{"id": 0, "sn": "ABC123", "sw_ver": "1.0.0"}])
+        msg = self._version_msg()
+
+        with caplog.at_level(logging.WARNING):
+            mqtt_client._handle_version_info(msg)
+            mqtt_client._handle_version_info(msg)
+
+        ams_warnings = [r for r in caplog.records if "AMS unit" in r.message]
+        assert len(ams_warnings) == 0
