@@ -11,7 +11,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.models.ams_label import AmsLabel
 from backend.app.models.spool import Spool
+from backend.app.models.spool_assignment import SpoolAssignment
 
 
 @pytest.fixture
@@ -324,3 +326,123 @@ class TestAssignSpoolTrayInfoIdx:
             call_kwargs = mock_client.ams_set_filament_setting.call_args
             # Slot's specific preset is reused when spool has no own preset
             assert call_kwargs.kwargs["tray_info_idx"] == "GFA05"
+
+
+class TestListAssignmentsAmsLabels:
+    """Tests for list_assignments GET endpoint — AMS label enrichment."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_list_assignments_uses_get_all_statuses(
+        self, async_client: AsyncClient, printer_factory, spool_factory, db_session: AsyncSession
+    ):
+        """list_assignments uses get_all_statuses() (one batch call) not get_status() per printer."""
+        printer = await printer_factory(name="X1C")
+        spool = await spool_factory(material="PLA")
+
+        # Create the assignment directly in the DB
+        assignment = SpoolAssignment(
+            spool_id=spool.id, printer_id=printer.id, ams_id=0, tray_id=0
+        )
+        db_session.add(assignment)
+        await db_session.commit()
+
+        mock_status = MagicMock()
+        mock_status.raw_data = {"ams": [{"id": 0, "sn": "AMS00000001"}]}
+
+        with patch("backend.app.services.printer_manager.printer_manager") as mock_pm:
+            mock_pm.get_all_statuses.return_value = {printer.id: mock_status}
+
+            response = await async_client.get("/api/v1/inventory/assignments")
+
+        assert response.status_code == 200
+        # Verify only the batched call was used, not the per-printer one
+        mock_pm.get_all_statuses.assert_called_once()
+        mock_pm.get_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_list_assignments_attaches_ams_label_by_serial(
+        self, async_client: AsyncClient, printer_factory, spool_factory, db_session: AsyncSession
+    ):
+        """list_assignments enriches response with ams_label when serial number is known."""
+        printer = await printer_factory(name="X1C")
+        spool = await spool_factory(material="PLA")
+
+        assignment = SpoolAssignment(
+            spool_id=spool.id, printer_id=printer.id, ams_id=1, tray_id=0
+        )
+        db_session.add(assignment)
+        label = AmsLabel(ams_serial_number="AMS00000002", ams_id=1, label="Workshop AMS")
+        db_session.add(label)
+        await db_session.commit()
+
+        mock_status = MagicMock()
+        mock_status.raw_data = {"ams": [{"id": 1, "sn": "AMS00000002"}]}
+
+        with patch("backend.app.services.printer_manager.printer_manager") as mock_pm:
+            mock_pm.get_all_statuses.return_value = {printer.id: mock_status}
+
+            response = await async_client.get("/api/v1/inventory/assignments")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["ams_label"] == "Workshop AMS"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_list_assignments_fallback_synthetic_key(
+        self, async_client: AsyncClient, printer_factory, spool_factory, db_session: AsyncSession
+    ):
+        """list_assignments falls back to synthetic key when printer is offline."""
+        printer = await printer_factory(name="X1C")
+        spool = await spool_factory(material="PETG")
+
+        assignment = SpoolAssignment(
+            spool_id=spool.id, printer_id=printer.id, ams_id=2, tray_id=0
+        )
+        db_session.add(assignment)
+        synthetic_key = f"p{printer.id}a2"
+        label = AmsLabel(ams_serial_number=synthetic_key, ams_id=2, label="Silk Colours")
+        db_session.add(label)
+        await db_session.commit()
+
+        with patch("backend.app.services.printer_manager.printer_manager") as mock_pm:
+            # Printer is offline — not in get_all_statuses result
+            mock_pm.get_all_statuses.return_value = {}
+
+            response = await async_client.get("/api/v1/inventory/assignments")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["ams_label"] == "Silk Colours"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_list_assignments_no_label_when_none_set(
+        self, async_client: AsyncClient, printer_factory, spool_factory, db_session: AsyncSession
+    ):
+        """list_assignments returns ams_label=None when no label has been configured."""
+        printer = await printer_factory(name="P2S")
+        spool = await spool_factory(material="ABS")
+
+        assignment = SpoolAssignment(
+            spool_id=spool.id, printer_id=printer.id, ams_id=0, tray_id=1
+        )
+        db_session.add(assignment)
+        await db_session.commit()
+
+        mock_status = MagicMock()
+        mock_status.raw_data = {"ams": [{"id": 0, "sn": "AMS99999999"}]}
+
+        with patch("backend.app.services.printer_manager.printer_manager") as mock_pm:
+            mock_pm.get_all_statuses.return_value = {printer.id: mock_status}
+
+            response = await async_client.get("/api/v1/inventory/assignments")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["ams_label"] is None
