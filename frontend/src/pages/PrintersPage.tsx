@@ -1448,6 +1448,21 @@ export function AmsNameHoverCard({
     }
   };
 
+  const handleClear = async () => {
+    if (!canEdit) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await api.deleteAmsLabel(printerId, ams.id, ams.serial_number);
+      onSaved();
+      setIsVisible(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div
       ref={triggerRef}
@@ -1528,7 +1543,7 @@ export function AmsNameHoverCard({
                     </button>
                     {amsLabels?.[ams.id] && (
                       <button
-                        onClick={() => { setEditValue(''); setSaveError(null); }}
+                        onClick={handleClear}
                         disabled={isSaving}
                         className="px-2 py-0.5 text-[10px] bg-bambu-dark-tertiary text-bambu-gray rounded hover:bg-bambu-dark-tertiary/70 disabled:opacity-50"
                       >
