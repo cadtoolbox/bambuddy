@@ -371,8 +371,8 @@ class PrintScheduler:
             if filament_overrides:
                 color_matches = self._count_override_color_matches(printer.id, filament_overrides)
                 # Strict mode requires ALL overrides to match; normal mode requires at least one
-                min_matches = len(filament_overrides) if strict_color_match else 1
-                if color_matches >= min_matches:
+                required_matches = len(filament_overrides) if strict_color_match else 1
+                if color_matches >= required_matches:
                     candidates.append((printer.id, color_matches))
                 else:
                     override_colors = [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in filament_overrides]
@@ -514,18 +514,17 @@ class PrintScheduler:
         for ams_unit in status.raw_data.get("ams", []):
             for tray in ams_unit.get("tray", []):
                 tray_type = tray.get("tray_type")
-                tray_color = tray.get("tray_color", "")
                 if tray_type:
-                    loaded.add((tray_type.upper(), tray_color.replace("#", "").lower()[:6]))
+                    loaded.add((tray_type.upper(), self._normalize_color_for_compare(tray.get("tray_color"))))
         for vt in status.raw_data.get("vt_tray") or []:
             vt_type = vt.get("tray_type")
             if vt_type:
-                loaded.add((vt_type.upper(), (vt.get("tray_color", "") or "").replace("#", "").lower()[:6]))
+                loaded.add((vt_type.upper(), self._normalize_color_for_compare(vt.get("tray_color"))))
 
         missing = [
             f"{r.get('type', '?')} ({r.get('color', '?')})"
             for r in filament_reqs
-            if ((r.get("type") or "").upper(), (r.get("color") or "").replace("#", "").lower()[:6]) not in loaded
+            if ((r.get("type") or "").upper(), self._normalize_color_for_compare(r.get("color"))) not in loaded
         ]
         return f"Strict color match: needs {', '.join(missing)}"
 
