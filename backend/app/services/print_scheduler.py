@@ -147,6 +147,29 @@ class PrintScheduler:
                     # Compute AMS mapping if not already set
                     if not item.ams_mapping:
                         computed_mapping = await self._compute_ams_mapping_for_printer(db, item.printer_id, item)
+
+                        # When force_color_match is enabled, verify all required slots have a
+                        # color+type match (no -1 entries).  A -1 means no matching spool was
+                        # found for that slot — either wrong color or no filament at all.
+                        if item.force_color_match:
+                            no_match = computed_mapping is None or any(v == -1 for v in computed_mapping)
+                            if no_match:
+                                new_reason = "No matching material/color"
+                                if item.waiting_reason != new_reason:
+                                    item.waiting_reason = new_reason
+                                    await db.commit()
+                                    logger.info(
+                                        "Queue item %s: force_color_match=True but no color match on printer %s — waiting",
+                                        item.id,
+                                        item.printer_id,
+                                    )
+                                busy_printers.add(item.printer_id)
+                                continue
+                            # Color match found — clear any previous waiting reason
+                            if item.waiting_reason:
+                                item.waiting_reason = None
+                                await db.commit()
+
                         if computed_mapping:
                             item.ams_mapping = json.dumps(computed_mapping)
                             logger.info(
@@ -251,6 +274,26 @@ class PrintScheduler:
                         # This is critical for model-based jobs where mapping wasn't computed upfront
                         if not item.ams_mapping:
                             computed_mapping = await self._compute_ams_mapping_for_printer(db, printer_id, item)
+
+                            # When force_color_match is enabled, verify all slots have a color match
+                            if item.force_color_match:
+                                no_match = computed_mapping is None or any(v == -1 for v in computed_mapping)
+                                if no_match:
+                                    # Unassign printer — keep item as model-based until a
+                                    # printer with the right colors becomes available
+                                    item.printer_id = None
+                                    new_reason = "No matching material/color"
+                                    if item.waiting_reason != new_reason:
+                                        item.waiting_reason = new_reason
+                                        await db.commit()
+                                    logger.info(
+                                        "Queue item %s: force_color_match=True but no color match on printer %s — unassigning",
+                                        item.id,
+                                        printer_id,
+                                    )
+                                    busy_printers.add(printer_id)
+                                    continue
+
                             if computed_mapping:
                                 item.ams_mapping = json.dumps(computed_mapping)
                                 logger.info(
@@ -496,7 +539,7 @@ class PrintScheduler:
             return None
 
         # Compute mapping: match required filaments to available slots
-        return self._match_filaments_to_slots(filament_reqs, loaded_filaments)
+        return self._match_filaments_to_slots(filament_reqs, loaded_filaments, force_color_match=item.force_color_match)
 
     async def _get_filament_requirements(self, db: AsyncSession, item: PrintQueueItem) -> list[dict] | None:
         """Extract filament requirements from the source 3MF file.
@@ -703,10 +746,12 @@ class PrintScheduler:
         except ValueError:
             return False
 
-    def _match_filaments_to_slots(self, required: list[dict], loaded: list[dict]) -> list[int] | None:
+    def _match_filaments_to_slots(self, required: list[dict], loaded: list[dict], force_color_match: bool = False) -> list[int] | None:
         """Match required filaments to loaded filaments and build AMS mapping.
 
         Priority: unique tray_info_idx match > exact color match > similar color match > type-only match
+
+        When force_color_match is True, type-only matches are not used (color must match).
 
         The tray_info_idx is a filament type identifier stored in the 3MF file when the user
         slices (e.g., "GFA00" for generic PLA, "P4d64437" for custom presets). If the same
@@ -795,7 +840,11 @@ class PrintScheduler:
                     elif not type_only_match:
                         type_only_match = f
 
-            match = idx_match or exact_match or similar_match or type_only_match
+            # When force_color_match is True, skip type-only matches (color must match)
+            if force_color_match:
+                match = idx_match or exact_match or similar_match
+            else:
+                match = idx_match or exact_match or similar_match or type_only_match
             if match:
                 used_tray_ids.add(match["global_tray_id"])
                 comparisons.append({"slot_id": req.get("slot_id", 0), "global_tray_id": match["global_tray_id"]})

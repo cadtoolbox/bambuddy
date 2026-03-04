@@ -1251,6 +1251,7 @@ export interface PrintQueueItem {
   layer_inspect: boolean;
   timelapse: boolean;
   use_ams: boolean;
+  force_color_match: boolean;  // Only start if matching material AND color is found
   status: 'pending' | 'printing' | 'completed' | 'failed' | 'skipped' | 'cancelled';
   started_at: string | null;
   completed_at: string | null;
@@ -1289,6 +1290,7 @@ export interface PrintQueueItemCreate {
   layer_inspect?: boolean;
   timelapse?: boolean;
   use_ams?: boolean;
+  force_color_match?: boolean;  // Only start if matching material AND color is found
 }
 
 export interface PrintQueueItemUpdate {
@@ -1310,6 +1312,7 @@ export interface PrintQueueItemUpdate {
   layer_inspect?: boolean;
   timelapse?: boolean;
   use_ams?: boolean;
+  force_color_match?: boolean;  // Only start if matching material AND color is found
 }
 
 export interface PrintQueueBulkUpdate {

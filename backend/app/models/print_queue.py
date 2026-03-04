@@ -64,6 +64,9 @@ class PrintQueueItem(Base):
     layer_inspect: Mapped[bool] = mapped_column(Boolean, default=False)
     timelapse: Mapped[bool] = mapped_column(Boolean, default=False)
     use_ams: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Force color match: when True, scheduler will only start the print if matching
+    # material AND color is found (no type-only fallback). Defaults to True.
+    force_color_match: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Status: pending, printing, completed, failed, skipped, cancelled
     status: Mapped[str] = mapped_column(String(20), default="pending")
