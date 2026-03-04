@@ -64,6 +64,7 @@ class PrintQueueItem(Base):
     layer_inspect: Mapped[bool] = mapped_column(Boolean, default=False)
     timelapse: Mapped[bool] = mapped_column(Boolean, default=False)
     use_ams: Mapped[bool] = mapped_column(Boolean, default=True)
+    strict_color_match: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Status: pending, printing, completed, failed, skipped, cancelled
     status: Mapped[str] = mapped_column(String(20), default="pending")

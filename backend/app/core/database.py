@@ -1360,6 +1360,12 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Already applied
 
+    # Migration: Add strict_color_match column to print_queue for exact filament matching
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN strict_color_match BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+
     # Cleanup: Remove obsolete settings keys that are no longer used
     obsolete_keys = ["slicer_binary_path"]
     for key in obsolete_keys:

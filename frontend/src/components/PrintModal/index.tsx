@@ -108,6 +108,7 @@ export function PrintModal({
         scheduledTime,
         requirePreviousSuccess: queueItem.require_previous_success,
         autoOffAfter: queueItem.auto_off_after,
+        strictColorMatch: queueItem.strict_color_match ?? false,
       };
     }
     return DEFAULT_SCHEDULE_OPTIONS;
@@ -455,6 +456,7 @@ export function PrintModal({
       require_previous_success: scheduleOptions.requirePreviousSuccess,
       auto_off_after: scheduleOptions.autoOffAfter,
       manual_start: scheduleOptions.scheduleType === 'manual',
+      strict_color_match: scheduleOptions.strictColorMatch,
       ams_mapping: printerId ? getMappingForPrinter(printerId) : undefined,
       plate_id: selectedPlate,
       scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime
@@ -482,6 +484,7 @@ export function PrintModal({
             require_previous_success: scheduleOptions.requirePreviousSuccess,
             auto_off_after: scheduleOptions.autoOffAfter,
             manual_start: scheduleOptions.scheduleType === 'manual',
+            strict_color_match: scheduleOptions.strictColorMatch,
             ams_mapping: undefined,
             plate_id: selectedPlate,
             scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime
@@ -534,6 +537,7 @@ export function PrintModal({
               require_previous_success: scheduleOptions.requirePreviousSuccess,
               auto_off_after: scheduleOptions.autoOffAfter,
               manual_start: scheduleOptions.scheduleType === 'manual',
+              strict_color_match: scheduleOptions.strictColorMatch,
               ams_mapping: printerMapping,
               plate_id: selectedPlate,
               scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime

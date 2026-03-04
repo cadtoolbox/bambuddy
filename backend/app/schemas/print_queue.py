@@ -40,6 +40,7 @@ class PrintQueueItemCreate(BaseModel):
     layer_inspect: bool = False
     timelapse: bool = False
     use_ams: bool = True
+    strict_color_match: bool = False
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -61,6 +62,7 @@ class PrintQueueItemUpdate(BaseModel):
     layer_inspect: bool | None = None
     timelapse: bool | None = None
     use_ams: bool | None = None
+    strict_color_match: bool | None = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -87,6 +89,7 @@ class PrintQueueItemResponse(BaseModel):
     layer_inspect: bool = False
     timelapse: bool = False
     use_ams: bool = True
+    strict_color_match: bool = False
     status: Literal["pending", "printing", "completed", "failed", "skipped", "cancelled"]
     started_at: UTCDatetime
     completed_at: UTCDatetime

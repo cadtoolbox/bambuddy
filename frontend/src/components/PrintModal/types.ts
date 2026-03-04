@@ -69,6 +69,7 @@ export interface ScheduleOptions {
   scheduledTime: string;
   requirePreviousSuccess: boolean;
   autoOffAfter: boolean;
+  strictColorMatch: boolean;
 }
 
 /**
@@ -79,6 +80,7 @@ export const DEFAULT_SCHEDULE_OPTIONS: ScheduleOptions = {
   scheduledTime: '',
   requirePreviousSuccess: false,
   autoOffAfter: false,
+  strictColorMatch: false,
 };
 
 /**

@@ -231,6 +231,20 @@ export function ScheduleOptionsPanel({
         </label>
       </div>
 
+      {/* Strict color match */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="strictColorMatch"
+          checked={options.strictColorMatch}
+          onChange={(e) => onChange({ ...options, strictColorMatch: e.target.checked })}
+          className="rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+        />
+        <label htmlFor="strictColorMatch" className="text-sm text-bambu-gray">
+          Strict Color Match — require exact material and color match; holds in queue until a matching printer is available
+        </label>
+      </div>
+
       {/* Auto power off */}
       <div className="flex items-center gap-2">
         <input

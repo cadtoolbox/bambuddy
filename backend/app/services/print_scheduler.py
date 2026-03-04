@@ -144,6 +144,26 @@ class PrintScheduler:
                             )
                             continue
 
+                    # When strict color match is enabled, verify all required filaments
+                    # match exactly (type + color) before starting. Hold in queue if not.
+                    if item.strict_color_match:
+                        filament_reqs = await self._get_filament_requirements(db, item)
+                        if filament_reqs:
+                            color_mismatch = self._check_strict_filament_match(item.printer_id, filament_reqs)
+                            if color_mismatch:
+                                if item.waiting_reason != color_mismatch:
+                                    item.waiting_reason = color_mismatch
+                                    await db.commit()
+                                    logger.info(
+                                        "Queue item %s holding: %s", item.id, color_mismatch
+                                    )
+                                busy_printers.add(item.printer_id)
+                                continue
+                        # All filaments matched (or no requirements) — clear previous waiting reason
+                        if item.waiting_reason:
+                            item.waiting_reason = None
+                            await db.commit()
+
                     # Compute AMS mapping if not already set
                     if not item.ams_mapping:
                         computed_mapping = await self._compute_ams_mapping_for_printer(db, item.printer_id, item)
@@ -184,6 +204,12 @@ class PrintScheduler:
                             # Merge: keep original types for non-overridden slots, add override types
                             effective_types = sorted(set(required_types or []) | set(override_types))
 
+                    # For strict color match without overrides, load 3MF filament requirements
+                    # so the scheduler can verify exact color matches against each candidate printer
+                    strict_color_reqs = None
+                    if item.strict_color_match and not filament_overrides:
+                        strict_color_reqs = await self._get_filament_requirements(db, item)
+
                     printer_id, waiting_reason = await self._find_idle_printer_for_model(
                         db,
                         item.target_model,
@@ -191,6 +217,8 @@ class PrintScheduler:
                         effective_types,
                         item.target_location,
                         filament_overrides=filament_overrides,
+                        strict_color_match=item.strict_color_match,
+                        strict_color_reqs=strict_color_reqs,
                     )
 
                     # Update waiting_reason if changed and send notification when first waiting
@@ -269,6 +297,8 @@ class PrintScheduler:
         required_filament_types: list[str] | None = None,
         target_location: str | None = None,
         filament_overrides: list[dict] | None = None,
+        strict_color_match: bool = False,
+        strict_color_reqs: list[dict] | None = None,
     ) -> tuple[int | None, str | None]:
         """Find an idle, connected printer matching the model with compatible filaments.
 
@@ -279,6 +309,9 @@ class PrintScheduler:
             required_filament_types: Optional list of filament types needed (e.g., ["PLA", "PETG"])
                                      If provided, only printers with all required types loaded will match.
             target_location: Optional location filter. If provided, only printers in this location are considered.
+            strict_color_match: If True, require all filament colors to match exactly (no substitutions).
+            strict_color_reqs: Filament requirements (with type+color) used for strict matching when no
+                               filament_overrides are set. Loaded from the 3MF file.
 
         Returns:
             Tuple of (printer_id, waiting_reason):
@@ -334,18 +367,33 @@ class PrintScheduler:
                     logger.debug("Skipping printer %s (%s) - missing filaments: %s", printer.id, printer.name, missing)
                     continue
 
-            # If filament overrides with colors, only consider printers that have at least one color match
+            # If filament overrides with colors, check color matches
             if filament_overrides:
                 color_matches = self._count_override_color_matches(printer.id, filament_overrides)
-                if color_matches > 0:
+                # Strict mode requires ALL overrides to match; normal mode requires at least one
+                min_matches = len(filament_overrides) if strict_color_match else 1
+                if color_matches >= min_matches:
                     candidates.append((printer.id, color_matches))
                 else:
                     override_colors = [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in filament_overrides]
                     printers_missing_filament.append((printer.name, override_colors))
-                    logger.debug("Skipping printer %s (%s) - no matching override colors", printer.id, printer.name)
+                    logger.debug(
+                        "Skipping printer %s (%s) - insufficient color matches (%d/%d)",
+                        printer.id, printer.name, color_matches, len(filament_overrides),
+                    )
+                    continue
+            elif strict_color_match and strict_color_reqs:
+                # Strict mode without overrides: all 3MF filament colors must match exactly
+                mismatch = self._check_strict_filament_match(printer.id, strict_color_reqs)
+                if mismatch is None:
+                    candidates.append((printer.id, len(strict_color_reqs)))
+                else:
+                    missing_colors = [f"{r.get('type', '?')} ({r.get('color', '?')})" for r in strict_color_reqs]
+                    printers_missing_filament.append((printer.name, missing_colors))
+                    logger.debug("Skipping printer %s (%s) - strict color match failed", printer.id, printer.name)
                     continue
             else:
-                # No overrides - take first available (existing behavior)
+                # No overrides, no strict mode - take first available (existing behavior)
                 return printer.id, None
 
         # If we have candidates from override matching, pick the one with most color matches
@@ -437,6 +485,49 @@ class PrintScheduler:
             if (o_type, o_color) in loaded:
                 matches += 1
         return matches
+
+    def _check_strict_filament_match(self, printer_id: int, filament_reqs: list[dict]) -> str | None:
+        """Check whether all required filaments (type + color) are loaded on the printer.
+
+        Used for strict color match mode where no substitutions are allowed.
+
+        Args:
+            printer_id: The printer ID to check
+            filament_reqs: List of required filaments with 'type' and 'color' keys
+
+        Returns:
+            None if all filaments match exactly, or a waiting-reason string describing what is missing.
+        """
+        if not filament_reqs:
+            return None
+
+        matches = self._count_override_color_matches(printer_id, filament_reqs)
+        if matches == len(filament_reqs):
+            return None  # All required filaments present
+
+        # Build a helpful message listing what is missing
+        status = printer_manager.get_status(printer_id)
+        if not status:
+            return "Strict color match: printer status unavailable"
+
+        loaded: set[tuple[str, str]] = set()
+        for ams_unit in status.raw_data.get("ams", []):
+            for tray in ams_unit.get("tray", []):
+                tray_type = tray.get("tray_type")
+                tray_color = tray.get("tray_color", "")
+                if tray_type:
+                    loaded.add((tray_type.upper(), tray_color.replace("#", "").lower()[:6]))
+        for vt in status.raw_data.get("vt_tray") or []:
+            vt_type = vt.get("tray_type")
+            if vt_type:
+                loaded.add((vt_type.upper(), (vt.get("tray_color", "") or "").replace("#", "").lower()[:6]))
+
+        missing = [
+            f"{r.get('type', '?')} ({r.get('color', '?')})"
+            for r in filament_reqs
+            if ((r.get("type") or "").upper(), (r.get("color") or "").replace("#", "").lower()[:6]) not in loaded
+        ]
+        return f"Strict color match: needs {', '.join(missing)}"
 
     async def _compute_ams_mapping_for_printer(
         self, db: AsyncSession, printer_id: int, item: PrintQueueItem
