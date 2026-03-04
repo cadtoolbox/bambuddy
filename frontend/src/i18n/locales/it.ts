@@ -2547,6 +2547,7 @@ export default {
     originalFilament: 'Originale',
     overrideWith: 'Sostituisci con',
     resetToOriginal: 'Ripristina originale',
+    waitingForFilament: 'Il lavoro di stampa rimarrà in coda fino al caricamento del filamento corrispondente',
   },
 
   // Backup

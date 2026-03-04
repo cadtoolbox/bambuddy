@@ -2840,6 +2840,7 @@ export default {
     originalFilament: 'Original',
     overrideWith: 'Override with',
     resetToOriginal: 'Reset to original',
+    waitingForFilament: 'Print Job will remain in queue until matching filament material/color is loaded',
   },
 
   // Backup

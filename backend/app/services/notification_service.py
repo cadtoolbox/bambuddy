@@ -1140,7 +1140,7 @@ class NotificationService:
     async def on_queue_job_waiting(
         self,
         job_name: str,
-        target_model: str,
+        target_model: str | None,
         waiting_reason: str,
         db: AsyncSession,
     ):

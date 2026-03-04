@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Circle, Check, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Palette } from 'lucide-react';
+import { Circle, Check, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../../api/client';
 import { useFilamentMapping } from '../../hooks/useFilamentMapping';
 import { getGlobalTrayId } from '../../utils/amsHelpers';
@@ -20,8 +20,6 @@ export function FilamentMapping({
   currencySymbol,
   defaultCostPerKg,
   defaultExpanded = false,
-  forceColorMatch,
-  onForceColorMatchChange,
 }: FilamentMappingProps & { defaultExpanded?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -174,91 +172,83 @@ export function FilamentMapping({
             </button>
           </div>
           {filamentComparison.map((item, idx) => (
-            <div
-              key={idx}
-              className="grid items-center gap-2 text-xs"
-              style={{ gridTemplateColumns: '16px minmax(70px, 1fr) auto 2fr 16px' }}
-            >
-              {/* Required color */}
-              <span title={`Required: ${item.type} - ${getColorName(item.color)}`}>
-                <Circle className="w-3 h-3" fill={item.color} stroke={item.color} />
-              </span>
-              {/* Required type + grams + nozzle badge */}
-              <span className="text-white truncate flex items-center gap-1">
-                {isDualNozzle && item.nozzle_id != null && (
-                  <span
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold leading-none bg-bambu-gray/20 text-bambu-gray shrink-0"
-                    title={item.nozzle_id === 1 ? t('printModal.leftNozzleTooltip') : t('printModal.rightNozzleTooltip')}
-                  >
-                    {item.nozzle_id === 1 ? t('printModal.leftNozzle') : t('printModal.rightNozzle')}
+            <div key={idx} className="space-y-1">
+              <div
+                className="grid items-center gap-2 text-xs"
+                style={{ gridTemplateColumns: '16px minmax(70px, 1fr) auto 2fr 16px' }}
+              >
+                {/* Required color */}
+                <span title={`Required: ${item.type} - ${getColorName(item.color)}`}>
+                  <Circle className="w-3 h-3" fill={item.color} stroke={item.color} />
+                </span>
+                {/* Required type + grams + nozzle badge */}
+                <span className="text-white truncate flex items-center gap-1">
+                  {isDualNozzle && item.nozzle_id != null && (
+                    <span
+                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold leading-none bg-bambu-gray/20 text-bambu-gray shrink-0"
+                      title={item.nozzle_id === 1 ? t('printModal.leftNozzleTooltip') : t('printModal.rightNozzleTooltip')}
+                    >
+                      {item.nozzle_id === 1 ? t('printModal.leftNozzle') : t('printModal.rightNozzle')}
+                    </span>
+                  )}
+                  {item.type} <span className="text-bambu-gray">({item.used_grams}g)</span>
+                </span>
+                {/* Arrow */}
+                <span className="text-bambu-gray">→</span>
+                {/* Slot selector dropdown */}
+                <select
+                  value={item.loaded?.globalTrayId ?? ''}
+                  onChange={(e) => handleSlotChange(item.slot_id || 0, e.target.value)}
+                  className={`flex-1 px-2 py-1 rounded border text-xs bg-bambu-dark-secondary focus:outline-none focus:ring-1 focus:ring-bambu-green ${
+                    item.status === 'match'
+                      ? 'border-bambu-green/50 text-bambu-green'
+                      : item.status === 'type_only'
+                      ? 'border-yellow-400/50 text-yellow-400'
+                      : 'border-orange-400/50 text-orange-400'
+                  } ${item.isManual ? 'ring-1 ring-blue-400/50' : ''}`}
+                  title={item.isManual ? 'Manually selected' : 'Auto-matched'}
+                >
+                  <option value="" className="bg-bambu-dark text-bambu-gray">
+                    {t('printModal.originalFilament')}: {item.type} ({getColorName(item.color)})
+                  </option>
+                  {loadedFilaments
+                    .filter((f) => item.nozzle_id == null || f.extruderId === item.nozzle_id)
+                    .map((f) => {
+                      const remainingWeight = trayRemainingWeightMap.get(f.globalTrayId);
+                      const remainingLabel = remainingWeight != null
+                        ? t('printModal.slotRemainingShort', {
+                            grams: remainingWeight,
+                            defaultValue: ` - ${remainingWeight}g left`,
+                          })
+                        : '';
+                      return (
+                        <option key={f.globalTrayId} value={f.globalTrayId} className="bg-bambu-dark text-white">
+                          {f.label}: {f.type} ({f.colorName}){remainingLabel}
+                        </option>
+                      );
+                  })}
+                </select>
+                {/* Status icon */}
+                {item.status === 'match' ? (
+                  <Check className="w-3 h-3 text-bambu-green" />
+                ) : item.status === 'type_only' ? (
+                  <span title="Same type, different color">
+                    <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                  </span>
+                ) : (
+                  <span title="Filament type not loaded">
+                    <AlertTriangle className="w-3 h-3 text-orange-400" />
                   </span>
                 )}
-                {item.type} <span className="text-bambu-gray">({item.used_grams}g)</span>
-              </span>
-              {/* Arrow */}
-              <span className="text-bambu-gray">→</span>
-              {/* Slot selector dropdown */}
-              <select
-                value={item.loaded?.globalTrayId ?? ''}
-                onChange={(e) => handleSlotChange(item.slot_id || 0, e.target.value)}
-                className={`flex-1 px-2 py-1 rounded border text-xs bg-bambu-dark-secondary focus:outline-none focus:ring-1 focus:ring-bambu-green ${
-                  item.status === 'match'
-                    ? 'border-bambu-green/50 text-bambu-green'
-                    : item.status === 'type_only'
-                    ? 'border-yellow-400/50 text-yellow-400'
-                    : 'border-orange-400/50 text-orange-400'
-                } ${item.isManual ? 'ring-1 ring-blue-400/50' : ''}`}
-                title={item.isManual ? 'Manually selected' : 'Auto-matched'}
-              >
-                <option value="" className="bg-bambu-dark text-bambu-gray">
-                  -- Select slot --
-                </option>
-                {loadedFilaments
-                  .filter((f) => item.nozzle_id == null || f.extruderId === item.nozzle_id)
-                  .map((f) => {
-                    const remainingWeight = trayRemainingWeightMap.get(f.globalTrayId);
-                    const remainingLabel = remainingWeight != null
-                      ? t('printModal.slotRemainingShort', {
-                          grams: remainingWeight,
-                          defaultValue: ` - ${remainingWeight}g left`,
-                        })
-                      : '';
-                    return (
-                      <option key={f.globalTrayId} value={f.globalTrayId} className="bg-bambu-dark text-white">
-                        {f.label}: {f.type} ({f.colorName}){remainingLabel}
-                      </option>
-                    );
-                })}
-              </select>
-              {/* Status icon */}
-              {item.status === 'match' ? (
-                <Check className="w-3 h-3 text-bambu-green" />
-              ) : item.status === 'type_only' ? (
-                <span title="Same type, different color">
-                  <AlertTriangle className="w-3 h-3 text-yellow-400" />
-                </span>
-              ) : (
-                <span title="Filament type not loaded">
-                  <AlertTriangle className="w-3 h-3 text-orange-400" />
-                </span>
+              </div>
+              {/* Warning when original filament is selected (no slot assigned) */}
+              {!item.loaded && (
+                <p className="text-[10px] text-orange-400 pl-5">
+                  {t('printModal.waitingForFilament')}
+                </p>
               )}
             </div>
           ))}
-          {onForceColorMatchChange !== undefined && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="filamentMappingForceColorMatch"
-                checked={forceColorMatch ?? true}
-                onChange={(e) => onForceColorMatchChange(e.target.checked)}
-                className="rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
-              />
-              <label htmlFor="filamentMappingForceColorMatch" className="text-xs flex items-center gap-1 text-bambu-gray">
-                <Palette className="w-3 h-3" />
-                Force color match
-              </label>
-            </div>
-          )}
           <div className="text-xs text-bambu-gray">
             {t('printModal.totalCost')}{' '}
             <span className="text-white">

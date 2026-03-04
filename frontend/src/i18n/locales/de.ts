@@ -2836,6 +2836,7 @@ export default {
     originalFilament: 'Original',
     overrideWith: 'Ersetzen mit',
     resetToOriginal: 'Auf Original zurücksetzen',
+    waitingForFilament: 'Druckauftrag verbleibt in der Warteschlange, bis passendes Filamentmaterial/Farbe geladen ist',
   },
 
   // Backup
