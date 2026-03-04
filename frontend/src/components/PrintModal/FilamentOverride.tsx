@@ -95,7 +95,6 @@ export function FilamentOverride({
                 <select
                   value={isOverridden ? `${override.type}|${override.color}` : ''}
                   onChange={(e) => handleChange(req.slot_id, e.target.value)}
-                  disabled={compatible.length === 0}
                   className={`flex-1 px-2 py-1 rounded border text-xs bg-bambu-dark-secondary focus:outline-none focus:ring-1 focus:ring-bambu-green ${
                     isOverridden
                       ? 'border-blue-400/50 text-blue-400'

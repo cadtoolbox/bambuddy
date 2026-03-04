@@ -298,6 +298,22 @@ export function useFilamentMapping(
       // Check if there's a manual override for this slot
       if (slotId > 0 && manualMappings[slotId] !== undefined) {
         const manualTrayId = manualMappings[slotId];
+
+        // -1 is the "explicitly Original" sentinel — user chose to use the original
+        // filament from the 3MF without assigning a specific AMS slot.
+        // Skip auto-matching so the selection persists.
+        if (manualTrayId === -1) {
+          return {
+            ...req,
+            loaded: undefined,
+            hasFilament: false,
+            typeMatch: false,
+            colorMatch: false,
+            status: 'mismatch' as FilamentStatus,
+            isManual: true,
+          };
+        }
+
         const manualLoaded = loadedFilaments.find((f) => f.globalTrayId === manualTrayId);
 
         if (manualLoaded) {

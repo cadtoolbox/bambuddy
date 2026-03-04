@@ -290,4 +290,73 @@ describe('FilamentOverride', () => {
       expect(mockOnChange).toHaveBeenCalledWith({});
     });
   });
+
+  describe('disabled state', () => {
+    it('select is not disabled when no compatible filaments exist for a slot', () => {
+      const petgReqs: FilamentReqsData = {
+        filaments: [
+          { slot_id: 1, type: 'PETG', color: '#FF0000', used_grams: 25, used_meters: 8.5 },
+        ],
+      };
+
+      // Only PLA available — no PETG compatible filaments
+      const plaOnly = [
+        { type: 'PLA', color: '#FF0000', tray_info_idx: 'GFA00', extruder_id: null },
+      ];
+
+      render(
+        <FilamentOverride
+          filamentReqs={petgReqs}
+          availableFilaments={plaOnly}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const select = screen.getByRole('combobox');
+      expect(select).not.toBeDisabled();
+    });
+
+    it('select is not disabled when compatible filaments exist', () => {
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const select = screen.getByRole('combobox');
+      expect(select).not.toBeDisabled();
+    });
+
+    it('shows only the Original option when no compatible filaments exist', () => {
+      const petgReqs: FilamentReqsData = {
+        filaments: [
+          { slot_id: 1, type: 'PETG', color: '#FF0000', used_grams: 25, used_meters: 8.5 },
+        ],
+      };
+
+      const plaOnly = [
+        { type: 'PLA', color: '#FF0000', tray_info_idx: 'GFA00', extruder_id: null },
+      ];
+
+      render(
+        <FilamentOverride
+          filamentReqs={petgReqs}
+          availableFilaments={plaOnly}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const select = screen.getByRole('combobox');
+      const options = select.querySelectorAll('option');
+
+      // Only the "Original" option — no compatible PETG options
+      expect(options).toHaveLength(1);
+      expect(options[0].getAttribute('value')).toBe('');
+    });
+  });
 });

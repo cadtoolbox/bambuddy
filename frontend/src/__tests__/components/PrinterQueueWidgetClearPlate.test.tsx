@@ -530,7 +530,7 @@ describe('PrinterQueueWidget - Clear Plate', () => {
   });
 
   describe('force color match / waiting_reason filtering', () => {
-    it('hides widget when queue item has waiting_reason "No matching material/color"', async () => {
+    it('hides widget when queue item has waiting_reason starting with "Waiting on Material"', async () => {
       const noColorMatchItem = [
         {
           id: 30,
@@ -542,7 +542,7 @@ describe('PrinterQueueWidget - Clear Plate', () => {
           printer_name: 'X1 Carbon',
           print_time_seconds: 3600,
           scheduled_time: null,
-          waiting_reason: 'No matching material/color',
+          waiting_reason: 'Waiting on Material (Color): PLA (#ff0000)',
           force_color_match: true,
         },
       ];
@@ -562,6 +562,40 @@ describe('PrinterQueueWidget - Clear Plate', () => {
         expect(container.querySelector('button')).not.toBeInTheDocument();
       });
       expect(screen.queryByText('Force Color Print')).not.toBeInTheDocument();
+    });
+
+    it('hides widget when waiting_reason lists multiple missing materials', async () => {
+      const multiMaterialItem = [
+        {
+          id: 33,
+          printer_id: 1,
+          archive_id: 33,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Multi Material Print',
+          printer_name: 'X1 Carbon',
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          waiting_reason: 'Waiting on Material (Color): PETG (#00ff00), ABS (#0000ff)',
+          force_color_match: true,
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(multiMaterialItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('Multi Material Print')).not.toBeInTheDocument();
     });
 
     it('shows widget when queue item has a different waiting_reason', async () => {

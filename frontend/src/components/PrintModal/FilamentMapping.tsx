@@ -108,10 +108,12 @@ export function FilamentMapping({
   const handleSlotChange = (slotId: number, value: string) => {
     if (slotId > 0) {
       if (value === '') {
-        // Clear manual override
-        const next = { ...manualMappings };
-        delete next[slotId];
-        onManualMappingChange(next);
+        // Explicitly select "Original" — store -1 sentinel so auto-matching
+        // does not immediately re-assign a slot for this position.
+        onManualMappingChange({
+          ...manualMappings,
+          [slotId]: -1,
+        });
       } else {
         onManualMappingChange({
           ...manualMappings,
