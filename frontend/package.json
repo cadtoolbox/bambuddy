@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@floating-ui/dom": "^1.7.5",
     "@tanstack/react-query": "^5.90.11",
+    "@testing-library/dom": "^10.4.1",
     "@tiptap/extension-color": "^3.11.1",
     "@tiptap/extension-image": "^3.11.1",
     "@tiptap/extension-link": "^3.11.1",

@@ -775,6 +775,8 @@ export function PrintModal({
                 defaultExpanded={!!initialSelectedPrinterIds?.length || (settings?.per_printer_mapping_expanded ?? false)}
                 currencySymbol={currencySymbol}
                 defaultCostPerKg={defaultCostPerKg}
+                forceColorMatch={scheduleOptions.forceColorMatch}
+                onForceColorMatchChange={(value) => setScheduleOptions(prev => ({ ...prev, forceColorMatch: value }))}
               />
             )}
 

@@ -528,4 +528,106 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       });
     });
   });
+
+  describe('force color match / waiting_reason filtering', () => {
+    it('hides widget when queue item has waiting_reason "No matching material/color"', async () => {
+      const noColorMatchItem = [
+        {
+          id: 30,
+          printer_id: 1,
+          archive_id: 30,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Force Color Print',
+          printer_name: 'X1 Carbon',
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          waiting_reason: 'No matching material/color',
+          force_color_match: true,
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(noColorMatchItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('Force Color Print')).not.toBeInTheDocument();
+    });
+
+    it('shows widget when queue item has a different waiting_reason', async () => {
+      const otherWaitingItem = [
+        {
+          id: 31,
+          printer_id: null,
+          archive_id: 31,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Waiting Print',
+          printer_name: null,
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          waiting_reason: 'No printer available',
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(otherWaitingItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Waiting Print')).toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when queue item has no waiting_reason', async () => {
+      const noWaitingReasonItem = [
+        {
+          id: 32,
+          printer_id: 1,
+          archive_id: 32,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Normal Print',
+          printer_name: 'X1 Carbon',
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          waiting_reason: null,
+          force_color_match: true,
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(noWaitingReasonItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Normal Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+  });
 });
