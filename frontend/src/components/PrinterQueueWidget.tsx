@@ -41,6 +41,10 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
 
   // Filter queue to items this printer can actually print (filament type + color check)
   const compatibleQueue = queue?.filter(item => {
+    // If the item is waiting due to no matching material/color, it's not compatible
+    if (item.waiting_reason === 'No matching material/color') {
+      return false;
+    }
     // Type check: all required filament types must be loaded
     if (item.required_filament_types?.length && loadedFilamentTypes?.size) {
       if (!item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()))) {

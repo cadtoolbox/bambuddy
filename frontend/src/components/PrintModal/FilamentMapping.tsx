@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Circle, Check, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Circle, Check, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Palette } from 'lucide-react';
 import { api } from '../../api/client';
 import { useFilamentMapping } from '../../hooks/useFilamentMapping';
 import { getGlobalTrayId } from '../../utils/amsHelpers';
@@ -20,6 +20,8 @@ export function FilamentMapping({
   currencySymbol,
   defaultCostPerKg,
   defaultExpanded = false,
+  forceColorMatch,
+  onForceColorMatchChange,
 }: FilamentMappingProps & { defaultExpanded?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -242,6 +244,21 @@ export function FilamentMapping({
               )}
             </div>
           ))}
+          {onForceColorMatchChange !== undefined && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="filamentMappingForceColorMatch"
+                checked={forceColorMatch ?? true}
+                onChange={(e) => onForceColorMatchChange(e.target.checked)}
+                className="rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+              />
+              <label htmlFor="filamentMappingForceColorMatch" className="text-xs flex items-center gap-1 text-bambu-gray">
+                <Palette className="w-3 h-3" />
+                Force color match
+              </label>
+            </div>
+          )}
           <div className="text-xs text-bambu-gray">
             {t('printModal.totalCost')}{' '}
             <span className="text-white">
