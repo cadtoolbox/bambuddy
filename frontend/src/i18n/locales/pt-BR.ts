@@ -2834,6 +2834,7 @@ export default {
     originalFilament: 'Original',
     overrideWith: 'Substituir por',
     resetToOriginal: 'Restaurar original',
+    waitingForFilament: 'O trabalho de impressão permanecerá na fila até que o filamento correspondente seja carregado',
   },
 
   // Backup

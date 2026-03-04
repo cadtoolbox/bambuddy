@@ -2732,6 +2732,7 @@ export default {
     originalFilament: '原始',
     overrideWith: '覆盖为',
     resetToOriginal: '恢复为原始',
+    waitingForFilament: '打印任务将留在队列中，直到加载匹配的耗材材料/颜色',
   },
 
   // Backup

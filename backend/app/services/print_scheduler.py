@@ -144,32 +144,42 @@ class PrintScheduler:
                             )
                             continue
 
+                    # When no manual AMS mapping is set, check if required filaments are loaded.
+                    # This allows jobs to wait in queue until the correct material/color is available.
+                    if not item.ams_mapping:
+                        filament_waiting_reason = await self._get_printer_filament_waiting_reason(
+                            db, item.printer_id, item
+                        )
+                        if filament_waiting_reason:
+                            # Required filaments not loaded - set waiting reason and skip
+                            if item.waiting_reason != filament_waiting_reason:
+                                was_waiting = item.waiting_reason is not None
+                                item.waiting_reason = filament_waiting_reason
+                                await db.commit()
+                                # Send waiting notification only when transitioning to waiting state
+                                if not was_waiting:
+                                    job_name = await self._get_job_name(db, item)
+                                    printer = await self._get_printer(db, item.printer_id)
+                                    await notification_service.on_queue_job_waiting(
+                                        job_name=job_name,
+                                        target_model=printer.model or printer.name if printer else "",
+                                        waiting_reason=filament_waiting_reason,
+                                        db=db,
+                                    )
+                            logger.debug(
+                                "Queue item %s: waiting for filament on printer %s: %s",
+                                item.id, item.printer_id, filament_waiting_reason,
+                            )
+                            busy_printers.add(item.printer_id)
+                            continue
+                        elif item.waiting_reason:
+                            # Filaments are now available - clear waiting reason so print can start
+                            item.waiting_reason = None
+                            await db.commit()
+
                     # Compute AMS mapping if not already set
                     if not item.ams_mapping:
                         computed_mapping = await self._compute_ams_mapping_for_printer(db, item.printer_id, item)
-
-                        # When force_color_match is enabled, verify all required slots have a
-                        # color+type match (no -1 entries).  A -1 means no matching spool was
-                        # found for that slot — either wrong color or no filament at all.
-                        if item.force_color_match:
-                            no_match = computed_mapping is None or any(v == -1 for v in computed_mapping)
-                            if no_match:
-                                new_reason = "No matching material/color"
-                                if item.waiting_reason != new_reason:
-                                    item.waiting_reason = new_reason
-                                    await db.commit()
-                                    logger.info(
-                                        "Queue item %s: force_color_match=True but no color match on printer %s — waiting",
-                                        item.id,
-                                        item.printer_id,
-                                    )
-                                busy_printers.add(item.printer_id)
-                                continue
-                            # Color match found — clear any previous waiting reason
-                            if item.waiting_reason:
-                                item.waiting_reason = None
-                                await db.commit()
-
                         if computed_mapping:
                             item.ams_mapping = json.dumps(computed_mapping)
                             logger.info(
@@ -274,25 +284,6 @@ class PrintScheduler:
                         # This is critical for model-based jobs where mapping wasn't computed upfront
                         if not item.ams_mapping:
                             computed_mapping = await self._compute_ams_mapping_for_printer(db, printer_id, item)
-
-                            # When force_color_match is enabled, verify all slots have a color match
-                            if item.force_color_match:
-                                no_match = computed_mapping is None or any(v == -1 for v in computed_mapping)
-                                if no_match:
-                                    # Unassign printer — keep item as model-based until a
-                                    # printer with the right colors becomes available
-                                    item.printer_id = None
-                                    new_reason = "No matching material/color"
-                                    if item.waiting_reason != new_reason:
-                                        item.waiting_reason = new_reason
-                                        await db.commit()
-                                    logger.info(
-                                        "Queue item %s: force_color_match=True but no color match on printer %s — unassigning",
-                                        item.id,
-                                        printer_id,
-                                    )
-                                    busy_printers.add(printer_id)
-                                    continue
 
                             if computed_mapping:
                                 item.ams_mapping = json.dumps(computed_mapping)
@@ -400,8 +391,13 @@ class PrintScheduler:
         reasons = []
         if printers_missing_filament:
             # Filament mismatch is most actionable - show first
-            names_and_missing = [f"{name} (needs {', '.join(missing)})" for name, missing in printers_missing_filament]
-            reasons.append(f"Waiting for filament: {'; '.join(names_and_missing)}")
+            # Format: "Waiting on Material (Color): {type} ({color}); ..."
+            missing_items = []
+            for name, missing in printers_missing_filament:
+                for m in missing:
+                    if m not in missing_items:
+                        missing_items.append(m)
+            reasons.append(f"Waiting on Material (Color): {', '.join(missing_items)}")
         if printers_busy:
             reasons.append(f"Busy: {', '.join(printers_busy)}")
         if printers_offline:
@@ -448,6 +444,77 @@ class PrintScheduler:
                 missing.append(req_type)
 
         return missing
+
+    async def _get_printer_filament_waiting_reason(
+        self, db: AsyncSession, printer_id: int, item: PrintQueueItem
+    ) -> str | None:
+        """Check if required filament types are loaded on the specific printer.
+
+        Returns a waiting reason string if any required filament type is missing
+        on the printer, otherwise returns None (all filaments available).
+
+        Args:
+            db: Database session
+            printer_id: The target printer ID
+            item: Queue item with archive_id/library_file_id and optional filament_overrides
+
+        Returns:
+            None if all required filaments are available, or a reason string if not.
+        """
+        # Get filament requirements
+        filament_reqs = await self._get_filament_requirements(db, item)
+        if not filament_reqs:
+            return None  # No requirements, no waiting needed
+
+        # Apply overrides if present (same logic as _compute_ams_mapping_for_printer)
+        effective_reqs = [dict(req) for req in filament_reqs]
+        if item.filament_overrides:
+            try:
+                overrides = json.loads(item.filament_overrides)
+                override_map = {o["slot_id"]: o for o in overrides}
+                for req in effective_reqs:
+                    if req["slot_id"] in override_map:
+                        override = override_map[req["slot_id"]]
+                        req["type"] = override["type"]
+                        req["color"] = override["color"]
+                        req["tray_info_idx"] = ""
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.warning("Failed to apply filament overrides for waiting check: %s", e)
+
+        # Get printer status
+        status = printer_manager.get_status(printer_id)
+        if not status:
+            return None  # Can't determine status, don't block
+
+        # Build loaded filaments from printer status
+        loaded_filaments = self._build_loaded_filaments(status)
+
+        # Check each required filament type against loaded filaments
+        missing_parts = []
+        for req in effective_reqs:
+            req_type = (req.get("type") or "").upper()
+            req_nozzle = req.get("nozzle_id")
+
+            # Filter available filaments by nozzle if applicable (hard filter for dual-nozzle)
+            available = loaded_filaments
+            if req_nozzle is not None:
+                available = [f for f in available if f.get("extruder_id") == req_nozzle]
+
+            # Check if required type exists among available filaments
+            type_found = any((f.get("type") or "").upper() == req_type for f in available)
+
+            if not type_found:
+                nozzle_suffix = ""
+                if req_nozzle == 1:
+                    nozzle_suffix = " (Left Nozzle)"
+                elif req_nozzle == 0:
+                    nozzle_suffix = " (Right Nozzle)"
+                color = req.get("color", "")
+                missing_parts.append(f"{req['type']} ({color}){nozzle_suffix}")
+
+        if missing_parts:
+            return f"Waiting on Material (Color): {', '.join(missing_parts)}"
+        return None
 
     def _count_override_color_matches(self, printer_id: int, overrides: list[dict]) -> int:
         """Count how many filament overrides have an exact color match on the printer.
@@ -539,7 +606,7 @@ class PrintScheduler:
             return None
 
         # Compute mapping: match required filaments to available slots
-        return self._match_filaments_to_slots(filament_reqs, loaded_filaments, force_color_match=item.force_color_match)
+        return self._match_filaments_to_slots(filament_reqs, loaded_filaments)
 
     async def _get_filament_requirements(self, db: AsyncSession, item: PrintQueueItem) -> list[dict] | None:
         """Extract filament requirements from the source 3MF file.
@@ -746,12 +813,10 @@ class PrintScheduler:
         except ValueError:
             return False
 
-    def _match_filaments_to_slots(self, required: list[dict], loaded: list[dict], force_color_match: bool = False) -> list[int] | None:
+    def _match_filaments_to_slots(self, required: list[dict], loaded: list[dict]) -> list[int] | None:
         """Match required filaments to loaded filaments and build AMS mapping.
 
         Priority: unique tray_info_idx match > exact color match > similar color match > type-only match
-
-        When force_color_match is True, type-only matches are not used (color must match).
 
         The tray_info_idx is a filament type identifier stored in the 3MF file when the user
         slices (e.g., "GFA00" for generic PLA, "P4d64437" for custom presets). If the same
@@ -840,11 +905,7 @@ class PrintScheduler:
                     elif not type_only_match:
                         type_only_match = f
 
-            # When force_color_match is True, skip type-only matches (color must match)
-            if force_color_match:
-                match = idx_match or exact_match or similar_match
-            else:
-                match = idx_match or exact_match or similar_match or type_only_match
+            match = idx_match or exact_match or similar_match or type_only_match
             if match:
                 used_tray_ids.add(match["global_tray_id"])
                 comparisons.append({"slot_id": req.get("slot_id", 0), "global_tray_id": match["global_tray_id"]})

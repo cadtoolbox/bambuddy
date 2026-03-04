@@ -69,7 +69,6 @@ export interface ScheduleOptions {
   scheduledTime: string;
   requirePreviousSuccess: boolean;
   autoOffAfter: boolean;
-  forceColorMatch: boolean;
 }
 
 /**
@@ -80,7 +79,6 @@ export const DEFAULT_SCHEDULE_OPTIONS: ScheduleOptions = {
   scheduledTime: '',
   requirePreviousSuccess: false,
   autoOffAfter: false,
-  forceColorMatch: true,
 };
 
 /**
@@ -177,10 +175,6 @@ export interface FilamentMappingProps {
   onManualMappingChange: (mappings: Record<number, number>) => void;
   currencySymbol: string;
   defaultCostPerKg: number;
-  /** Whether to require matching color (in addition to type) before allowing print */
-  forceColorMatch?: boolean;
-  /** Callback when forceColorMatch is toggled */
-  onForceColorMatchChange?: (value: boolean) => void;
 }
 
 /**

@@ -2751,6 +2751,7 @@ export default {
     originalFilament: 'オリジナル',
     overrideWith: '変更先',
     resetToOriginal: 'オリジナルに戻す',
+    waitingForFilament: '一致するフィラメント素材/色がロードされるまで印刷ジョブはキューに残ります',
   },
   backup: {
     restoreBackup: 'バックアップの復元',

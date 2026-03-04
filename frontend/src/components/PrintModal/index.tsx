@@ -108,7 +108,6 @@ export function PrintModal({
         scheduledTime,
         requirePreviousSuccess: queueItem.require_previous_success,
         autoOffAfter: queueItem.auto_off_after,
-        forceColorMatch: queueItem.force_color_match ?? DEFAULT_SCHEDULE_OPTIONS.forceColorMatch,
       };
     }
     return DEFAULT_SCHEDULE_OPTIONS;
@@ -456,7 +455,6 @@ export function PrintModal({
       require_previous_success: scheduleOptions.requirePreviousSuccess,
       auto_off_after: scheduleOptions.autoOffAfter,
       manual_start: scheduleOptions.scheduleType === 'manual',
-      force_color_match: scheduleOptions.forceColorMatch,
       ams_mapping: printerId ? getMappingForPrinter(printerId) : undefined,
       plate_id: selectedPlate,
       scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime
@@ -484,7 +482,6 @@ export function PrintModal({
             require_previous_success: scheduleOptions.requirePreviousSuccess,
             auto_off_after: scheduleOptions.autoOffAfter,
             manual_start: scheduleOptions.scheduleType === 'manual',
-            force_color_match: scheduleOptions.forceColorMatch,
             ams_mapping: undefined,
             plate_id: selectedPlate,
             scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime
@@ -537,7 +534,6 @@ export function PrintModal({
               require_previous_success: scheduleOptions.requirePreviousSuccess,
               auto_off_after: scheduleOptions.autoOffAfter,
               manual_start: scheduleOptions.scheduleType === 'manual',
-              force_color_match: scheduleOptions.forceColorMatch,
               ams_mapping: printerMapping,
               plate_id: selectedPlate,
               scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime
@@ -775,8 +771,6 @@ export function PrintModal({
                 defaultExpanded={!!initialSelectedPrinterIds?.length || (settings?.per_printer_mapping_expanded ?? false)}
                 currencySymbol={currencySymbol}
                 defaultCostPerKg={defaultCostPerKg}
-                forceColorMatch={scheduleOptions.forceColorMatch}
-                onForceColorMatchChange={(value) => setScheduleOptions(prev => ({ ...prev, forceColorMatch: value }))}
               />
             )}
 
