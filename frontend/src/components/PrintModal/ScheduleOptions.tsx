@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, Clock, Hand, Power } from 'lucide-react';
+import { Calendar, Clock, Hand, Palette, Power } from 'lucide-react';
 import type { ScheduleOptionsProps, ScheduleType } from './types';
 import {
   formatDateInput,
@@ -244,6 +244,21 @@ export function ScheduleOptionsPanel({
         <label htmlFor="autoOffAfter" className={`text-sm flex items-center gap-1 ${canControlPrinter ? 'text-bambu-gray' : 'text-bambu-gray/50'}`}>
           <Power className="w-3.5 h-3.5" />
           Power off printer when done
+        </label>
+      </div>
+
+      {/* Force color match */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="forceColorMatch"
+          checked={options.forceColorMatch}
+          onChange={(e) => onChange({ ...options, forceColorMatch: e.target.checked })}
+          className="rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+        />
+        <label htmlFor="forceColorMatch" className="text-sm flex items-center gap-1 text-bambu-gray">
+          <Palette className="w-3.5 h-3.5" />
+          Force color match
         </label>
       </div>
 
