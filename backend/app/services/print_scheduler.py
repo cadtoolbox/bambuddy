@@ -320,6 +320,15 @@ class PrintScheduler:
 
         for printer in printers:
             if printer.id in exclude_ids:
+                # Printer is already claimed by another job in this scheduling run.
+                # For force-color jobs, still check if the color would match — if not,
+                # report it as a color mismatch rather than plain "Busy" so the user
+                # knows the job needs a filament change, not just to wait for availability.
+                if force_overrides and not pref_overrides:
+                    missing_colors = self._get_missing_force_color_slots(printer.id, force_overrides)
+                    if missing_colors:
+                        printers_missing_filament.append((printer.name, missing_colors))
+                        continue
                 printers_busy.append(printer.name)
                 continue
 
@@ -331,6 +340,21 @@ class PrintScheduler:
                 continue
 
             if not is_idle:
+                # Printer is currently printing.  For force-color jobs, check whether the
+                # loaded color would satisfy the requirement — if not, surface it as a
+                # color-mismatch reason rather than plain "Busy" so the user understands
+                # that the job is waiting for a filament change, not just printer availability.
+                if force_overrides and not pref_overrides:
+                    missing_colors = self._get_missing_force_color_slots(printer.id, force_overrides)
+                    if missing_colors:
+                        printers_missing_filament.append((printer.name, missing_colors))
+                        logger.debug(
+                            "Printer %s (%s) is busy but also has wrong force-color: %s",
+                            printer.id,
+                            printer.name,
+                            missing_colors,
+                        )
+                        continue
                 printers_busy.append(printer.name)
                 continue
 
