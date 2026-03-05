@@ -172,7 +172,7 @@ export function PrintModal({
     if (mode === 'edit-queue-item' && queueItem?.filament_overrides) {
       const flags: Record<number, boolean> = {};
       for (const o of queueItem.filament_overrides) {
-        flags[o.slot_id] = (o as { slot_id: number; type: string; color: string; force_color_match?: boolean }).force_color_match !== false;
+        flags[o.slot_id] = o.force_color_match !== false;
       }
       return flags;
     }

@@ -2751,7 +2751,7 @@ export default {
     originalFilament: 'オリジナル',
     overrideWith: '変更先',
     resetToOriginal: 'オリジナルに戻す',
-    forceColorMatch: 'Force Color Match',
+    forceColorMatch: 'カラーマッチを強制',
   },
   backup: {
     restoreBackup: 'バックアップの復元',
