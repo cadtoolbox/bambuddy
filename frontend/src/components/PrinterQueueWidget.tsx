@@ -41,15 +41,19 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
 
   // Filter queue to items this printer can actually print (filament type + color check)
   const compatibleQueue = queue?.filter(item => {
-    // Type check: all required filament types must be loaded
-    if (item.required_filament_types?.length && loadedFilamentTypes?.size) {
+    // Type check: all required filament types must be loaded.
+    // Only apply when loadedFilamentTypes is provided (not undefined).
+    // An empty Set means no filaments are loaded — jobs requiring specific types are incompatible.
+    if (item.required_filament_types?.length && loadedFilamentTypes !== undefined) {
       if (!item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()))) {
         return false;
       }
     }
     // Color check: evaluate force_color_match per slot
-    // Mirrors backend _find_idle_printer_for_model() logic
-    if (item.filament_overrides?.length && loadedFilaments?.size) {
+    // Mirrors backend _find_idle_printer_for_model() logic.
+    // Only apply when loadedFilaments is provided (not undefined).
+    // An empty Set means no filaments are loaded — force-matched slots cannot match.
+    if (item.filament_overrides?.length && loadedFilaments !== undefined) {
       const forceOverrides = item.filament_overrides.filter(o => o.force_color_match === true);
       const prefOverrides = item.filament_overrides.filter(o => o.force_color_match !== true);
 

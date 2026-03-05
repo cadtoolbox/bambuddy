@@ -338,7 +338,17 @@ class PrintScheduler:
             if required_filament_types:
                 missing = self._get_missing_filament_types(printer.id, required_filament_types)
                 if missing:
-                    printers_missing_filament.append((printer.name, missing))
+                    # When force_overrides are present, enrich missing entries with color info
+                    # so the "Waiting on" message includes "TYPE (color)" instead of just "TYPE"
+                    if force_overrides:
+                        force_color_map = {(o.get("type") or "").upper(): o.get("color", "?") for o in force_overrides}
+                        missing_enriched = [
+                            f"{t} ({force_color_map[t_upper]})" if (t_upper := t.upper()) in force_color_map else t
+                            for t in missing
+                        ]
+                        printers_missing_filament.append((printer.name, missing_enriched))
+                    else:
+                        printers_missing_filament.append((printer.name, missing))
                     logger.debug("Skipping printer %s (%s) - missing filaments: %s", printer.id, printer.name, missing)
                     continue
 

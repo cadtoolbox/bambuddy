@@ -642,5 +642,80 @@ describe('PrinterQueueWidget - Clear Plate', () => {
         expect(screen.getByText('Mixed Match Job')).toBeInTheDocument();
       });
     });
+
+    it('hides force_color_match job when printer has no filaments loaded (empty Set)', async () => {
+      const forceColorItem = [
+        {
+          id: 40,
+          printer_id: null,
+          archive_id: 40,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Force Color No Filament',
+          printer_name: null,
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forceColorItem))
+      );
+
+      // Printer has no filaments at all — empty Sets (not undefined)
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set()}
+          loadedFilaments={new Set()}
+        />
+      );
+
+      // Job must not appear and Clear Plate button must not show
+      await new Promise((r) => setTimeout(r, 200));
+      expect(screen.queryByText('Force Color No Filament')).not.toBeInTheDocument();
+      expect(container.querySelector('button')).not.toBeInTheDocument();
+    });
+
+    it('does not hide job when loadedFilaments prop is omitted (unknown filaments)', async () => {
+      const forceColorItem = [
+        {
+          id: 41,
+          printer_id: null,
+          archive_id: 41,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Force Color Unknown Filaments',
+          printer_name: null,
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forceColorItem))
+      );
+
+      // loadedFilamentTypes and loadedFilaments are NOT provided (undefined) — skip filtering
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Force Color Unknown Filaments')).toBeInTheDocument();
+      });
+    });
   });
 });
