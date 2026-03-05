@@ -414,3 +414,65 @@ class TestFindIdlePrinterForceColorMatch:
         # Should still be assigned because at least one color matched (legacy behaviour)
         assert printer_id == 7
         assert reason is None
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_no_filaments_loaded_includes_color_in_waiting_reason(self, mock_pm, scheduler):
+        """Printer with no filaments generates waiting reason with color info for force_color_match."""
+        # Printer has completely empty AMS and no external spool
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={"ams": [], "vt_tray": []}
+        )
+        mock_pm.is_connected.return_value = True
+
+        scheduler._is_printer_idle = MagicMock(return_value=True)
+
+        mock_printer = MagicMock()
+        mock_printer.id = 1
+        mock_printer.name = "Empty Printer"
+        mock_printer.model = "X1C"
+        mock_printer.location = None
+
+        mock_db = self._make_async_db([mock_printer])
+
+        force_overrides = [{"type": "PLA", "color": "#FF0000", "force_color_match": True}]
+        required_types = ["PLA"]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "X1C", set(), required_filament_types=required_types, filament_overrides=force_overrides
+        )
+
+        assert printer_id is None
+        assert reason is not None
+        # Color info must appear in the message even though the printer failed the type check
+        assert "No matching material/color" in reason
+        assert "PLA (#FF0000)" in reason
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_no_filaments_not_shown_as_busy(self, mock_pm, scheduler):
+        """Printer with no filaments is placed in 'missing filament' bucket, not 'busy' bucket."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={"ams": [], "vt_tray": []}
+        )
+        mock_pm.is_connected.return_value = True
+
+        scheduler._is_printer_idle = MagicMock(return_value=True)
+
+        mock_printer = MagicMock()
+        mock_printer.id = 1
+        mock_printer.name = "Empty Printer"
+        mock_printer.model = "X1C"
+        mock_printer.location = None
+
+        mock_db = self._make_async_db([mock_printer])
+
+        force_overrides = [{"type": "PLA", "color": "#FF0000", "force_color_match": True}]
+        required_types = ["PLA"]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "X1C", set(), required_filament_types=required_types, filament_overrides=force_overrides
+        )
+
+        assert printer_id is None
+        assert reason is not None
+        # Should NOT appear as "Busy" — that label is reserved for printers running a print
+        assert "Busy" not in reason
