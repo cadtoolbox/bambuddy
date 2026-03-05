@@ -867,6 +867,7 @@ export default {
       failed: '失敗',
       skipped: 'スキップ',
       cancelled: 'キャンセル済み',
+      noMatchingMaterial: '一致する素材/色がありません。{{material}} を待機中',
     },
     summary: {
       printing: '印刷中',
