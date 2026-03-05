@@ -1,0 +1,10 @@
+{
+  "name": "bambuddy",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "test": "npm run test:run --prefix frontend",
+    "install": "npm install --prefix frontend"
+  }
+}
