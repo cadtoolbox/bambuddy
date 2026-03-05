@@ -388,7 +388,7 @@ describe('FilamentOverride', () => {
         />
       );
 
-      expect(screen.getByText('Force Color Match')).toBeInTheDocument();
+      expect(screen.getByText('Force color match')).toBeInTheDocument();
     });
   });
 });

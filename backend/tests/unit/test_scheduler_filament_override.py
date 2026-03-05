@@ -747,3 +747,65 @@ class TestFindIdlePrinterForceColorMatch:
         # Printer is genuinely busy (printing another job) — Job 2 correctly reports "Busy"
         assert r2 is not None
         assert "Busy" in r2
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_busy_printer_right_color_shows_busy_even_when_other_printer_has_wrong_color(self, mock_pm, scheduler):
+        """When one printer is busy but has matching force-color AND another printer is idle with
+        wrong color, the message should be 'Busy' — not 'No matching material/color' — because the
+        job will start automatically once the busy printer finishes."""
+        from unittest.mock import AsyncMock
+
+        # Printer 1: busy (currently printing), has Red PLA (correct color)
+        # Printer 2: idle, has Green PLA (wrong color)
+        def get_status_side_effect(printer_id):
+            if printer_id == 1:
+                return MagicMock(
+                    raw_data={
+                        "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"}]}],
+                    }
+                )
+            if printer_id == 2:
+                return MagicMock(
+                    raw_data={
+                        "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "00FF00FF"}]}],
+                    }
+                )
+            return None
+
+        mock_pm.get_status.side_effect = get_status_side_effect
+        mock_pm.is_connected.return_value = True
+
+        def is_idle_side_effect(printer_id):
+            return printer_id == 2  # Only printer 2 is idle; printer 1 is busy
+
+        scheduler._is_printer_idle = MagicMock(side_effect=is_idle_side_effect)
+
+        mock_printer1 = MagicMock()
+        mock_printer1.id = 1
+        mock_printer1.name = "Busy Printer"
+        mock_printer1.model = "X1C"
+        mock_printer1.location = None
+
+        mock_printer2 = MagicMock()
+        mock_printer2.id = 2
+        mock_printer2.name = "Wrong Color Printer"
+        mock_printer2.model = "X1C"
+        mock_printer2.location = None
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_printer1, mock_printer2]
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        # Job requires Red PLA: printer1 has it (but is busy), printer2 has wrong color
+        force_overrides = [{"type": "PLA", "color": "#FF0000", "color_name": "Red", "force_color_match": True}]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "X1C", set(), filament_overrides=force_overrides
+        )
+
+        assert printer_id is None
+        assert reason is not None
+        # Printer 1 has the right color — "Busy" should appear, not "No matching material/color"
+        assert "Busy" in reason
+        assert "No matching material/color" not in reason
