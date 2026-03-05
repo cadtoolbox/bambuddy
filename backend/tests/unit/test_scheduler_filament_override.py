@@ -213,3 +213,204 @@ class TestFilamentOverrideInMatching:
         # Nozzle filter limits to extruder 1 (LEFT) which only has PLA.
         # Override changed type to PETG, so no type match on LEFT nozzle -> -1
         assert result == [-1]
+
+
+class TestGetMissingForceColorSlots:
+    """Test the _get_missing_force_color_slots method."""
+
+    @pytest.fixture
+    def scheduler(self):
+        return PrintScheduler()
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    def test_no_status_returns_all_slots(self, mock_pm, scheduler):
+        """When printer has no status, all force-matched slots are reported missing."""
+        mock_pm.get_status.return_value = None
+
+        result = scheduler._get_missing_force_color_slots(
+            1, [{"type": "PLA", "color": "#FF0000", "force_color_match": True}]
+        )
+        assert result == ["PLA (#FF0000)"]
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    def test_exact_match_returns_empty(self, mock_pm, scheduler):
+        """All force slots loaded on printer returns empty list."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"}]}],
+            }
+        )
+
+        result = scheduler._get_missing_force_color_slots(
+            1, [{"type": "PLA", "color": "#FF0000", "force_color_match": True}]
+        )
+        assert result == []
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    def test_partial_match_reports_missing(self, mock_pm, scheduler):
+        """Only missing slots reported when one matches and one does not."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"}]}],
+            }
+        )
+
+        overrides = [
+            {"type": "PLA", "color": "#FF0000", "force_color_match": True},
+            {"type": "PETG", "color": "#00FF00", "force_color_match": True},
+        ]
+        result = scheduler._get_missing_force_color_slots(1, overrides)
+        assert result == ["PETG (#00FF00)"]
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    def test_external_spool_match(self, mock_pm, scheduler):
+        """Force-matched slot satisfied by external spool (vt_tray)."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [],
+                "vt_tray": [{"tray_type": "TPU", "tray_color": "0000FFFF"}],
+            }
+        )
+
+        result = scheduler._get_missing_force_color_slots(
+            1, [{"type": "TPU", "color": "#0000FF", "force_color_match": True}]
+        )
+        assert result == []
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    def test_dual_nozzle_color_match(self, mock_pm, scheduler):
+        """Force color match works across multiple AMS trays on dual-nozzle printer."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [
+                    {
+                        "id": 0,
+                        "tray": [
+                            {"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"},
+                            {"id": 1, "tray_type": "PETG", "tray_color": "00FF00FF"},
+                        ],
+                    }
+                ],
+            }
+        )
+
+        overrides = [
+            {"type": "PLA", "color": "#FF0000", "force_color_match": True},
+            {"type": "PETG", "color": "#00FF00", "force_color_match": True},
+        ]
+        result = scheduler._get_missing_force_color_slots(1, overrides)
+        assert result == []
+
+
+class TestFindIdlePrinterForceColorMatch:
+    """Integration tests for _find_idle_printer_for_model with force_color_match overrides."""
+
+    @pytest.fixture
+    def scheduler(self):
+        return PrintScheduler()
+
+    def _make_async_db(self, printers):
+        """Build a minimal async-compatible DB mock that returns the given printers."""
+        from unittest.mock import AsyncMock
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = printers
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        return mock_db
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_force_color_match_skips_printer_missing_color(self, mock_pm, scheduler):
+        """Printer missing a force-matched color is skipped with descriptive waiting reason."""
+        # Printer has red PLA but not green PLA
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"}]}],
+            }
+        )
+        mock_pm.is_connected.return_value = True
+
+        scheduler._is_printer_idle = MagicMock(return_value=True)
+
+        mock_printer = MagicMock()
+        mock_printer.id = 1
+        mock_printer.name = "Test Printer"
+        mock_printer.model = "X1C"
+        mock_printer.location = None
+
+        mock_db = self._make_async_db([mock_printer])
+
+        force_overrides = [{"type": "PLA", "color": "#00FF00", "force_color_match": True}]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "X1C", set(), filament_overrides=force_overrides
+        )
+
+        assert printer_id is None
+        assert reason is not None
+        assert "No matching material/color" in reason
+        assert "PLA (#00FF00)" in reason
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_force_color_match_succeeds_when_color_loaded(self, mock_pm, scheduler):
+        """Printer with all force-matched colors loaded is assigned immediately."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "00FF00FF"}]}],
+            }
+        )
+        mock_pm.is_connected.return_value = True
+
+        scheduler._is_printer_idle = MagicMock(return_value=True)
+
+        mock_printer = MagicMock()
+        mock_printer.id = 42
+        mock_printer.name = "Green Printer"
+        mock_printer.model = "X1C"
+        mock_printer.location = None
+
+        mock_db = self._make_async_db([mock_printer])
+
+        force_overrides = [{"type": "PLA", "color": "#00FF00", "force_color_match": True}]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "X1C", set(), filament_overrides=force_overrides
+        )
+
+        assert printer_id == 42
+        assert reason is None
+
+    @patch("backend.app.services.print_scheduler.printer_manager")
+    @pytest.mark.asyncio
+    async def test_legacy_overrides_without_force_flag_use_preference_ordering(self, mock_pm, scheduler):
+        """Old overrides without force_color_match use existing 'at least one match' preference logic."""
+        mock_pm.get_status.return_value = MagicMock(
+            raw_data={
+                "ams": [{"id": 0, "tray": [{"id": 0, "tray_type": "PLA", "tray_color": "FF0000FF"}]}],
+            }
+        )
+        mock_pm.is_connected.return_value = True
+
+        scheduler._is_printer_idle = MagicMock(return_value=True)
+
+        mock_printer = MagicMock()
+        mock_printer.id = 7
+        mock_printer.name = "Legacy Printer"
+        mock_printer.model = "P1S"
+        mock_printer.location = None
+
+        mock_db = self._make_async_db([mock_printer])
+
+        # Only one of two overrides matches — no force_color_match flag (legacy data)
+        legacy_overrides = [
+            {"type": "PLA", "color": "#FF0000"},   # matches
+            {"type": "PLA", "color": "#00FF00"},   # does not match
+        ]
+        printer_id, reason = await scheduler._find_idle_printer_for_model(
+            mock_db, "P1S", set(), filament_overrides=legacy_overrides
+        )
+
+        # Should still be assigned because at least one color matched (legacy behaviour)
+        assert printer_id == 7
+        assert reason is None

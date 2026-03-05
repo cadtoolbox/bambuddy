@@ -2836,6 +2836,7 @@ export default {
     originalFilament: 'Original',
     overrideWith: 'Ersetzen mit',
     resetToOriginal: 'Auf Original zurücksetzen',
+    forceColorMatch: 'Farbe erzwingen',
   },
 
   // Backup

@@ -290,4 +290,105 @@ describe('FilamentOverride', () => {
       expect(mockOnChange).toHaveBeenCalledWith({});
     });
   });
+
+  describe('force color match', () => {
+    it('renders a Force Color Match checkbox for each filament slot', () => {
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes).toHaveLength(1); // one per slot
+    });
+
+    it('checkbox is checked by default when forceColorMatch is not provided', () => {
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toBeChecked();
+    });
+
+    it('checkbox reflects forceColorMatch prop value when provided', () => {
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+          forceColorMatch={{ 1: false }}
+        />
+      );
+
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).not.toBeChecked();
+    });
+
+    it('calls onForceColorMatchChange when checkbox is toggled', () => {
+      const mockOnForceColorMatchChange = vi.fn();
+
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+          forceColorMatch={{ 1: true }}
+          onForceColorMatchChange={mockOnForceColorMatchChange}
+        />
+      );
+
+      const checkbox = screen.getByRole('checkbox');
+      fireEvent.click(checkbox);
+
+      expect(mockOnForceColorMatchChange).toHaveBeenCalledWith(1, false);
+    });
+
+    it('renders one Force Color Match checkbox per slot in multi-slot print', () => {
+      const twoSlotReqs: FilamentReqsData = {
+        filaments: [
+          { slot_id: 1, type: 'PLA', color: '#FF0000', used_grams: 25, used_meters: 8.5 },
+          { slot_id: 2, type: 'PLA', color: '#00FF00', used_grams: 10, used_meters: 3.2 },
+        ],
+      };
+
+      render(
+        <FilamentOverride
+          filamentReqs={twoSlotReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes).toHaveLength(2);
+      // Both default to checked
+      checkboxes.forEach((cb) => expect(cb).toBeChecked());
+    });
+
+    it('renders Force Color Match label text', () => {
+      render(
+        <FilamentOverride
+          filamentReqs={defaultFilamentReqs}
+          availableFilaments={defaultAvailable}
+          overrides={{}}
+          onChange={mockOnChange}
+        />
+      );
+
+      expect(screen.getByText('Force Color Match')).toBeInTheDocument();
+    });
+  });
 });

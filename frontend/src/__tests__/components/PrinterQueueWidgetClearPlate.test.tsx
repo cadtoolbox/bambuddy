@@ -527,5 +527,120 @@ describe('PrinterQueueWidget - Clear Plate', () => {
         expect(screen.getByText('Multi Color Print')).toBeInTheDocument();
       });
     });
+
+    it('hides job when force_color_match slot color is missing from printer', async () => {
+      const forceColorItem = [
+        {
+          id: 30,
+          printer_id: null,
+          archive_id: 30,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Force Color Job',
+          printer_name: null,
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forceColorItem))
+      );
+
+      // Printer has green PLA but not red — must be hidden (force color match)
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:00ff00'])}
+        />
+      );
+
+      // Wait a moment to confirm the item does NOT appear
+      await new Promise((r) => setTimeout(r, 200));
+      expect(screen.queryByText('Force Color Job')).not.toBeInTheDocument();
+    });
+
+    it('shows job when all force_color_match slots are loaded on printer', async () => {
+      const forceColorItem = [
+        {
+          id: 31,
+          printer_id: null,
+          archive_id: 31,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Exact Color Job',
+          printer_name: null,
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forceColorItem))
+      );
+
+      // Printer has matching red PLA
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Exact Color Job')).toBeInTheDocument();
+      });
+    });
+
+    it('shows job when force_color_match slots match even if another slot does not', async () => {
+      const mixedItem = [
+        {
+          id: 32,
+          printer_id: null,
+          archive_id: 32,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Mixed Match Job',
+          printer_name: null,
+          print_time_seconds: 1800,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },   // force-matched — must match
+            { slot_id: 2, type: 'PLA', color: '#00FF00', force_color_match: false },  // preference only
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(mixedItem))
+      );
+
+      // Printer has red PLA (force slot) but not green PLA (preference slot) — should still show
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Mixed Match Job')).toBeInTheDocument();
+      });
+    });
   });
 });
