@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useFilamentMapping } from '../../hooks/useFilamentMapping';
 import { useMultiPrinterFilamentMapping, type PerPrinterConfig } from '../../hooks/useMultiPrinterFilamentMapping';
+import { getColorName } from '../../utils/colors';
 import { isPlaceholderDate } from '../../utils/amsHelpers';
 import { getCurrencySymbol } from '../../utils/currency';
 import { toDateTimeLocalValue, parseUTCDate } from '../../utils/date';
@@ -451,7 +452,7 @@ export function PrintModal({
     // Include all slots that either have a user override or have force_color_match enabled
     // (which is the default for model-based assignment).
     const buildFilamentOverridesArray = () => {
-      const entries: Array<{ slot_id: number; type: string; color: string; force_color_match: boolean }> = [];
+      const entries: Array<{ slot_id: number; type: string; color: string; color_name: string; force_color_match: boolean }> = [];
 
       // Process all slots from filament requirements (to capture force_color_match defaults)
       if (effectiveFilamentReqs?.filaments) {
@@ -463,7 +464,7 @@ export function PrintModal({
 
           // Include slot if user changed the filament OR force_color_match is enabled
           if (userOverride || isForceColor) {
-            entries.push({ slot_id: req.slot_id, type: effectiveType, color: effectiveColor, force_color_match: isForceColor });
+            entries.push({ slot_id: req.slot_id, type: effectiveType, color: effectiveColor, color_name: getColorName(effectiveColor), force_color_match: isForceColor });
           }
         }
       } else {
@@ -471,7 +472,7 @@ export function PrintModal({
         for (const [slotId, { type, color }] of Object.entries(filamentOverrides)) {
           const id = parseInt(slotId, 10);
           const isForceColor = forceColorMatch[id] ?? true;
-          entries.push({ slot_id: id, type, color, force_color_match: isForceColor });
+          entries.push({ slot_id: id, type, color, color_name: getColorName(color), force_color_match: isForceColor });
         }
       }
 
