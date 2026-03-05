@@ -341,7 +341,10 @@ class PrintScheduler:
                     # When force_overrides are present, enrich missing entries with color info
                     # so the "Waiting on" message includes "TYPE (color)" instead of just "TYPE"
                     if force_overrides:
-                        force_color_map = {(o.get("type") or "").upper(): o.get("color", "?") for o in force_overrides}
+                        force_color_map = {
+                            (o.get("type") or "").upper(): o.get("color_name") or o.get("color", "?")
+                            for o in force_overrides
+                        }
                         missing_enriched = [
                             f"{t} ({force_color_map[t_upper]})" if (t_upper := t.upper()) in force_color_map else t
                             for t in missing
@@ -392,9 +395,11 @@ class PrintScheduler:
         if printers_missing_filament:
             # Filament/color mismatch is most actionable - show first
             if force_overrides and not pref_overrides:
-                # All mismatches are force-color failures — use descriptive message
+                # All mismatches are force-color failures — use descriptive message only;
+                # do not append "Busy" info since the root cause is the missing color, not
+                # printer availability.
                 all_missing = sorted({c for _, cols in printers_missing_filament for c in cols})
-                reasons.append(f"No matching material/color. Waiting on {', '.join(all_missing)}")
+                return None, f"No matching material/color. Waiting on {', '.join(all_missing)}"
             else:
                 names_and_missing = [f"{name} (needs {', '.join(missing)})" for name, missing in printers_missing_filament]
                 reasons.append(f"Waiting for filament: {'; '.join(names_and_missing)}")
@@ -417,7 +422,7 @@ class PrintScheduler:
         """
         status = printer_manager.get_status(printer_id)
         if not status:
-            return [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in force_overrides]
+            return [f"{o.get('type', '?')} ({o.get('color_name') or o.get('color', '?')})" for o in force_overrides]
 
         # Build set of loaded type+colour pairs from AMS and external spool
         loaded: set[tuple[str, str]] = set()
@@ -439,8 +444,8 @@ class PrintScheduler:
             o_type = (o.get("type") or "").upper()
             o_color = (o.get("color") or "").replace("#", "").lower()[:6]
             if (o_type, o_color) not in loaded:
-                hex_color = o.get("color", "?")
-                missing.append(f"{o_type} ({hex_color})")
+                color_label = o.get("color_name") or o.get("color", "?")
+                missing.append(f"{o_type} ({color_label})")
         return missing
 
     def _get_missing_filament_types(self, printer_id: int, required_types: list[str]) -> list[str]:
