@@ -167,6 +167,18 @@ export function PrintModal({
     return {};
   });
 
+  // Per-slot force color match flags. Default is true (checked) for all slots.
+  const [forceColorMatch, setForceColorMatch] = useState<Record<number, boolean>>(() => {
+    if (mode === 'edit-queue-item' && queueItem?.filament_overrides) {
+      const flags: Record<number, boolean> = {};
+      for (const o of queueItem.filament_overrides) {
+        flags[o.slot_id] = (o as { slot_id: number; type: string; color: string; force_color_match?: boolean }).force_color_match !== false;
+      }
+      return flags;
+    }
+    return {};
+  });
+
   // Track initial values for clearing mappings on change (edit mode only)
   const [initialPrinterIds] = useState(() => (mode === 'edit-queue-item' && queueItem?.printer_id ? [queueItem.printer_id] : []));
   const [initialPlateId] = useState(() => (mode === 'edit-queue-item' && queueItem ? queueItem.plate_id : null));
@@ -331,6 +343,7 @@ export function PrintModal({
       // Don't clear on initial render in edit mode (values are initialized from queueItem)
       if (mode !== 'edit-queue-item' || prevTargetModel !== null) {
         setFilamentOverrides({});
+        setForceColorMatch({});
       }
     }
   }, [targetModel, selectedPlate, prevTargetModel, prevPlateForOverrides, mode]);
@@ -434,14 +447,38 @@ export function PrintModal({
       return amsMapping;
     };
 
-    // Convert filament overrides from Record to array format for API
-    const filamentOverridesArray = Object.keys(filamentOverrides).length > 0
-      ? Object.entries(filamentOverrides).map(([slotId, { type, color }]) => ({
-          slot_id: parseInt(slotId, 10),
-          type,
-          color,
-        }))
-      : undefined;
+    // Convert filament overrides from Record to array format for API.
+    // Include all slots that either have a user override or have force_color_match enabled
+    // (which is the default for model-based assignment).
+    const buildFilamentOverridesArray = () => {
+      const entries: Array<{ slot_id: number; type: string; color: string; force_color_match: boolean }> = [];
+
+      // Process all slots from filament requirements (to capture force_color_match defaults)
+      if (effectiveFilamentReqs?.filaments) {
+        for (const req of effectiveFilamentReqs.filaments) {
+          const userOverride = filamentOverrides[req.slot_id];
+          const isForceColor = forceColorMatch[req.slot_id] ?? true; // default: true
+          const effectiveType = userOverride?.type ?? req.type;
+          const effectiveColor = userOverride?.color ?? req.color;
+
+          // Include slot if user changed the filament OR force_color_match is enabled
+          if (userOverride || isForceColor) {
+            entries.push({ slot_id: req.slot_id, type: effectiveType, color: effectiveColor, force_color_match: isForceColor });
+          }
+        }
+      } else {
+        // Fallback: no filament requirements data — only include explicit user overrides
+        for (const [slotId, { type, color }] of Object.entries(filamentOverrides)) {
+          const id = parseInt(slotId, 10);
+          const isForceColor = forceColorMatch[id] ?? true;
+          entries.push({ slot_id: id, type, color, force_color_match: isForceColor });
+        }
+      }
+
+      return entries.length > 0 ? entries : undefined;
+    };
+
+    const filamentOverridesArray = buildFilamentOverridesArray();
 
     // Common queue data for add-to-queue and edit modes
     const getQueueData = (printerId: number | null): PrintQueueItemCreate => ({
@@ -732,6 +769,10 @@ export function PrintModal({
                 availableFilaments={availableFilaments}
                 overrides={filamentOverrides}
                 onChange={setFilamentOverrides}
+                forceColorMatch={forceColorMatch}
+                onForceColorMatchChange={(slotId, value) =>
+                  setForceColorMatch((prev) => ({ ...prev, [slotId]: value }))
+                }
               />
             )}
 

@@ -2732,6 +2732,7 @@ export default {
     originalFilament: '原始',
     overrideWith: '覆盖为',
     resetToOriginal: '恢复为原始',
+    forceColorMatch: 'Force Color Match',
   },
 
   // Backup
