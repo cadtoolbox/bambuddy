@@ -127,4 +127,137 @@ describe('PrinterQueueWidget', () => {
       });
     });
   });
+
+  describe('force_color_match filtering', () => {
+    it('shows item when force_color_match override exactly matches loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: true },
+              ],
+            },
+          ]);
+        })
+      );
+
+      // Printer has the exact PLA:ff0000 filament loaded
+      const loadedFilaments = new Set(['PLA:ff0000']);
+      render(<PrinterQueueWidget printerId={1} loadedFilaments={loadedFilaments} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('First Print')).toBeInTheDocument();
+      });
+    });
+
+    it('hides item when force_color_match override does not match any loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: true },
+              ],
+            },
+          ]);
+        })
+      );
+
+      // Printer has a different color loaded — force match must fail
+      const loadedFilaments = new Set(['PLA:00ff00']);
+      const { container } = render(
+        <PrinterQueueWidget printerId={1} loadedFilaments={loadedFilaments} />
+      );
+
+      await waitFor(() => {
+        // All items filtered out → widget returns null
+        expect(container.querySelector('a[href="/queue"]')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows item when preference-only override matches at least one loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: false },
+                { type: 'PLA', color: '00ff00', force_color_match: false },
+              ],
+            },
+          ]);
+        })
+      );
+
+      // Only the second color is loaded — some() should pass
+      const loadedFilaments = new Set(['PLA:00ff00']);
+      render(<PrinterQueueWidget printerId={1} loadedFilaments={loadedFilaments} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('First Print')).toBeInTheDocument();
+      });
+    });
+
+    it('hides item when preference-only overrides have no color match', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: false },
+              ],
+            },
+          ]);
+        })
+      );
+
+      // No matching color loaded
+      const loadedFilaments = new Set(['PLA:0000ff']);
+      const { container } = render(
+        <PrinterQueueWidget printerId={1} loadedFilaments={loadedFilaments} />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('a[href="/queue"]')).not.toBeInTheDocument();
+      });
+    });
+
+    it('counts only compatible items when some have unmatched force_color_match overrides', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: true },
+              ],
+            },
+            {
+              ...mockQueueItems[1],
+              filament_overrides: [
+                { type: 'PLA', color: '0000ff', force_color_match: true },
+              ],
+            },
+          ]);
+        })
+      );
+
+      // Only the first item's force color matches
+      const loadedFilaments = new Set(['PLA:ff0000']);
+      render(<PrinterQueueWidget printerId={1} loadedFilaments={loadedFilaments} />);
+
+      await waitFor(() => {
+        // First item is compatible and should be shown
+        expect(screen.getByText('First Print')).toBeInTheDocument();
+      });
+
+      // Second item is filtered out — no "+1" badge
+      expect(screen.queryByText('+1')).not.toBeInTheDocument();
+    });
+  });
 });

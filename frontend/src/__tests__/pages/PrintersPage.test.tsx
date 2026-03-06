@@ -385,4 +385,144 @@ describe('PrintersPage', () => {
       expect(screen.queryByText('01.01.03.00')).not.toBeInTheDocument();
     });
   });
+
+  describe('queue count badge', () => {
+    const mockStatusWithAms = {
+      ...mockPrinterStatus,
+      ams: [
+        {
+          id: 0,
+          tray: [
+            { tray_type: 'PLA', tray_color: 'ff0000' },
+          ],
+        },
+      ],
+    };
+
+    it('shows queue count badge when compatible pending items exist', async () => {
+      server.use(
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json(mockStatusWithAms);
+        }),
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: 1,
+              position: 1,
+              status: 'pending',
+              archive_name: 'Test Print',
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+            },
+          ]);
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        // The queue count badge should show 1
+        expect(screen.getAllByText('1').some(el => el.closest('button[title]'))).toBe(true);
+      });
+    });
+
+    it('hides queue count badge when force_color_match override does not match loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json(mockStatusWithAms);
+        }),
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: 1,
+              position: 1,
+              status: 'pending',
+              archive_name: 'Force Color Print',
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              filament_overrides: [
+                // Requires blue PLA but printer only has red PLA
+                { type: 'PLA', color: '0000ff', force_color_match: true },
+              ],
+            },
+          ]);
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('X1 Carbon')).toBeInTheDocument();
+      });
+
+      // The Layers icon badge should not appear — job is incompatible with this printer
+      const queueBadge = document.querySelector('button[title*="queue"]');
+      expect(queueBadge).not.toBeInTheDocument();
+    });
+
+    it('shows correct count when only some items match force_color_match constraint', async () => {
+      server.use(
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json(mockStatusWithAms);
+        }),
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              id: 1,
+              printer_id: 1,
+              archive_id: 1,
+              position: 1,
+              status: 'pending',
+              archive_name: 'Compatible Print',
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              filament_overrides: [
+                { type: 'PLA', color: 'ff0000', force_color_match: true },
+              ],
+            },
+            {
+              id: 2,
+              printer_id: 1,
+              archive_id: 2,
+              position: 2,
+              status: 'pending',
+              archive_name: 'Incompatible Print',
+              printer_name: 'X1 Carbon',
+              print_time_seconds: 7200,
+              scheduled_time: null,
+              filament_overrides: [
+                // Blue PLA not loaded — should be filtered out
+                { type: 'PLA', color: '0000ff', force_color_match: true },
+              ],
+            },
+          ]);
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('X1 Carbon')).toBeInTheDocument();
+      });
+
+      // Only 1 of 2 items is compatible — badge should show 1, not 2
+      await waitFor(() => {
+        // The queue badge shows 1 (only the compatible item is counted)
+        const badge1 = screen.getAllByText('1').find(el => el.closest('button')?.title?.includes('queue'));
+        expect(badge1).toBeDefined();
+      });
+
+      // Badge should not show 2 (the incompatible item is filtered out)
+      const badges2 = screen.queryAllByText('2');
+      const queueBadge2 = badges2.find(el => el.closest('button')?.title?.includes('queue'));
+      expect(queueBadge2).toBeUndefined();
+    });
+  });
 });
