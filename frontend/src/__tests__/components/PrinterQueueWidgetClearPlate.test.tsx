@@ -528,4 +528,141 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       });
     });
   });
+
+  describe('force_color_match filtering', () => {
+    const forcePetgItem = [
+      {
+        id: 30,
+        printer_id: null,
+        archive_id: 30,
+        position: 1,
+        status: 'pending',
+        archive_name: 'Force Color Print',
+        printer_name: null,
+        print_time_seconds: 3600,
+        scheduled_time: null,
+        required_filament_types: ['PETG'],
+        filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#FFFFFF', force_color_match: true }],
+      },
+    ];
+
+    it('hides widget when force_color_match override color does not match loaded filaments', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forcePetgItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set(['PETG:0000ff'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('Force Color Print')).not.toBeInTheDocument();
+    });
+
+    it('shows widget when force_color_match override color matches loaded filaments', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forcePetgItem))
+      );
+
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set(['PETG:ffffff'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Force Color Print')).toBeInTheDocument();
+        expect(screen.getByText('Clear Plate & Start Next')).toBeInTheDocument();
+      });
+    });
+
+    it('hides widget when only some force_color_match slots match (all must match)', async () => {
+      const multiForceItem = [
+        {
+          id: 31,
+          printer_id: null,
+          archive_id: 31,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Multi Force Color Print',
+          printer_name: null,
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+            { slot_id: 2, type: 'PLA', color: '#00FF00', force_color_match: true },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(multiForceItem))
+      );
+
+      // Only red matches, green does not — both force slots must match, so widget should be hidden
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByText('Multi Force Color Print')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when force override matches regardless of pref override status', async () => {
+      // Mixed: one force slot matches; pref slots are not evaluated when force slots exist
+      const mixedItem = [
+        {
+          id: 32,
+          printer_id: null,
+          archive_id: 32,
+          position: 1,
+          status: 'pending',
+          archive_name: 'Mixed Override Print',
+          printer_name: null,
+          print_time_seconds: 3600,
+          scheduled_time: null,
+          required_filament_types: ['PLA'],
+          filament_overrides: [
+            { slot_id: 1, type: 'PLA', color: '#FF0000', force_color_match: true },
+            { slot_id: 2, type: 'PLA', color: '#00FF00', force_color_match: false },
+          ],
+        },
+      ];
+
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(mixedItem))
+      );
+
+      // Red force slot matches; green pref slot is irrelevant when force slots exist
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PLA'])}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Mixed Override Print')).toBeInTheDocument();
+      });
+    });
+  });
 });
