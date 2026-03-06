@@ -329,6 +329,28 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       expect(screen.queryByText('PETG Print')).not.toBeInTheDocument();
     });
 
+    it('hides widget when loadedFilamentTypes is empty Set (no filaments loaded)', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(petgQueueItems))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set()}
+        />
+      );
+
+      // An empty Set means no filaments are loaded — the check must be applied,
+      // not skipped. (A size-based guard like `?.size` would evaluate to 0/falsy
+      // and skip the check, incorrectly showing the widget.)
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('PETG Print')).not.toBeInTheDocument();
+    });
+
     it('matches filament types case-insensitively', async () => {
       const lowercaseQueue = [
         {
@@ -487,6 +509,29 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       await waitFor(() => {
         expect(screen.getByText('First Print')).toBeInTheDocument();
       });
+    });
+
+    it('hides widget when loadedFilaments is empty Set (no filaments loaded, pref override)', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(whitePetgOverrideItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set()}
+        />
+      );
+
+      // An empty Set means no filaments are loaded — preference overrides must not match.
+      // (A size-based guard like `?.size` would evaluate to 0/falsy and skip the check,
+      // incorrectly showing the widget as compatible.)
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('White PETG Print')).not.toBeInTheDocument();
     });
 
     it('matches any override when multiple overrides exist', async () => {
@@ -663,6 +708,29 @@ describe('PrinterQueueWidget - Clear Plate', () => {
       await waitFor(() => {
         expect(screen.getByText('Mixed Override Print')).toBeInTheDocument();
       });
+    });
+
+    it('hides widget when loadedFilaments is empty Set (no filaments loaded, force override)', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => HttpResponse.json(forcePetgItem))
+      );
+
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          printerState="FINISH"
+          loadedFilamentTypes={new Set(['PETG'])}
+          loadedFilaments={new Set()}
+        />
+      );
+
+      // An empty Set means no filaments are loaded — force-matched slots cannot match.
+      // (A size-based guard like `?.size` would evaluate to 0/falsy and skip the check,
+      // incorrectly showing the widget as compatible.)
+      await waitFor(() => {
+        expect(container.querySelector('button')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('Force Color Print')).not.toBeInTheDocument();
     });
   });
 });
