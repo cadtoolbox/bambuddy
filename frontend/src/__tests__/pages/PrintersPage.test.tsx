@@ -385,4 +385,109 @@ describe('PrintersPage', () => {
       expect(screen.queryByText('01.01.03.00')).not.toBeInTheDocument();
     });
   });
+
+  describe('queueCount badge force_color_match filtering', () => {
+    const forceColorQueueItem = {
+      id: 10,
+      printer_id: 1,
+      archive_id: 10,
+      position: 1,
+      status: 'pending',
+      archive_name: 'Force Color Job',
+      printer_name: 'X1 Carbon',
+      print_time_seconds: 3600,
+      scheduled_time: null,
+      filament_overrides: [
+        { type: 'PLA', color: '#ff0000', force_color_match: true },
+      ],
+    };
+
+    it('does not show queue badge when force-matched color is absent from printer AMS', async () => {
+      server.use(
+        http.get('/api/v1/queue/', ({ request }) => {
+          const url = new URL(request.url);
+          if (url.searchParams.get('printer_id') === '1') {
+            return HttpResponse.json([forceColorQueueItem]);
+          }
+          return HttpResponse.json([]);
+        }),
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json({
+            ...mockPrinterStatus,
+            // AMS loaded with green PLA — the required red PLA is NOT present
+            ams: [{ tray: [{ tray_type: 'PLA', tray_color: '#00ff00' }] }],
+          });
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('X1 Carbon')).toBeInTheDocument();
+      });
+
+      // queueCount should be 0 — badge must not appear
+      expect(screen.queryByTitle(/print in queue/i)).not.toBeInTheDocument();
+    });
+
+    it('shows queue badge when force-matched color IS loaded on printer AMS', async () => {
+      server.use(
+        http.get('/api/v1/queue/', ({ request }) => {
+          const url = new URL(request.url);
+          if (url.searchParams.get('printer_id') === '1') {
+            return HttpResponse.json([forceColorQueueItem]);
+          }
+          return HttpResponse.json([]);
+        }),
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json({
+            ...mockPrinterStatus,
+            // AMS loaded with red PLA — exact match for the force-matched override
+            ams: [{ tray: [{ tray_type: 'PLA', tray_color: '#ff0000' }] }],
+          });
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTitle('1 print in queue')).toBeInTheDocument();
+      });
+    });
+
+    it('does not show queue badge when pref-only override color is absent', async () => {
+      const prefOnlyItem = {
+        ...forceColorQueueItem,
+        archive_name: 'Pref Only Job',
+        filament_overrides: [
+          { type: 'PLA', color: '#ff0000', force_color_match: false },
+        ],
+      };
+
+      server.use(
+        http.get('/api/v1/queue/', ({ request }) => {
+          const url = new URL(request.url);
+          if (url.searchParams.get('printer_id') === '1') {
+            return HttpResponse.json([prefOnlyItem]);
+          }
+          return HttpResponse.json([]);
+        }),
+        http.get('/api/v1/printers/:id/status', () => {
+          return HttpResponse.json({
+            ...mockPrinterStatus,
+            // AMS has green PLA — pref-only red PLA not matched
+            ams: [{ tray: [{ tray_type: 'PLA', tray_color: '#00ff00' }] }],
+          });
+        })
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('X1 Carbon')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTitle(/print in queue/i)).not.toBeInTheDocument();
+    });
+  });
 });

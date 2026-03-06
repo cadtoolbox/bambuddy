@@ -127,4 +127,118 @@ describe('PrinterQueueWidget', () => {
       });
     });
   });
+
+  describe('force_color_match filtering', () => {
+    const forceColorItem = {
+      id: 3,
+      printer_id: 1,
+      archive_id: 3,
+      position: 1,
+      status: 'pending',
+      archive_name: 'Force Color Print',
+      printer_name: 'X1 Carbon',
+      print_time_seconds: 3600,
+      scheduled_time: null,
+      filament_overrides: [
+        { type: 'PLA', color: '#ff0000', force_color_match: true },
+      ],
+    };
+
+    it('hides widget when force-matched color is not loaded on printer', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([forceColorItem]);
+        })
+      );
+
+      // loadedFilaments does not contain PLA:ff0000 — job is incompatible
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          loadedFilaments={new Set(['PLA:00ff00'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('a[href="/queue"]')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows widget when force-matched color IS loaded on printer', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([forceColorItem]);
+        })
+      );
+
+      // loadedFilaments contains PLA:ff0000 — job is compatible
+      render(
+        <PrinterQueueWidget
+          printerId={1}
+          loadedFilaments={new Set(['PLA:ff0000'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Force Color Print')).toBeInTheDocument();
+      });
+    });
+
+    it('hides widget when job has both force and pref overrides but force color not loaded', async () => {
+      const mixedOverrideItem = {
+        ...forceColorItem,
+        archive_name: 'Mixed Override Print',
+        filament_overrides: [
+          { type: 'PLA', color: '#ff0000', force_color_match: true },
+          { type: 'PLA', color: '#00ff00', force_color_match: false },
+        ],
+      };
+
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([mixedOverrideItem]);
+        })
+      );
+
+      // loadedFilaments has pref color but not force color — should be incompatible
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          loadedFilaments={new Set(['PLA:00ff00'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('a[href="/queue"]')).not.toBeInTheDocument();
+      });
+    });
+
+    it('hides widget when pref-only overrides have no color match', async () => {
+      const prefOnlyItem = {
+        ...forceColorItem,
+        archive_name: 'Pref Only Print',
+        filament_overrides: [
+          { type: 'PLA', color: '#ff0000', force_color_match: false },
+        ],
+      };
+
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([prefOnlyItem]);
+        })
+      );
+
+      // loadedFilaments has a different color — pref-only item is incompatible
+      const { container } = render(
+        <PrinterQueueWidget
+          printerId={1}
+          loadedFilaments={new Set(['PLA:00ff00'])}
+        />
+      );
+
+      await waitFor(() => {
+        expect(container.querySelector('a[href="/queue"]')).not.toBeInTheDocument();
+      });
+    });
+  });
 });
