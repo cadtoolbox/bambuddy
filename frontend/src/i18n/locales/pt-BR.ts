@@ -1044,7 +1044,7 @@ export default {
     avgTime: 'Méd. tempo',
     filamentByPrints: 'Impressões',
     timeframe: {
-      'today': 'Hoje',
+      today: 'Hoje',
       'this-week': 'Esta semana',
       'this-month': 'Este mês',
       'last-7': 'Últimos 7 dias',
@@ -1052,7 +1052,7 @@ export default {
       'last-90': 'Últimos 90 dias',
       'this-year': 'Este ano',
       'all-time': 'Todo o período',
-      'custom': 'Personalizado',
+      custom: 'Personalizado',
       from: 'De',
       to: 'Até',
     },
@@ -1421,7 +1421,7 @@ export default {
     apiKeysDescription: 'Crie chaves API para integrações externas e webhooks.',
     createKey: 'Criar Chave',
     apiKeyCreated: 'Chave API criada com sucesso',
-    apiKeyCopyWarning: "Copie esta chave agora - ela não será exibida novamente!",
+    apiKeyCopyWarning: 'Copie esta chave agora - ela não será exibida novamente!',
     useInApiBrowser: 'Usar no Navegador API',
     createNewApiKey: 'Criar Nova Chave API',
     keyName: 'Nome da Chave',
@@ -1786,8 +1786,8 @@ export default {
     loginFailed: 'Falha no login',
     enterCredentials: 'Por favor, insira nome de usuário e senha',
     forgotPasswordTitle: 'Esqueceu a Senha',
-    forgotPasswordMessage: "Se você esqueceu sua senha, entre em contato com o administrador do sistema para redefini-la.",
-    forgotPasswordEmailMessage: "Digite seu endereço de email e enviaremos uma nova senha.",
+    forgotPasswordMessage: 'Se você esqueceu sua senha, entre em contato com o administrador do sistema para redefini-la.',
+    forgotPasswordEmailMessage: 'Digite seu endereço de email e enviaremos uma nova senha.',
     emailAddress: 'Endereço de Email',
     emailPlaceholder: 'seu.email@exemplo.com',
     cancel: 'Cancelar',
@@ -2369,7 +2369,7 @@ export default {
     description: 'Descrição',
     noProjects: 'Nenhum projeto ainda',
     noProjectsFiltered: 'Nenhum projeto {{status}}',
-    noProjectsFilteredHelp: "Você não tem nenhum projeto {{status}}. Os projetos aparecerão aqui quando seu status mudar.",
+    noProjectsFilteredHelp: 'Você não tem nenhum projeto {{status}}. Os projetos aparecerão aqui quando seu status mudar.',
     createFirst: 'Crie seu primeiro projeto para começar a organizar impressões relacionadas, acompanhar o progresso e gerenciar suas construções.',
     createFirstButton: 'Crie Seu Primeiro Projeto',
     create: 'Criar',
@@ -2613,7 +2613,7 @@ export default {
     weight: 'Peso',
     remaining: 'Restante',
     disableWeightSync: 'Desativar Sincronização de Peso Estimado do AMS',
-    disableWeightSyncDesc: "Não atualize a capacidade restante a partir das estimativas do AMS. Use isso se preferir o rastreamento de uso do Spoolman em vez das estimativas baseadas em porcentagem do AMS. Novos carretéis ainda usarão a estimativa do AMS como seu peso inicial.",
+    disableWeightSyncDesc: 'Não atualize a capacidade restante a partir das estimativas do AMS. Use isso se preferir o rastreamento de uso do Spoolman em vez das estimativas baseadas em porcentagem do AMS. Novos carretéis ainda usarão a estimativa do AMS como seu peso inicial.',
     reportPartialUsage: 'Relatar Uso Parcial para Impressões Falhadas',
     reportPartialUsageDesc: 'Quando uma impressão falha ou é cancelada, relate o filamento estimado usado até aquele ponto com base no progresso das camadas.',
   },
@@ -2749,6 +2749,10 @@ export default {
     table: 'Tabela',
     cards: 'Cartões',
     net: 'Líquido',
+    // Grouping
+    groupSimilar: 'Agrupar',
+    groupedSpools: '{{count}} carretéis idênticos',
+    groupedRows: 'linhas',
     // Column config
     columns: 'Colunas',
     configureColumns: 'Configurar Colunas',
@@ -2811,6 +2815,8 @@ export default {
     kFactor: 'Fator K',
     fill: 'Preencher',
     configure: 'Configurar',
+    used: 'usado',
+    remainingUnit: 'restante',
   },
 
   // Print modal
@@ -3117,19 +3123,9 @@ export default {
     },
     howItWorks: {
       title: 'Como funciona',
-      titleProxy: 'Como funciona (Modo Proxy)',
       step1: 'Complete o guia de configuração para sua plataforma',
       step2: 'Ative a impressora virtual e defina um código de acesso',
       step3: 'No Bambu Studio ou OrcaSlicer, vá para "Adicionar Impressora"',
-      step4: 'A impressora "Bambuddy" deve aparecer na lista de descoberta',
-      step5: 'Conecte-se usando o código de acesso que você definiu',
-      step6: 'Quando você "imprimir" para o Bambuddy, o arquivo 3MF será arquivado em vez disso',
-      proxyStep1: 'Selecione a impressora alvo (deve estar no modo LAN)',
-      proxyStep2: 'Para rede cruzada: selecione a interface de rede do slicer',
-      proxyStep3: 'Ative o proxy - a impressora aparece na descoberta do slicer via SSDP',
-      proxyStep4: 'Conecte-se usando o código de acesso da impressora',
-      proxyStep5: 'Imprima normalmente - o tráfego é retransmitido pelo Bambuddy',
-      proxyStep6: 'O streaming da câmera requer NAT/encaminhamento de IP (veja a documentação)',
     },
     status: {
       title: 'Detalhes do Status',
@@ -3149,8 +3145,37 @@ export default {
       failedToUpdate: 'Falha ao atualizar as configurações',
       accessCodeRequired: 'Defina um código de acesso primeiro',
       targetPrinterRequired: 'Selecione uma impressora alvo primeiro',
+      bindIpRequired: 'Defina um IP de ligação primeiro',
       accessCodeEmpty: 'O código de acesso não pode estar vazio',
       accessCodeLength: 'O código de acesso deve ter exatamente 8 caracteres',
+      created: 'Impressora virtual criada',
+      failedToCreate: 'Falha ao criar impressora virtual',
+      deleted: 'Impressora virtual excluída',
+      failedToDelete: 'Falha ao excluir impressora virtual',
+    },
+    list: {
+      title: 'Impressoras Virtuais',
+      add: 'Adicionar',
+      addFirst: 'Adicionar Impressora Virtual',
+      empty: 'Nenhuma impressora virtual configurada. Adicione uma para começar.',
+    },
+    bindIp: {
+      title: 'Interface de Rede',
+      placeholder: 'Selecionar interface...',
+      hint: 'Interface de rede para esta impressora virtual. Deve ser única por impressora.',
+    },
+    proxy: {
+      accessCodeHint: 'No modo proxy, use o código de acesso da impressora alvo no slicer. A conexão é encaminhada de forma transparente para a impressora real.',
+    },
+    addDialog: {
+      title: 'Adicionar Impressora Virtual',
+      name: 'Nome',
+      hint: 'Você pode configurar o código de acesso, impressora alvo e outras configurações após a criação.',
+      create: 'Criar',
+    },
+    deleteConfirm: {
+      title: 'Excluir Impressora Virtual',
+      message: 'Tem certeza que deseja excluir "{{name}}"? Isso irá parar todos os serviços desta impressora.',
     },
   },
 
@@ -3572,6 +3597,20 @@ export default {
   // Spoolman Settings
   spoolmanSettings: {},
 
+  // Time
+  time: {
+    unknown: '-',
+    waiting: 'Aguardando',
+    justNow: 'Agora mesmo',
+    now: 'Agora',
+    minsAgo: '{{count}}min atrás',
+    inMins: 'em {{count}}min',
+    hoursAgo: '{{count}}h atrás',
+    inHours: 'em {{count}}h',
+    daysAgo: '{{count}}d atrás',
+    inDays: 'em {{count}}d',
+  },
+
   // SpoolBuddy Kiosk
   spoolbuddy: {
     nav: {
@@ -3613,6 +3652,25 @@ export default {
       grossWeight: 'Peso bruto',
       spoolSize: 'Tamanho do carretel',
       close: 'Fechar',
+      currentSpool: 'Carretel Atual',
+    },
+    modal: {
+      spoolDetected: 'Carretel Detectado',
+      assignToAms: 'Atribuir ao AMS',
+      syncWeight: 'Sincronizar Peso',
+      weightSynced: 'Sincronizado!',
+      syncing: 'Sincronizando...',
+      newTagDetected: 'Nova Tag Detectada',
+      addToInventory: 'Adicionar ao Inventário',
+      assignToAmsTitle: 'Atribuir ao AMS',
+      selectSlot: 'Selecionar um slot',
+      assign: 'Atribuir',
+      assigning: 'Atribuindo...',
+      assignSuccess: 'Atribuído!',
+      assignError: 'Falha ao atribuir carretel. Tente novamente.',
+      noPrinterSelected: 'Selecionar uma impressora...',
+      noAmsDetected: 'Nenhum AMS detectado nesta impressora',
+      slot: 'Slot',
     },
     weight: {
       noReading: 'Sem leitura',
@@ -3652,12 +3710,12 @@ export default {
       addSpool: 'Adicionar carretel',
     },
     settings: {
-      // Abas
+      // Tabs
       tabDevice: 'Dispositivo',
       tabDisplay: 'Tela',
       tabScale: 'Balança',
       tabUpdates: 'Atualizações',
-      // Aba dispositivo
+      // Device tab
       nfcReader: 'Leitor NFC',
       type: 'Tipo',
       connection: 'Conexão',
@@ -3665,14 +3723,14 @@ export default {
       deviceInfo: 'Info do dispositivo',
       hostname: 'Host',
       uptime: 'Tempo de atividade',
-      // Aba tela
+      // Display tab
       brightness: 'Brilho',
       saved: 'Salvo',
       noBacklight: 'Nenhuma retroiluminação DSI detectada. O controle de brilho requer uma tela DSI.',
       screenBlank: 'Tempo para desligar tela',
       screenBlankDesc: 'A tela desliga após inatividade. Toque para despertar.',
       displayNote: 'O brilho é aplicado como filtro de software.',
-      // Aba balança
+      // Scale tab
       scaleCalibration: 'Calibração da balança',
       currentWeight: 'Peso atual',
       tareOffset: 'Tara',
@@ -3694,7 +3752,7 @@ export default {
       firmware: 'Firmware',
       scale: 'Balança',
       noDevice: 'Nenhum dispositivo SpoolBuddy encontrado',
-      // Aba atualizações
+      // Updates tab
       daemonVersion: 'Versão do daemon',
       currentVersion: 'Atual',
       versionPending: 'Aguardando daemon...',
