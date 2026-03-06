@@ -385,4 +385,153 @@ describe('PrintersPage', () => {
       expect(screen.queryByText('01.01.03.00')).not.toBeInTheDocument();
     });
   });
+
+  describe('queue count badge (force_color_match filter)', () => {
+    // Single printer so each test exercises exactly one badge
+    const singlePrinter = [mockPrinters[0]];
+
+    // Printer status with white PETG loaded in AMS slot 0
+    const statusWithWhitePetg = {
+      ...mockPrinterStatus,
+      ams: [
+        {
+          id: 0,
+          humidity: null,
+          temp: null,
+          is_ams_ht: false,
+          serial_number: '',
+          sw_ver: '',
+          tray: [
+            {
+              id: 0,
+              tray_type: 'PETG',
+              tray_color: '#ffffff',
+              tray_sub_brands: null,
+              tray_id_name: null,
+              tray_info_idx: null,
+              remain: 100,
+              k: null,
+              cali_idx: null,
+              tag_uid: null,
+              tray_uuid: null,
+              nozzle_temp_min: null,
+              nozzle_temp_max: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      server.use(
+        http.get('/api/v1/printers/', () => HttpResponse.json(singlePrinter)),
+        http.get('/api/v1/printers/:id/status', () => HttpResponse.json(statusWithWhitePetg))
+      );
+    });
+
+    it('shows badge when force_color_match override matches loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () =>
+          HttpResponse.json([
+            {
+              id: 10,
+              printer_id: null,
+              archive_id: 10,
+              position: 1,
+              status: 'pending',
+              archive_name: 'White PETG Job',
+              printer_name: null,
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              required_filament_types: ['PETG'],
+              filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#FFFFFF', force_color_match: true }],
+            },
+          ])
+        )
+      );
+
+      render(<PrintersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTitle('1 print in queue')).toBeInTheDocument();
+      });
+    });
+
+    it('hides badge when force_color_match override does not match loaded filament', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () =>
+          HttpResponse.json([
+            {
+              id: 11,
+              printer_id: null,
+              archive_id: 11,
+              position: 1,
+              status: 'pending',
+              archive_name: 'Blue PETG Job',
+              printer_name: null,
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              required_filament_types: ['PETG'],
+              // Blue override — does not match the white PETG in the AMS
+              filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#0000FF', force_color_match: true }],
+            },
+          ])
+        )
+      );
+
+      render(<PrintersPage />);
+
+      // Wait for the component to fully render, then confirm no badge is shown
+      await waitFor(() => {
+        expect(screen.getByText('X1 Carbon')).toBeInTheDocument();
+        expect(screen.queryByTitle(/print in queue/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows count of 1 when only one of two force-matched jobs is compatible', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () =>
+          HttpResponse.json([
+            {
+              id: 12,
+              printer_id: null,
+              archive_id: 12,
+              position: 1,
+              status: 'pending',
+              archive_name: 'White PETG Job',
+              printer_name: null,
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              required_filament_types: ['PETG'],
+              // White — matches loaded filament
+              filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#FFFFFF', force_color_match: true }],
+            },
+            {
+              id: 13,
+              printer_id: null,
+              archive_id: 13,
+              position: 2,
+              status: 'pending',
+              archive_name: 'Blue PETG Job',
+              printer_name: null,
+              print_time_seconds: 3600,
+              scheduled_time: null,
+              required_filament_types: ['PETG'],
+              // Blue — does not match loaded white PETG
+              filament_overrides: [{ slot_id: 1, type: 'PETG', color: '#0000FF', force_color_match: true }],
+            },
+          ])
+        )
+      );
+
+      render(<PrintersPage />);
+
+      // Only the white job is compatible — badge should read "1"
+      await waitFor(() => {
+        expect(screen.getByTitle('1 print in queue')).toBeInTheDocument();
+      });
+      // "2 prints in queue" must not appear
+      expect(screen.queryByTitle('2 prints in queue')).not.toBeInTheDocument();
+    });
+  });
 });
