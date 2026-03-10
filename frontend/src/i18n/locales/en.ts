@@ -1669,6 +1669,8 @@ export default {
     slicerOrcaSlicer: 'OrcaSlicer',
     sidebarOrderDescription: 'Drag items in the sidebar to reorder. Reset to default order here.',
     reset: 'Reset',
+    setOrder: 'Set Order',
+    setOrderDescription: 'Push menu order to all users',
     // Appearance
     darkMode: 'Dark Mode',
     lightMode: 'Light Mode',

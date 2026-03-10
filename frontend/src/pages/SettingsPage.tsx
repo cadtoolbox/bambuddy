@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown, Save, Mail } from 'lucide-react';
+import { Loader2, Plus, Plug, AlertTriangle, RotateCcw, Bell, Download, RefreshCw, ExternalLink, Globe, Droplets, Thermometer, FileText, Edit2, Send, CheckCircle, XCircle, History, Trash2, Zap, TrendingUp, Calendar, DollarSign, Power, PowerOff, Key, Copy, Database, X, Shield, Printer, Cylinder, Wifi, Home, Video, Users, Lock, Unlock, ChevronDown, Save, Mail, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
@@ -177,6 +177,17 @@ export function SettingsPage() {
   const handleResetSidebarOrder = () => {
     localStorage.removeItem('sidebarOrder');
     window.location.reload();
+  };
+
+  const handleSetSidebarOrder = async () => {
+    const currentOrder = localStorage.getItem('sidebarOrder');
+    try {
+      await api.updateSettings({ default_sidebar_order: currentOrder ?? '' });
+      showToast(t('settings.toast.settingsSaved'), 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save sidebar order';
+      showToast(message, 'error');
+    }
   };
 
   const { data: settings, isLoading } = useQuery({
@@ -1172,6 +1183,22 @@ export function SettingsPage() {
                 >
                   <RotateCcw className="w-4 h-4" />
                   {t('settings.reset')}
+                </Button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white">{t('settings.setOrder')}</p>
+                  <p className="text-sm text-bambu-gray">
+                    {t('settings.setOrderDescription')}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSetSidebarOrder}
+                >
+                  <Share2 className="w-4 h-4" />
+                  {t('settings.setOrder')}
                 </Button>
               </div>
             </CardContent>

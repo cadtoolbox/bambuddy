@@ -157,6 +157,12 @@ class AppSettings(BaseModel):
         description="Low stock threshold percentage (%) for inventory filtering and display",
     )
 
+    # Default sidebar order (JSON array of nav item IDs)
+    default_sidebar_order: str = Field(
+        default="",
+        description="Default sidebar menu order as JSON array of nav item IDs (pushed to all users)",
+    )
+
 
 class AppSettingsUpdate(BaseModel):
     """Schema for updating settings (all fields optional)."""
@@ -219,3 +225,4 @@ class AppSettingsUpdate(BaseModel):
     prometheus_enabled: bool | None = None
     prometheus_token: str | None = None
     low_stock_threshold: float | None = Field(default=None, ge=0.1, le=99.9)
+    default_sidebar_order: str | None = None

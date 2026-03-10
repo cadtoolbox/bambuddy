@@ -197,6 +197,22 @@ export function Layout() {
     return (status.state === 'FINISH' || status.state === 'FAILED') && !status.plate_cleared;
   });
 
+  // Apply default sidebar order from settings when user has no customized order
+  useEffect(() => {
+    if (!settings?.default_sidebar_order) return;
+    const hasCustomOrder = localStorage.getItem('sidebarOrder') !== null;
+    if (!hasCustomOrder) {
+      try {
+        const defaultOrder: string[] = JSON.parse(settings.default_sidebar_order);
+        if (Array.isArray(defaultOrder) && defaultOrder.length > 0) {
+          setSidebarOrder(defaultOrder);
+        }
+      } catch {
+        // Ignore invalid stored order
+      }
+    }
+  }, [settings?.default_sidebar_order]);
+
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);
   useEffect(() => {
