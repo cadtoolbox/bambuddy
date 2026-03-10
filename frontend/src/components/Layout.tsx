@@ -211,7 +211,7 @@ export function Layout() {
         // Ignore invalid stored order
       }
     }
-  }, [settings?.default_sidebar_order]);
+  }, [settings?.default_sidebar_order, setSidebarOrder]);
 
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);

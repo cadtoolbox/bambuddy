@@ -180,9 +180,10 @@ export function SettingsPage() {
   };
 
   const handleSetSidebarOrder = async () => {
-    const currentOrder = localStorage.getItem('sidebarOrder');
+    const stored = localStorage.getItem('sidebarOrder');
+    const currentOrder = stored ?? JSON.stringify(defaultNavItems.map(i => i.id));
     try {
-      await api.updateSettings({ default_sidebar_order: currentOrder ?? '' });
+      await api.updateSettings({ default_sidebar_order: currentOrder });
       showToast(t('settings.toast.settingsSaved'), 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save sidebar order';
