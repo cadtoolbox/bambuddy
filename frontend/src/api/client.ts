@@ -842,6 +842,8 @@ export interface AppSettings {
   bed_cooled_threshold: number;
   // Inventory low stock threshold
   low_stock_threshold: number;
+  // Default sidebar order (JSON array of nav item IDs set by admin)
+  default_sidebar_order: string;
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>;
