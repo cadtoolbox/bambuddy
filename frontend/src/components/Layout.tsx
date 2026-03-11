@@ -112,6 +112,7 @@ export function Layout() {
     queryKey: ['settings'],
     queryFn: api.getSettings,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchInterval: 60 * 1000, // Check every minute for pushed sidebar order changes
   });
 
   const { data: updateCheck } = useQuery({
