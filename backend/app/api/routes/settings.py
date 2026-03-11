@@ -152,6 +152,10 @@ async def update_settings(
     }
     mqtt_updated = bool(mqtt_keys & set(update_data.keys()))
 
+    # Auto-set sidebar_order_version when default_sidebar_order is updated
+    if "default_sidebar_order" in update_data and "sidebar_order_version" not in update_data:
+        update_data["sidebar_order_version"] = datetime.utcnow().isoformat()
+
     for key, value in update_data.items():
         # Convert value to string for storage
         if isinstance(value, bool):

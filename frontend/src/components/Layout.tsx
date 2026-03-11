@@ -197,21 +197,32 @@ export function Layout() {
     return (status.state === 'FINISH' || status.state === 'FAILED') && !status.plate_cleared;
   });
 
-  // Apply default sidebar order from settings when user has no customized order
+  // Apply default sidebar order from settings when admin pushes a new order version
   useEffect(() => {
     if (!settings?.default_sidebar_order) return;
+    const backendVersion = settings.sidebar_order_version || '';
+    const localVersion = localStorage.getItem('sidebarOrderVersion') || '';
     const hasCustomOrder = localStorage.getItem('sidebarOrder') !== null;
-    if (!hasCustomOrder) {
+
+    // Apply backend order if:
+    // 1. Admin has pushed a new order version (backend version differs from stored version), OR
+    // 2. User has no custom order and there is a backend order to apply
+    const shouldApply = (backendVersion && localVersion !== backendVersion) || (!hasCustomOrder && !!settings.default_sidebar_order);
+    if (shouldApply) {
       try {
         const defaultOrder: string[] = JSON.parse(settings.default_sidebar_order);
         if (Array.isArray(defaultOrder) && defaultOrder.length > 0) {
           setSidebarOrder(defaultOrder);
+          saveSidebarOrder(defaultOrder);
+          if (backendVersion) {
+            localStorage.setItem('sidebarOrderVersion', backendVersion);
+          }
         }
       } catch {
         // Ignore invalid stored order
       }
     }
-  }, [settings?.default_sidebar_order, setSidebarOrder]);
+  }, [settings?.default_sidebar_order, settings?.sidebar_order_version, setSidebarOrder]);
 
   // Calculate debug duration client-side for real-time updates
   const [debugDuration, setDebugDuration] = useState<number | null>(null);
