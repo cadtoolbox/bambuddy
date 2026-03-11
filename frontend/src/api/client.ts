@@ -844,6 +844,8 @@ export interface AppSettings {
   low_stock_threshold: number;
   // Default sidebar order (JSON array of nav item IDs set by admin)
   default_sidebar_order: string;
+  // ISO timestamp set when admin pushes sidebar order to all users
+  sidebar_order_version: string;
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>;

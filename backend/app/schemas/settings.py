@@ -163,6 +163,12 @@ class AppSettings(BaseModel):
         description="Default sidebar menu order as JSON array of nav item IDs (pushed to all users)",
     )
 
+    # Sidebar order version (ISO timestamp set when admin pushes order to all users)
+    sidebar_order_version: str = Field(
+        default="",
+        description="ISO timestamp set when admin pushes sidebar order to all users; used by clients to detect forced order updates",
+    )
+
 
 class AppSettingsUpdate(BaseModel):
     """Schema for updating settings (all fields optional)."""
@@ -226,3 +232,4 @@ class AppSettingsUpdate(BaseModel):
     prometheus_token: str | None = None
     low_stock_threshold: float | None = Field(default=None, ge=0.1, le=99.9)
     default_sidebar_order: str | None = None
+    sidebar_order_version: str | None = None

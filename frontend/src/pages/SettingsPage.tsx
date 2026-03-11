@@ -176,6 +176,7 @@ export function SettingsPage() {
 
   const handleResetSidebarOrder = () => {
     localStorage.removeItem('sidebarOrder');
+    localStorage.removeItem('sidebarOrderVersion');
     window.location.reload();
   };
 
