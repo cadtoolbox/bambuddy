@@ -45,6 +45,7 @@ from backend.app.api.routes import (
     support,
     system,
     updates,
+    user_notifications,
     users,
     virtual_printers,
     webhook,
@@ -1021,6 +1022,17 @@ async def _send_print_start_notification(
                 archive_data["image_data"] = image_data
 
             await notification_service.on_print_start(printer_id, printer_name, data, db, archive_data=archive_data)
+
+            # Send user-specific email notification for print start
+            if archive_data and archive_data.get("created_by_id"):
+                await notification_service.send_user_print_email(
+                    event_type="user_print_start",
+                    created_by_id=archive_data["created_by_id"],
+                    printer_name=printer_name,
+                    filename=data.get("subtask_name") or data.get("filename", "Unknown"),
+                    db=db,
+                    print_time_seconds=archive_data.get("print_time_seconds"),
+                )
     except Exception as e:
         logger.warning("Notification on_print_start failed: %s", e)
 
@@ -1306,7 +1318,7 @@ async def on_print_start(printer_id: int, data: dict):
 
                 # Send notification with archive data (reprint/scheduled)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": archive.print_time_seconds}
+                    archive_data = {"print_time_seconds": archive.print_time_seconds, "created_by_id": archive.created_by_id}
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
 
                 # Extract printable objects from the archived 3MF file
@@ -1380,7 +1392,7 @@ async def on_print_start(printer_id: int, data: dict):
                         logger.warning("Failed to record starting energy for existing archive: %s", e)
                 # Send notification with archive data (existing archive)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": existing_archive.print_time_seconds}
+                    archive_data = {"print_time_seconds": existing_archive.print_time_seconds, "created_by_id": existing_archive.created_by_id}
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
                 # Extract printable objects from the archived 3MF file
                 _load_objects_from_archive(existing_archive, printer_id, logger)
@@ -1723,7 +1735,7 @@ async def on_print_start(printer_id: int, data: dict):
 
                 # Send notification with archive data (new archive created)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": archive.print_time_seconds}
+                    archive_data = {"print_time_seconds": archive.print_time_seconds, "created_by_id": archive.created_by_id}
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
 
                 # Extract printable objects for skip object functionality
@@ -2721,6 +2733,7 @@ async def on_print_complete(printer_id: int, data: dict):
                             "print_time_seconds": archive.print_time_seconds,
                             "actual_filament_grams": archive.filament_used_grams,
                             "failure_reason": archive.failure_reason,
+                            "created_by_id": archive.created_by_id,
                         }
 
                         # Scale filament usage for partial prints
@@ -2783,6 +2796,31 @@ async def on_print_complete(printer_id: int, data: dict):
                 await notification_service.on_print_complete(
                     printer_id, printer_name, print_status, data, db, archive_data=archive_data
                 )
+
+                # Send user-specific email notification
+                if archive_data:
+                    created_by_id = archive_data.get("created_by_id")
+                    raw_filename = data.get("subtask_name") or data.get("filename", "Unknown")
+                    if print_status == "completed":
+                        await notification_service.send_user_print_email(
+                            event_type="user_print_complete",
+                            created_by_id=created_by_id,
+                            printer_name=printer_name,
+                            filename=raw_filename,
+                            db=db,
+                            print_time_seconds=archive_data.get("print_time_seconds"),
+                            filament_grams=archive_data.get("actual_filament_grams"),
+                        )
+                    elif print_status in ("failed",):
+                        await notification_service.send_user_print_email(
+                            event_type="user_print_failed",
+                            created_by_id=created_by_id,
+                            printer_name=printer_name,
+                            filename=raw_filename,
+                            db=db,
+                            reason=archive_data.get("failure_reason"),
+                        )
+
                 logger.info("[NOTIFY-BG] Completed")
         except Exception as e:
             logger.warning("[NOTIFY-BG] Failed: %s", e)
@@ -3621,6 +3659,7 @@ app.include_router(background_dispatch_routes.router, prefix=app_settings.api_pr
 app.include_router(kprofiles.router, prefix=app_settings.api_prefix)
 app.include_router(notifications.router, prefix=app_settings.api_prefix)
 app.include_router(notification_templates.router, prefix=app_settings.api_prefix)
+app.include_router(user_notifications.router, prefix=app_settings.api_prefix)
 app.include_router(spoolman.router, prefix=app_settings.api_prefix)
 app.include_router(updates.router, prefix=app_settings.api_prefix)
 app.include_router(maintenance.router, prefix=app_settings.api_prefix)

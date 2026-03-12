@@ -106,6 +106,7 @@ async def init_db():
         spool_usage_history,
         spoolbuddy_device,
         user,
+        user_email_pref,
         virtual_printer,
     )
 
@@ -1421,6 +1422,27 @@ async def run_migrations(conn):
     obsolete_keys = ["slicer_binary_path"]
     for key in obsolete_keys:
         await conn.execute(text("DELETE FROM settings WHERE key = :key"), {"key": key})
+
+    # Migration: Create user_email_preferences table for user-specific email notification settings
+    try:
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS user_email_preferences (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                notify_print_start BOOLEAN NOT NULL DEFAULT 1,
+                notify_print_complete BOOLEAN NOT NULL DEFAULT 1,
+                notify_print_failed BOOLEAN NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_user_email_preferences_user_id ON user_email_preferences(user_id)")
+        )
+    except OperationalError:
+        pass  # Already applied
 
 
 async def seed_notification_templates():
