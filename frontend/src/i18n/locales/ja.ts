@@ -3901,8 +3901,6 @@ export default {
       maintenance_due: 'メンテナンス期限',
       test: 'テスト',
     },
-  },
-
     // User email notification preferences
     userEmail: {
       title: '通知',

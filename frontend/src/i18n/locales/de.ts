@@ -3896,8 +3896,6 @@ export default {
       maintenance_due: 'Wartung fällig',
       test: 'Test',
     },
-  },
-
     // User email notification preferences
     userEmail: {
       title: 'Benachrichtigungen',

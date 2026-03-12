@@ -1153,10 +1153,9 @@ class NotificationService:
         printer_name: str,
         filename: str,
         db: AsyncSession,
-        duration: str = "Unknown",
-        filament_grams: str = "Unknown",
-        reason: str = "Unknown",
-        estimated_time: str = "Unknown",
+        print_time_seconds: int | None = None,
+        filament_grams: float | None = None,
+        reason: str | None = None,
     ) -> None:
         """Send a print event email notification to the user who submitted the job.
 
@@ -1164,12 +1163,11 @@ class NotificationService:
             event_type: 'user_print_start', 'user_print_complete', or 'user_print_failed'
             created_by_id: User ID who submitted the print job (from archive)
             printer_name: Name of the printer
-            filename: Name of the file being printed
+            filename: Raw filename or subtask name
             db: Database session
-            duration: Print duration (for complete/failed events)
-            filament_grams: Filament used (for complete events)
+            print_time_seconds: Print time in seconds (for formatting)
+            filament_grams: Actual filament used in grams
             reason: Failure reason (for failed events)
-            estimated_time: Estimated print time (for start events)
         """
         if created_by_id is None:
             return
@@ -1216,14 +1214,21 @@ class NotificationService:
             if not should_send:
                 return
 
+            # Format values for the template
+            clean_filename = self._clean_filename(filename)
+            duration_str = self._format_duration(print_time_seconds) if print_time_seconds else "Unknown"
+            filament_str = f"{filament_grams:.1f}" if filament_grams is not None else "Unknown"
+            reason_str = reason or "Unknown"
+            estimated_time_str = duration_str  # For start events, print_time_seconds is estimated
+
             # Build variables
             variables = {
                 "printer": printer_name,
-                "filename": filename,
-                "duration": duration,
-                "filament_grams": filament_grams,
-                "reason": reason,
-                "estimated_time": estimated_time,
+                "filename": clean_filename,
+                "duration": duration_str,
+                "filament_grams": filament_str,
+                "reason": reason_str,
+                "estimated_time": estimated_time_str,
             }
 
             # Send the email

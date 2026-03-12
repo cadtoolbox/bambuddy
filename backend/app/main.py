@@ -1025,17 +1025,13 @@ async def _send_print_start_notification(
 
             # Send user-specific email notification for print start
             if archive_data and archive_data.get("created_by_id"):
-                filename_for_user = notification_service._clean_filename(
-                    data.get("subtask_name") or data.get("filename", "Unknown")
-                )
-                estimated_time = notification_service._format_duration(archive_data.get("print_time_seconds"))
                 await notification_service.send_user_print_email(
                     event_type="user_print_start",
                     created_by_id=archive_data["created_by_id"],
                     printer_name=printer_name,
-                    filename=filename_for_user,
+                    filename=data.get("subtask_name") or data.get("filename", "Unknown"),
                     db=db,
-                    estimated_time=estimated_time,
+                    print_time_seconds=archive_data.get("print_time_seconds"),
                 )
     except Exception as e:
         logger.warning("Notification on_print_start failed: %s", e)
@@ -2804,30 +2800,25 @@ async def on_print_complete(printer_id: int, data: dict):
                 # Send user-specific email notification
                 if archive_data:
                     created_by_id = archive_data.get("created_by_id")
-                    filename_for_user = notification_service._clean_filename(
-                        data.get("subtask_name") or data.get("filename", "Unknown")
-                    )
+                    raw_filename = data.get("subtask_name") or data.get("filename", "Unknown")
                     if print_status == "completed":
-                        user_event_type = "user_print_complete"
-                        duration = notification_service._format_duration(archive_data.get("print_time_seconds"))
-                        filament_grams = f"{archive_data.get('actual_filament_grams', 0):.1f}" if archive_data.get("actual_filament_grams") else "Unknown"
                         await notification_service.send_user_print_email(
-                            event_type=user_event_type,
+                            event_type="user_print_complete",
                             created_by_id=created_by_id,
                             printer_name=printer_name,
-                            filename=filename_for_user,
+                            filename=raw_filename,
                             db=db,
-                            duration=duration,
-                            filament_grams=filament_grams,
+                            print_time_seconds=archive_data.get("print_time_seconds"),
+                            filament_grams=archive_data.get("actual_filament_grams"),
                         )
                     elif print_status in ("failed",):
                         await notification_service.send_user_print_email(
                             event_type="user_print_failed",
                             created_by_id=created_by_id,
                             printer_name=printer_name,
-                            filename=filename_for_user,
+                            filename=raw_filename,
                             db=db,
-                            reason=archive_data.get("failure_reason") or "Unknown",
+                            reason=archive_data.get("failure_reason"),
                         )
 
                 logger.info("[NOTIFY-BG] Completed")

@@ -3887,8 +3887,6 @@ export default {
       maintenance_due: 'Manutenção Necessária',
       test: 'Teste',
     },
-  },
-
     // User email notification preferences
     userEmail: {
       title: 'Notificações',

@@ -3887,15 +3887,13 @@ export default {
       maintenance_due: 'Manutenzione necessaria',
       test: 'Prova',
     },
-  },
-
     // User email notification preferences
     userEmail: {
       title: 'Notifiche',
       emailNotifications: 'Notifiche via e-mail',
-      emailNotificationsDesc: 'Ricevi notifiche via e-mail per i tuoi lavori di stampa. Le e-mail vengono inviate tramite le impostazioni SMTP configurate nell'autenticazione avanzata.',
+      emailNotificationsDesc: "Ricevi notifiche via e-mail per i tuoi lavori di stampa. Le e-mail vengono inviate tramite le impostazioni SMTP configurate nell'autenticazione avanzata.",
       sendingTo: 'Le notifiche verranno inviate a',
-      noEmailWarning: 'Il tuo account non ha un indirizzo e-mail. Contatta un amministratore per aggiungerne uno.',
+      noEmailWarning: "Il tuo account non ha un indirizzo e-mail. Contatta un amministratore per aggiungerne uno.",
       printJobNotifications: 'Notifiche lavori di stampa',
       printJobNotificationsDesc: 'Scegli quali eventi attivano le notifiche e-mail per i lavori di stampa che invii.',
       printJobStarts: 'Inizio lavoro di stampa',
