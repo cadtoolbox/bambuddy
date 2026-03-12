@@ -1146,6 +1146,99 @@ class NotificationService:
         """Clear the template cache. Call this when templates are updated."""
         self._template_cache.clear()
 
+    async def send_user_print_email(
+        self,
+        event_type: str,
+        created_by_id: int | None,
+        printer_name: str,
+        filename: str,
+        db: AsyncSession,
+        duration: str = "Unknown",
+        filament_grams: str = "Unknown",
+        reason: str = "Unknown",
+        estimated_time: str = "Unknown",
+    ) -> None:
+        """Send a print event email notification to the user who submitted the job.
+
+        Args:
+            event_type: 'user_print_start', 'user_print_complete', or 'user_print_failed'
+            created_by_id: User ID who submitted the print job (from archive)
+            printer_name: Name of the printer
+            filename: Name of the file being printed
+            db: Database session
+            duration: Print duration (for complete/failed events)
+            filament_grams: Filament used (for complete events)
+            reason: Failure reason (for failed events)
+            estimated_time: Estimated print time (for start events)
+        """
+        if created_by_id is None:
+            return
+
+        try:
+            # Check if advanced auth is enabled - required for user email notifications
+            from backend.app.models.settings import Settings
+
+            result = await db.execute(
+                select(Settings).where(Settings.key == "advanced_auth_enabled")
+            )
+            setting = result.scalar_one_or_none()
+            if not setting or setting.value.lower() != "true":
+                return
+
+            # Load user preferences
+            from backend.app.models.user import User
+            from backend.app.models.user_email_pref import UserEmailPreference
+
+            user_result = await db.execute(select(User).where(User.id == created_by_id))
+            user = user_result.scalar_one_or_none()
+            if user is None or not user.email:
+                return
+
+            # Check if user has the permission to receive notifications
+            if not user.has_permission("notifications:user_email"):
+                return
+
+            # Load user's notification preferences
+            pref_result = await db.execute(
+                select(UserEmailPreference).where(UserEmailPreference.user_id == created_by_id)
+            )
+            pref = pref_result.scalar_one_or_none()
+
+            # Determine if this event type should be sent
+            should_send = False
+            if event_type == "user_print_start":
+                should_send = pref is None or pref.notify_print_start
+            elif event_type == "user_print_complete":
+                should_send = pref is None or pref.notify_print_complete
+            elif event_type == "user_print_failed":
+                should_send = pref is None or pref.notify_print_failed
+
+            if not should_send:
+                return
+
+            # Build variables
+            variables = {
+                "printer": printer_name,
+                "filename": filename,
+                "duration": duration,
+                "filament_grams": filament_grams,
+                "reason": reason,
+                "estimated_time": estimated_time,
+            }
+
+            # Send the email
+            from backend.app.services.email_service import send_user_print_notification
+
+            await send_user_print_notification(
+                db=db,
+                event_type=event_type,
+                user_email=user.email,
+                username=user.username,
+                variables=variables,
+            )
+        except Exception as e:
+            logger.warning("Failed to send user print email notification: %s", e)
+
     # ==================== Queue Notifications ====================
 
     async def on_queue_job_added(
