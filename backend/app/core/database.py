@@ -1454,6 +1454,20 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Column already exists
 
+    # Seed default settings keys that must exist on fresh install
+    default_settings = [
+        ("advanced_auth_enabled", "false"),
+        ("smtp_auth_enabled", "true"),
+    ]
+    for key, value in default_settings:
+        try:
+            await conn.execute(
+                text("INSERT OR IGNORE INTO settings (key, value) VALUES (:key, :value)"),
+                {"key": key, "value": value},
+            )
+        except OperationalError:
+            pass
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

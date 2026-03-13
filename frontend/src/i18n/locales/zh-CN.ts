@@ -1226,6 +1226,7 @@ export default {
       advancedAuthEnabledDesc: '基于邮箱的用户管理功能已激活。新用户将通过邮件收到自动生成的密码，用户可以通过忘记密码功能重置密码。',
       advancedAuthDisabled: '高级认证已禁用',
       advancedAuthDisabledDesc: '启用高级认证以激活基于邮箱的用户管理功能。',
+      configureSmtpToEnable: '请在下方配置并保存SMTP设置，然后返回此处启用高级认证。',
       enable: '启用',
       disable: '禁用',
       feature1: '密码自动生成并通过邮件发送给新用户',

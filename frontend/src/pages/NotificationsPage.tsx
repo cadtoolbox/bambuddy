@@ -17,6 +17,7 @@ export function NotificationsPage() {
   const [notifyPrintStart, setNotifyPrintStart] = useState(true);
   const [notifyPrintComplete, setNotifyPrintComplete] = useState(true);
   const [notifyPrintFailed, setNotifyPrintFailed] = useState(true);
+  const [notifyPrintStopped, setNotifyPrintStopped] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
 
   // Fetch current preferences
@@ -31,6 +32,7 @@ export function NotificationsPage() {
       setNotifyPrintStart(preferences.notify_print_start);
       setNotifyPrintComplete(preferences.notify_print_complete);
       setNotifyPrintFailed(preferences.notify_print_failed);
+      setNotifyPrintStopped(preferences.notify_print_stopped);
       setIsDirty(false);
     }
   }, [preferences]);
@@ -42,6 +44,7 @@ export function NotificationsPage() {
         notify_print_start: notifyPrintStart,
         notify_print_complete: notifyPrintComplete,
         notify_print_failed: notifyPrintFailed,
+        notify_print_stopped: notifyPrintStopped,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-email-preferences'] });
@@ -185,6 +188,33 @@ export function NotificationsPage() {
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   notifyPrintFailed ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Print Job Stops */}
+          <div className="flex items-center justify-between p-4 bg-bambu-dark rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notifyPrintStopped ? 'bg-bambu-green/20' : 'bg-bambu-dark-tertiary'}`}>
+                <CheckCircle2 className={`w-5 h-5 ${notifyPrintStopped ? 'text-bambu-green' : 'text-bambu-gray'}`} />
+              </div>
+              <div>
+                <p className="text-white font-medium">{t('notifications.userEmail.printJobStops')}</p>
+                <p className="text-sm text-bambu-gray">{t('notifications.userEmail.printJobStopsDesc')}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggle(setNotifyPrintStopped, notifyPrintStopped)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-bambu-green focus:ring-offset-2 focus:ring-offset-bambu-dark ${
+                notifyPrintStopped ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
+              }`}
+              role="switch"
+              aria-checked={notifyPrintStopped}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notifyPrintStopped ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>
