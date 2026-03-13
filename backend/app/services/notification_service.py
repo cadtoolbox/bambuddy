@@ -1160,7 +1160,7 @@ class NotificationService:
         """Send a print event email notification to the user who submitted the job.
 
         Args:
-            event_type: 'user_print_start', 'user_print_complete', or 'user_print_failed'
+            event_type: 'user_print_start', 'user_print_complete', 'user_print_failed', or 'user_print_stopped'
             created_by_id: User ID who submitted the print job (from archive)
             printer_name: Name of the printer
             filename: Raw filename or subtask name
@@ -1192,10 +1192,6 @@ class NotificationService:
             if user is None or not user.email:
                 return
 
-            # Check if user has the permission to receive notifications
-            if not user.has_permission("notifications:user_email"):
-                return
-
             # Load user's notification preferences
             pref_result = await db.execute(
                 select(UserEmailPreference).where(UserEmailPreference.user_id == created_by_id)
@@ -1210,6 +1206,8 @@ class NotificationService:
                 should_send = pref is None or pref.notify_print_complete
             elif event_type == "user_print_failed":
                 should_send = pref is None or pref.notify_print_failed
+            elif event_type == "user_print_stopped":
+                should_send = pref is None or pref.notify_print_stopped
 
             if not should_send:
                 return

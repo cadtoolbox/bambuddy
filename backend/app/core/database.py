@@ -1444,6 +1444,16 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Already applied
 
+    # Migration: Add notify_print_stopped column to user_email_preferences
+    try:
+        await conn.execute(
+            text(
+                "ALTER TABLE user_email_preferences ADD COLUMN notify_print_stopped BOOLEAN NOT NULL DEFAULT 1"
+            )
+        )
+    except OperationalError:
+        pass  # Column already exists
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

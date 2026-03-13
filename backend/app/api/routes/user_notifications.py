@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.auth import RequirePermissionIfAuthEnabled, get_current_active_user
+from backend.app.core.auth import get_current_active_user
 from backend.app.core.database import get_db
-from backend.app.core.permissions import Permission
 from backend.app.models.user import User
 from backend.app.models.user_email_pref import UserEmailPreference
 from backend.app.schemas.user_notifications import UserEmailPreferenceResponse, UserEmailPreferenceUpdate
@@ -21,7 +20,6 @@ router = APIRouter(prefix="/user-notifications", tags=["user-notifications"])
 @router.get("/preferences", response_model=UserEmailPreferenceResponse)
 async def get_user_email_preferences(
     current_user: User = Depends(get_current_active_user),
-    _: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_USER_EMAIL),
     db: AsyncSession = Depends(get_db),
 ):
     """Get the current user's email notification preferences.
@@ -39,6 +37,7 @@ async def get_user_email_preferences(
             notify_print_start=True,
             notify_print_complete=True,
             notify_print_failed=True,
+            notify_print_stopped=True,
         )
 
     return pref
@@ -48,7 +47,6 @@ async def get_user_email_preferences(
 async def update_user_email_preferences(
     data: UserEmailPreferenceUpdate,
     current_user: User = Depends(get_current_active_user),
-    _: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_USER_EMAIL),
     db: AsyncSession = Depends(get_db),
 ):
     """Update the current user's email notification preferences."""
@@ -69,22 +67,25 @@ async def update_user_email_preferences(
             notify_print_start=data.notify_print_start,
             notify_print_complete=data.notify_print_complete,
             notify_print_failed=data.notify_print_failed,
+            notify_print_stopped=data.notify_print_stopped,
         )
         db.add(pref)
     else:
         pref.notify_print_start = data.notify_print_start
         pref.notify_print_complete = data.notify_print_complete
         pref.notify_print_failed = data.notify_print_failed
+        pref.notify_print_stopped = data.notify_print_stopped
 
     await db.commit()
     await db.refresh(pref)
 
     logger.info(
-        "Updated email notification preferences for user %s: start=%s, complete=%s, failed=%s",
+        "Updated email notification preferences for user %s: start=%s, complete=%s, failed=%s, stopped=%s",
         current_user.username,
         pref.notify_print_start,
         pref.notify_print_complete,
         pref.notify_print_failed,
+        pref.notify_print_stopped,
     )
 
     return pref

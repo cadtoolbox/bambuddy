@@ -50,6 +50,7 @@ EVENT_NAMES = {
     "user_print_start": "User Print Started Email",
     "user_print_complete": "User Print Completed Email",
     "user_print_failed": "User Print Failed Email",
+    "user_print_stopped": "User Print Stopped Email",
 }
 
 

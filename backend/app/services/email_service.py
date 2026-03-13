@@ -527,7 +527,7 @@ async def send_user_print_notification(
 
     Args:
         db: Database session
-        event_type: One of 'user_print_start', 'user_print_complete', 'user_print_failed'
+        event_type: One of 'user_print_start', 'user_print_complete', 'user_print_failed', 'user_print_stopped'
         user_email: Recipient email address
         username: Username of the recipient
         variables: Template variables (printer, filename, etc.)
