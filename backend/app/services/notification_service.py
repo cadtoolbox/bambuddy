@@ -1183,6 +1183,14 @@ class NotificationService:
             if not setting or setting.value.lower() != "true":
                 return
 
+            # Check SMTP settings are configured - required for sending emails
+            from backend.app.services.email_service import get_smtp_settings, send_user_print_notification
+
+            smtp_settings = await get_smtp_settings(db)
+            if not smtp_settings:
+                logger.debug("Skipping user print email: SMTP settings not configured")
+                return
+
             # Load user preferences
             from backend.app.models.user import User
             from backend.app.models.user_email_pref import UserEmailPreference
@@ -1230,8 +1238,6 @@ class NotificationService:
             }
 
             # Send the email
-            from backend.app.services.email_service import send_user_print_notification
-
             await send_user_print_notification(
                 db=db,
                 event_type=event_type,
