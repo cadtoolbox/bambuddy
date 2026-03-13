@@ -8,6 +8,7 @@ import re
 import secrets
 import smtplib
 import string
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -544,13 +545,18 @@ async def send_user_print_notification(
         logger.warning("No template found for event type: %s", event_type)
         return
 
-    # Add username to variables
-    all_variables = {"username": username, **variables}
+    # Add common variables (username, timestamp, app_name) merged with caller-supplied variables
+    all_variables = {
+        "username": username,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "app_name": "Bambuddy",
+        **variables,
+    }
 
     subject = render_template(template.title_template, all_variables)
     text_body = render_template(template.body_template, all_variables)
 
-    # Build HTML body
+    # Build HTML body — content comes entirely from the database template
     escaped_text_body = html.escape(text_body).replace("\n", "<br>\n")
     html_body = f"""<!DOCTYPE html>
 <html>
@@ -564,10 +570,6 @@ async def send_user_print_notification(
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #ddd; border-top: none;">
         <div style="font-size: 16px;">{escaped_text_body}</div>
-        <p style="font-size: 14px; color: #999; margin-top: 30px;">
-            Best regards,<br>
-            BamBuddy Team
-        </p>
     </div>
 </body>
 </html>

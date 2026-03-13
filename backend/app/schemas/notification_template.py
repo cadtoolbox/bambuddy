@@ -85,6 +85,7 @@ EVENT_VARIABLES: dict[str, list[str]] = {
     "user_print_start": ["username", "printer", "filename", "estimated_time", "timestamp", "app_name"],
     "user_print_complete": ["username", "printer", "filename", "duration", "filament_grams", "timestamp", "app_name"],
     "user_print_failed": ["username", "printer", "filename", "reason", "timestamp", "app_name"],
+    "user_print_stopped": ["username", "printer", "filename", "duration", "timestamp", "app_name"],
 }
 
 # Sample data for previewing templates
@@ -279,6 +280,14 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "printer": "Bambu X1C",
         "filename": "Benchy.3mf",
         "reason": "Filament runout",
+        "timestamp": "2024-01-15 15:15",
+        "app_name": "Bambuddy",
+    },
+    "user_print_stopped": {
+        "username": "john_doe",
+        "printer": "Bambu X1C",
+        "filename": "Benchy.3mf",
+        "duration": "0h 45m",
         "timestamp": "2024-01-15 15:15",
         "app_name": "Bambuddy",
     },
