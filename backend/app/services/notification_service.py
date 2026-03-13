@@ -1170,17 +1170,17 @@ class NotificationService:
             reason: Failure reason (for failed events)
         """
         if created_by_id is None:
+            logger.debug("[EMAIL] Skipping user print email (%s): no created_by_id", event_type)
             return
 
         try:
             # Check if advanced auth is enabled - required for user email notifications
             from backend.app.models.settings import Settings
 
-            result = await db.execute(
-                select(Settings).where(Settings.key == "advanced_auth_enabled")
-            )
+            result = await db.execute(select(Settings).where(Settings.key == "advanced_auth_enabled"))
             setting = result.scalar_one_or_none()
             if not setting or setting.value.lower() != "true":
+                logger.debug("[EMAIL] Skipping user print email (%s): advanced_auth not enabled", event_type)
                 return
 
             # Check SMTP settings are configured - required for sending emails
@@ -1188,7 +1188,7 @@ class NotificationService:
 
             smtp_settings = await get_smtp_settings(db)
             if not smtp_settings:
-                logger.debug("Skipping user print email: SMTP settings not configured")
+                logger.debug("[EMAIL] Skipping user print email (%s): SMTP settings not configured", event_type)
                 return
 
             # Load user preferences
@@ -1198,6 +1198,11 @@ class NotificationService:
             user_result = await db.execute(select(User).where(User.id == created_by_id))
             user = user_result.scalar_one_or_none()
             if user is None or not user.email:
+                logger.debug(
+                    "[EMAIL] Skipping user print email (%s): user %s not found or has no email address",
+                    event_type,
+                    created_by_id,
+                )
                 return
 
             # Load user's notification preferences
@@ -1218,7 +1223,21 @@ class NotificationService:
                 should_send = pref is None or pref.notify_print_stopped
 
             if not should_send:
+                logger.debug(
+                    "[EMAIL] Skipping user print email (%s): user %s has notifications disabled for this event",
+                    event_type,
+                    created_by_id,
+                )
                 return
+
+            logger.info(
+                "[EMAIL] Sending user print email: event=%s, user=%s (%s), printer=%s, file=%s",
+                event_type,
+                user.username,
+                user.email,
+                printer_name,
+                filename,
+            )
 
             # Format values for the template
             clean_filename = self._clean_filename(filename)
@@ -1245,8 +1264,9 @@ class NotificationService:
                 username=user.username,
                 variables=variables,
             )
+            logger.info("[EMAIL] User print email sent: event=%s → %s", event_type, user.email)
         except Exception as e:
-            logger.warning("Failed to send user print email notification: %s", e)
+            logger.warning("Failed to send user print email notification: %s", e, exc_info=True)
 
     # ==================== Queue Notifications ====================
 

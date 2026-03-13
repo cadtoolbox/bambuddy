@@ -1318,7 +1318,10 @@ async def on_print_start(printer_id: int, data: dict):
 
                 # Send notification with archive data (reprint/scheduled)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": archive.print_time_seconds, "created_by_id": archive.created_by_id}
+                    archive_data = {
+                        "print_time_seconds": archive.print_time_seconds,
+                        "created_by_id": archive.created_by_id,
+                    }
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
 
                 # Extract printable objects from the archived 3MF file
@@ -1392,7 +1395,10 @@ async def on_print_start(printer_id: int, data: dict):
                         logger.warning("Failed to record starting energy for existing archive: %s", e)
                 # Send notification with archive data (existing archive)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": existing_archive.print_time_seconds, "created_by_id": existing_archive.created_by_id}
+                    archive_data = {
+                        "print_time_seconds": existing_archive.print_time_seconds,
+                        "created_by_id": existing_archive.created_by_id,
+                    }
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
                 # Extract printable objects from the archived 3MF file
                 _load_objects_from_archive(existing_archive, printer_id, logger)
@@ -1735,7 +1741,10 @@ async def on_print_start(printer_id: int, data: dict):
 
                 # Send notification with archive data (new archive created)
                 if not notification_sent:
-                    archive_data = {"print_time_seconds": archive.print_time_seconds, "created_by_id": archive.created_by_id}
+                    archive_data = {
+                        "print_time_seconds": archive.print_time_seconds,
+                        "created_by_id": archive.created_by_id,
+                    }
                     await _send_print_start_notification(printer_id, data, archive_data, logger)
 
                 # Extract printable objects for skip object functionality
@@ -2400,6 +2409,94 @@ async def on_print_complete(printer_id: int, data: dict):
 
     if not archive_id:
         logger.warning("Could not find archive for print complete: filename=%s, subtask=%s", filename, subtask_name)
+
+        # Still send print-complete/failed/stopped notifications even without an archive.
+        # Try to enrich with queue/library-file data so user-specific emails work too.
+        async def _notify_no_archive():
+            try:
+                async with async_session() as db:
+                    from backend.app.models.library import LibraryFile
+                    from backend.app.models.print_queue import PrintQueueItem
+                    from backend.app.models.printer import Printer
+
+                    result = await db.execute(select(Printer).where(Printer.id == printer_id))
+                    printer_obj = result.scalar_one_or_none()
+                    p_name = printer_obj.name if printer_obj else f"Printer {printer_id}"
+
+                    # Try to find the most-recent queue item for this printer so we can
+                    # recover created_by_id and estimated print time.
+                    # NOTE: By the time this task runs the queue item status has already
+                    # been updated to a terminal state (completed/failed/cancelled), so
+                    # we look for recently-completed items (within the last 5 minutes).
+                    no_archive_data: dict | None = None
+                    try:
+                        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                        q_result = await db.execute(
+                            select(PrintQueueItem)
+                            .where(PrintQueueItem.printer_id == printer_id)
+                            .where(PrintQueueItem.status.in_(["completed", "failed", "cancelled"]))
+                            .where(PrintQueueItem.completed_at >= cutoff)
+                            .order_by(PrintQueueItem.completed_at.desc())
+                            .limit(1)
+                        )
+                        queue_item = q_result.scalar_one_or_none()
+                        if queue_item:
+                            no_archive_data = {"created_by_id": queue_item.created_by_id}
+                            # Pull estimated time from library file when available
+                            if queue_item.library_file_id:
+                                lib_result = await db.execute(
+                                    select(LibraryFile).where(LibraryFile.id == queue_item.library_file_id)
+                                )
+                                lib_file = lib_result.scalar_one_or_none()
+                                if lib_file and lib_file.print_time_seconds:
+                                    no_archive_data["print_time_seconds"] = lib_file.print_time_seconds
+                    except Exception as lookup_err:
+                        logger.debug(
+                            "[NOTIFY-BG] Could not look up queue item for no-archive notification: %s", lookup_err
+                        )
+
+                    ps = data.get("status", "completed")
+                    logger.info(
+                        "[NOTIFY-BG] Sending notification without archive: printer=%s, status=%s", printer_id, ps
+                    )
+                    await notification_service.on_print_complete(
+                        printer_id, p_name, ps, data, db, archive_data=no_archive_data
+                    )
+
+                    # Send user-specific email if we have a created_by_id
+                    if no_archive_data and no_archive_data.get("created_by_id"):
+                        raw_filename = data.get("subtask_name") or data.get("filename", "Unknown")
+                        if ps == "completed":
+                            await notification_service.send_user_print_email(
+                                event_type="user_print_complete",
+                                created_by_id=no_archive_data["created_by_id"],
+                                printer_name=p_name,
+                                filename=raw_filename,
+                                db=db,
+                                print_time_seconds=no_archive_data.get("print_time_seconds"),
+                            )
+                        elif ps == "failed":
+                            await notification_service.send_user_print_email(
+                                event_type="user_print_failed",
+                                created_by_id=no_archive_data["created_by_id"],
+                                printer_name=p_name,
+                                filename=raw_filename,
+                                db=db,
+                            )
+                        elif ps in ("stopped", "aborted", "cancelled"):
+                            await notification_service.send_user_print_email(
+                                event_type="user_print_stopped",
+                                created_by_id=no_archive_data["created_by_id"],
+                                printer_name=p_name,
+                                filename=raw_filename,
+                                db=db,
+                                print_time_seconds=no_archive_data.get("print_time_seconds"),
+                            )
+                    logger.info("[NOTIFY-BG] Completed (no-archive path)")
+            except Exception as e:
+                logger.warning("[NOTIFY-BG] Failed to send notification without archive: %s", e, exc_info=True)
+
+        asyncio.create_task(_notify_no_archive())
         return
 
     log_timing("Archive lookup")
@@ -2820,7 +2917,7 @@ async def on_print_complete(printer_id: int, data: dict):
                             db=db,
                             reason=archive_data.get("failure_reason"),
                         )
-                    elif print_status in ("stopped",):
+                    elif print_status in ("stopped", "aborted", "cancelled"):
                         await notification_service.send_user_print_email(
                             event_type="user_print_stopped",
                             created_by_id=created_by_id,
