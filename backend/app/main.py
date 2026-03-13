@@ -1060,13 +1060,24 @@ async def _send_print_start_notification(
 
             # Send user-specific email notification for print start
             if archive_data and archive_data.get("created_by_id"):
+                # Use same priority as on_print_start for estimated time:
+                # 1. Archive's print_time_seconds (most reliable)
+                # 2. MQTT remaining_time
+                # 3. raw_data mc_remaining_time (in minutes, convert to seconds)
+                estimated_time = archive_data.get("print_time_seconds")
+                if not estimated_time:
+                    estimated_time = data.get("remaining_time")
+                if not estimated_time:
+                    raw_time = data.get("raw_data", {}).get("mc_remaining_time")
+                    if raw_time:
+                        estimated_time = raw_time * 60
                 await notification_service.send_user_print_email(
                     event_type="user_print_start",
                     created_by_id=archive_data["created_by_id"],
                     printer_name=printer_name,
                     filename=data.get("subtask_name") or data.get("filename", "Unknown"),
                     db=db,
-                    print_time_seconds=archive_data.get("print_time_seconds"),
+                    print_time_seconds=estimated_time,
                 )
     except Exception as e:
         logger.warning("Notification on_print_start failed: %s", e)

@@ -47,7 +47,7 @@ DEFAULT_TEMPLATES = [
         "event_type": "print_stopped",
         "name": "Print Stopped",
         "title_template": "Print Stopped",
-        "body_template": "{printer}: {filename}\nTime: {duration}",
+        "body_template": "{printer}: {filename}",
     },
     {
         "event_type": "print_progress",
@@ -187,6 +187,6 @@ DEFAULT_TEMPLATES = [
         "event_type": "user_print_stopped",
         "name": "User Print Stopped",
         "title_template": "Your Print Has Been Stopped",
-        "body_template": "Hello {username},\n\nYour print job was stopped on {printer}.\n\nFile: {filename}\nTime: {duration}",
+        "body_template": "Hello {username},\n\nYour print job was stopped on {printer}.\n\nFile: {filename}",
     },
 ]
