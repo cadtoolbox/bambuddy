@@ -2820,6 +2820,15 @@ async def on_print_complete(printer_id: int, data: dict):
                             db=db,
                             reason=archive_data.get("failure_reason"),
                         )
+                    elif print_status in ("stopped",):
+                        await notification_service.send_user_print_email(
+                            event_type="user_print_stopped",
+                            created_by_id=created_by_id,
+                            printer_name=printer_name,
+                            filename=raw_filename,
+                            db=db,
+                            print_time_seconds=archive_data.get("print_time_seconds"),
+                        )
 
                 logger.info("[NOTIFY-BG] Completed")
         except Exception as e:

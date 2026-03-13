@@ -183,4 +183,10 @@ DEFAULT_TEMPLATES = [
         "title_template": "Your Print Has Failed",
         "body_template": "Hello {username},\n\nYour print job has failed on {printer}.\n\nFile: {filename}\nReason: {reason}",
     },
+    {
+        "event_type": "user_print_stopped",
+        "name": "User Print Stopped",
+        "title_template": "Your Print Has Been Stopped",
+        "body_template": "Hello {username},\n\nYour print job was stopped on {printer}.\n\nFile: {filename}\nTime: {duration}",
+    },
 ]

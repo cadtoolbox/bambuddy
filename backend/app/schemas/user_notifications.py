@@ -9,6 +9,7 @@ class UserEmailPreferenceResponse(BaseModel):
     notify_print_start: bool
     notify_print_complete: bool
     notify_print_failed: bool
+    notify_print_stopped: bool
 
     class Config:
         from_attributes = True
@@ -20,3 +21,4 @@ class UserEmailPreferenceUpdate(BaseModel):
     notify_print_start: bool
     notify_print_complete: bool
     notify_print_failed: bool
+    notify_print_stopped: bool
