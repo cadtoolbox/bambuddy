@@ -248,8 +248,8 @@ export function Layout() {
 
     const isHidden = (id: string) => {
       if (authEnabled && id in navPermissions && !hasPermission(navPermissions[id])) return true;
-      // notifications nav item also requires advanced auth to be enabled
-      if (id === 'notifications' && (!authEnabled || !advancedAuthStatus?.advanced_auth_enabled)) return true;
+      // notifications nav item also requires advanced auth to be enabled and user_notifications_enabled setting
+      if (id === 'notifications' && (!authEnabled || !advancedAuthStatus?.advanced_auth_enabled || (settings?.user_notifications_enabled === false))) return true;
       return false;
     };
 

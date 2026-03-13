@@ -1183,6 +1183,15 @@ class NotificationService:
                 logger.debug("[EMAIL] Skipping user print email (%s): advanced_auth not enabled", event_type)
                 return
 
+            # Check if user notifications are enabled (admin-controlled toggle)
+            notif_enabled_result = await db.execute(
+                select(Settings).where(Settings.key == "user_notifications_enabled")
+            )
+            notif_enabled_setting = notif_enabled_result.scalar_one_or_none()
+            if notif_enabled_setting and notif_enabled_setting.value.lower() == "false":
+                logger.debug("[EMAIL] Skipping user print email (%s): user_notifications_enabled is false", event_type)
+                return
+
             # Check SMTP settings are configured - required for sending emails
             from backend.app.services.email_service import get_smtp_settings, send_user_print_notification
 
@@ -1241,7 +1250,7 @@ class NotificationService:
 
             # Format values for the template
             clean_filename = self._clean_filename(filename)
-            duration_str = self._format_duration(print_time_seconds) if print_time_seconds else "Unknown"
+            duration_str = self._format_duration(print_time_seconds)
             filament_str = f"{filament_grams:.1f}" if filament_grams is not None else "Unknown"
             reason_str = reason or "Unknown"
             estimated_time_str = duration_str  # For start events, print_time_seconds is estimated
