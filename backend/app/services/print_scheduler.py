@@ -1168,6 +1168,7 @@ class PrintScheduler:
                     printer_id=item.printer_id,
                     source_file=file_path,
                     original_filename=filename,
+                    created_by_id=item.created_by_id,
                 )
                 if archive:
                     item.archive_id = archive.id
@@ -1301,7 +1302,13 @@ class PrintScheduler:
         if archive:
             from backend.app.main import register_expected_print
 
-            register_expected_print(item.printer_id, remote_filename, archive.id, ams_mapping=ams_mapping)
+            register_expected_print(
+                item.printer_id,
+                remote_filename,
+                archive.id,
+                ams_mapping=ams_mapping,
+                created_by_id=item.created_by_id,
+            )
 
         # IMPORTANT: Set status to "printing" BEFORE sending the print command.
         # This prevents phantom reprints if the backend crashes/restarts after the
