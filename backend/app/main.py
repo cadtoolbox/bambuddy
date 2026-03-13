@@ -1060,26 +1060,12 @@ async def _send_print_start_notification(
 
             # Send user-specific email notification for print start
             if archive_data and archive_data.get("created_by_id"):
-                # Use same priority as on_print_start for estimated time:
-                # 1. Archive's print_time_seconds (most reliable)
-                # 2. MQTT remaining_time
-                # 3. raw_data mc_remaining_time (in minutes, convert to seconds)
-                estimated_time = archive_data.get("print_time_seconds") or None
-                if estimated_time is None:
-                    est = data.get("remaining_time")
-                    if est:
-                        estimated_time = est
-                if estimated_time is None:
-                    raw_time = data.get("raw_data", {}).get("mc_remaining_time")
-                    if raw_time:
-                        estimated_time = raw_time * 60
                 await notification_service.send_user_print_email(
                     event_type="user_print_start",
                     created_by_id=archive_data["created_by_id"],
                     printer_name=printer_name,
                     filename=data.get("subtask_name") or data.get("filename", "Unknown"),
                     db=db,
-                    print_time_seconds=estimated_time,
                 )
     except Exception as e:
         logger.warning("Notification on_print_start failed: %s", e)
@@ -2572,7 +2558,6 @@ async def on_print_complete(printer_id: int, data: dict):
                                 printer_name=p_name,
                                 filename=raw_filename,
                                 db=db,
-                                print_time_seconds=no_archive_data.get("print_time_seconds"),
                             )
                         elif ps == "failed":
                             await notification_service.send_user_print_email(
@@ -2589,7 +2574,6 @@ async def on_print_complete(printer_id: int, data: dict):
                                 printer_name=p_name,
                                 filename=raw_filename,
                                 db=db,
-                                print_time_seconds=no_archive_data.get("print_time_seconds"),
                             )
                     logger.info("[NOTIFY-BG] Completed (no-archive path)")
             except Exception as e:
@@ -3004,8 +2988,6 @@ async def on_print_complete(printer_id: int, data: dict):
                             printer_name=printer_name,
                             filename=raw_filename,
                             db=db,
-                            print_time_seconds=archive_data.get("print_time_seconds"),
-                            filament_grams=archive_data.get("actual_filament_grams"),
                         )
                     elif print_status in ("failed",):
                         await notification_service.send_user_print_email(
@@ -3014,7 +2996,6 @@ async def on_print_complete(printer_id: int, data: dict):
                             printer_name=printer_name,
                             filename=raw_filename,
                             db=db,
-                            reason=archive_data.get("failure_reason"),
                         )
                     elif print_status in ("stopped", "aborted", "cancelled"):
                         await notification_service.send_user_print_email(
@@ -3023,7 +3004,6 @@ async def on_print_complete(printer_id: int, data: dict):
                             printer_name=printer_name,
                             filename=raw_filename,
                             db=db,
-                            print_time_seconds=archive_data.get("print_time_seconds"),
                         )
 
                 logger.info("[NOTIFY-BG] Completed")

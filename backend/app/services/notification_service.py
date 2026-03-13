@@ -1153,9 +1153,6 @@ class NotificationService:
         printer_name: str,
         filename: str,
         db: AsyncSession,
-        print_time_seconds: int | None = None,
-        filament_grams: float | None = None,
-        reason: str | None = None,
     ) -> None:
         """Send a print event email notification to the user who submitted the job.
 
@@ -1165,9 +1162,6 @@ class NotificationService:
             printer_name: Name of the printer
             filename: Raw filename or subtask name
             db: Database session
-            print_time_seconds: Print time in seconds (for formatting)
-            filament_grams: Actual filament used in grams
-            reason: Failure reason (for failed events)
         """
         if created_by_id is None:
             logger.debug("[EMAIL] Skipping user print email (%s): no created_by_id", event_type)
@@ -1248,21 +1242,10 @@ class NotificationService:
                 filename,
             )
 
-            # Format values for the template
-            clean_filename = self._clean_filename(filename)
-            duration_str = self._format_duration(print_time_seconds)
-            filament_str = f"{filament_grams:.1f}" if filament_grams is not None else "Unknown"
-            reason_str = reason or "Unknown"
-            estimated_time_str = duration_str  # For start events, print_time_seconds is estimated
-
             # Build variables
             variables = {
                 "printer": printer_name,
-                "filename": clean_filename,
-                "duration": duration_str,
-                "filament_grams": filament_str,
-                "reason": reason_str,
-                "estimated_time": estimated_time_str,
+                "filename": self._clean_filename(filename),
             }
 
             # Send the email

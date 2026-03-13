@@ -82,10 +82,10 @@ EVENT_VARIABLES: dict[str, list[str]] = {
     "user_created": ["username", "password", "login_url", "app_name", "timestamp"],
     "password_reset": ["username", "password", "login_url", "app_name", "timestamp"],
     # User email print notifications
-    "user_print_start": ["username", "printer", "filename", "estimated_time", "timestamp", "app_name"],
-    "user_print_complete": ["username", "printer", "filename", "duration", "filament_grams", "timestamp", "app_name"],
-    "user_print_failed": ["username", "printer", "filename", "reason", "timestamp", "app_name"],
-    "user_print_stopped": ["username", "printer", "filename", "duration", "timestamp", "app_name"],
+    "user_print_start": ["username", "printer", "filename", "timestamp", "app_name"],
+    "user_print_complete": ["username", "printer", "filename", "timestamp", "app_name"],
+    "user_print_failed": ["username", "printer", "filename", "timestamp", "app_name"],
+    "user_print_stopped": ["username", "printer", "filename", "timestamp", "app_name"],
 }
 
 # Sample data for previewing templates
@@ -262,7 +262,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "username": "john_doe",
         "printer": "Bambu X1C",
         "filename": "Benchy.3mf",
-        "estimated_time": "1h 23m",
         "timestamp": "2024-01-15 14:30",
         "app_name": "Bambuddy",
     },
@@ -270,8 +269,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "username": "john_doe",
         "printer": "Bambu X1C",
         "filename": "Benchy.3mf",
-        "duration": "1h 18m",
-        "filament_grams": "15.2",
         "timestamp": "2024-01-15 15:48",
         "app_name": "Bambuddy",
     },
@@ -279,7 +276,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "username": "john_doe",
         "printer": "Bambu X1C",
         "filename": "Benchy.3mf",
-        "reason": "Filament runout",
         "timestamp": "2024-01-15 15:15",
         "app_name": "Bambuddy",
     },
@@ -287,7 +283,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "username": "john_doe",
         "printer": "Bambu X1C",
         "filename": "Benchy.3mf",
-        "duration": "0h 45m",
         "timestamp": "2024-01-15 15:15",
         "app_name": "Bambuddy",
     },

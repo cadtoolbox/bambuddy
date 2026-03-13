@@ -169,19 +169,19 @@ DEFAULT_TEMPLATES = [
         "event_type": "user_print_start",
         "name": "User Print Started",
         "title_template": "Your Print Has Started",
-        "body_template": "Hello {username},\n\nYour print job has started on {printer}.\n\nFile: {filename}\nEstimated Time: {estimated_time}\n\nYou will be notified when it completes.",
+        "body_template": "Hello {username},\n\nYour print job has started on {printer}.\n\nFile: {filename}\n\nYou will be notified when it completes.",
     },
     {
         "event_type": "user_print_complete",
         "name": "User Print Completed",
         "title_template": "Your Print Is Complete",
-        "body_template": "Hello {username},\n\nYour print job has completed on {printer}.\n\nFile: {filename}\nPrint Time: {duration}\nFilament Used: {filament_grams}g",
+        "body_template": "Hello {username},\n\nYour print job has completed on {printer}.\n\nFile: {filename}",
     },
     {
         "event_type": "user_print_failed",
         "name": "User Print Failed",
         "title_template": "Your Print Has Failed",
-        "body_template": "Hello {username},\n\nYour print job has failed on {printer}.\n\nFile: {filename}\nReason: {reason}",
+        "body_template": "Hello {username},\n\nYour print job has failed on {printer}.\n\nFile: {filename}",
     },
     {
         "event_type": "user_print_stopped",
