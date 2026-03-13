@@ -2102,6 +2102,7 @@ export interface UserEmailPreferences {
   notify_print_start: boolean;
   notify_print_complete: boolean;
   notify_print_failed: boolean;
+  notify_print_stopped: boolean;
 }
 
 // Auth types

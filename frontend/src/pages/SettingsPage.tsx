@@ -523,6 +523,7 @@ export function SettingsPage() {
     const updateData: UserUpdate = {
       username: userFormData.username || undefined,
       password: userFormData.password || undefined,
+      email: userFormData.email || undefined,
       role: userFormData.role,
       group_ids: userFormData.group_ids,
     };
