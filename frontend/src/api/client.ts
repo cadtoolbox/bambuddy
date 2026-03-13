@@ -848,6 +848,8 @@ export interface AppSettings {
   bed_cooled_threshold: number;
   // Inventory low stock threshold
   low_stock_threshold: number;
+  // User email notifications toggle
+  user_notifications_enabled: boolean;
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>;

@@ -1064,10 +1064,12 @@ async def _send_print_start_notification(
                 # 1. Archive's print_time_seconds (most reliable)
                 # 2. MQTT remaining_time
                 # 3. raw_data mc_remaining_time (in minutes, convert to seconds)
-                estimated_time = archive_data.get("print_time_seconds")
-                if not estimated_time:
-                    estimated_time = data.get("remaining_time")
-                if not estimated_time:
+                estimated_time = archive_data.get("print_time_seconds") or None
+                if estimated_time is None:
+                    est = data.get("remaining_time")
+                    if est:
+                        estimated_time = est
+                if estimated_time is None:
                     raw_time = data.get("raw_data", {}).get("mc_remaining_time")
                     if raw_time:
                         estimated_time = raw_time * 60
