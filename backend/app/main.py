@@ -1104,6 +1104,41 @@ async def _send_print_start_notification(
         logger.warning("Notification on_print_start failed: %s", e)
 
 
+async def _dispatch_user_print_email(
+    status: str,
+    created_by_id: int | None,
+    printer_name: str,
+    filename: str,
+    db,
+) -> None:
+    """Send a user-specific print-completion email based on print status.
+
+    Maps the normalised print status to the correct event type and delegates
+    to :meth:`NotificationService.send_user_print_email`.  A single helper
+    avoids duplicating the ``if status == "completed" / elif "failed" / elif
+    "stopped"`` dispatch block at every call site.
+
+    Does nothing if *created_by_id* is ``None``.
+    """
+    if created_by_id is None:
+        return
+    if status == "completed":
+        event_type = "user_print_complete"
+    elif status == "failed":
+        event_type = "user_print_failed"
+    elif status in ("stopped", "aborted", "cancelled"):
+        event_type = "user_print_stopped"
+    else:
+        return
+    await notification_service.send_user_print_email(
+        event_type=event_type,
+        created_by_id=created_by_id,
+        printer_name=printer_name,
+        filename=filename,
+        db=db,
+    )
+
+
 def _load_objects_from_archive(archive, printer_id: int, logger) -> None:
     """Extract printable objects from an archive's 3MF file and store in printer state."""
     try:
@@ -2606,30 +2641,13 @@ async def on_print_complete(printer_id: int, data: dict):
                     # Send user-specific email if we have a created_by_id
                     if no_archive_data and no_archive_data.get("created_by_id"):
                         raw_filename = data.get("subtask_name") or data.get("filename", "Unknown")
-                        if ps == "completed":
-                            await notification_service.send_user_print_email(
-                                event_type="user_print_complete",
-                                created_by_id=no_archive_data["created_by_id"],
-                                printer_name=p_name,
-                                filename=raw_filename,
-                                db=db,
-                            )
-                        elif ps == "failed":
-                            await notification_service.send_user_print_email(
-                                event_type="user_print_failed",
-                                created_by_id=no_archive_data["created_by_id"],
-                                printer_name=p_name,
-                                filename=raw_filename,
-                                db=db,
-                            )
-                        elif ps in ("stopped", "aborted", "cancelled"):
-                            await notification_service.send_user_print_email(
-                                event_type="user_print_stopped",
-                                created_by_id=no_archive_data["created_by_id"],
-                                printer_name=p_name,
-                                filename=raw_filename,
-                                db=db,
-                            )
+                        await _dispatch_user_print_email(
+                            ps,
+                            no_archive_data["created_by_id"],
+                            p_name,
+                            raw_filename,
+                            db,
+                        )
                     logger.info("[NOTIFY-BG] Completed (no-archive path)")
             except Exception as e:
                 logger.warning("[NOTIFY-BG] Failed to send notification without archive: %s", e, exc_info=True)
@@ -3042,30 +3060,13 @@ async def on_print_complete(printer_id: int, data: dict):
                 if archive_data:
                     created_by_id = archive_data.get("created_by_id")
                     raw_filename = data.get("subtask_name") or data.get("filename", "Unknown")
-                    if print_status == "completed":
-                        await notification_service.send_user_print_email(
-                            event_type="user_print_complete",
-                            created_by_id=created_by_id,
-                            printer_name=printer_name,
-                            filename=raw_filename,
-                            db=db,
-                        )
-                    elif print_status in ("failed",):
-                        await notification_service.send_user_print_email(
-                            event_type="user_print_failed",
-                            created_by_id=created_by_id,
-                            printer_name=printer_name,
-                            filename=raw_filename,
-                            db=db,
-                        )
-                    elif print_status in ("stopped", "aborted", "cancelled"):
-                        await notification_service.send_user_print_email(
-                            event_type="user_print_stopped",
-                            created_by_id=created_by_id,
-                            printer_name=printer_name,
-                            filename=raw_filename,
-                            db=db,
-                        )
+                    await _dispatch_user_print_email(
+                        print_status,
+                        created_by_id,
+                        printer_name,
+                        raw_filename,
+                        db,
+                    )
 
                 logger.info("[NOTIFY-BG] Completed")
         except Exception as e:
