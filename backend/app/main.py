@@ -3574,6 +3574,8 @@ def _evict_stale_expected_prints() -> None:
     printer disconnects, the app restarts, or the print is started directly from
     the printer panel without going through the queue.
     """
+    # Use monotonic time so the TTL is unaffected by system clock adjustments
+    # (e.g. NTP sync, DST changes).
     cutoff = time.monotonic() - _EXPECTED_PRINT_TTL_SECONDS
     stale_keys = [k for k, t in _expected_print_registered_at.items() if t < cutoff]
     if not stale_keys:
@@ -3605,7 +3607,7 @@ async def _expected_prints_cleanup_loop() -> None:
         try:
             _evict_stale_expected_prints()
         except asyncio.CancelledError:
-            break
+            raise
         except Exception as e:
             logging.getLogger(__name__).warning("Expected prints cleanup failed: %s", e)
         await asyncio.sleep(_EXPECTED_PRINT_CLEANUP_INTERVAL)
