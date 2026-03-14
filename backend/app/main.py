@@ -291,6 +291,18 @@ _user_stopped_printers: set[int] = set()
 # {(printer_id, filename): created_by_id}
 _expected_print_creators: dict[tuple[int, str], int] = {}
 
+# TTL for expected-print entries: evict registrations older than this to prevent
+# unbounded growth when a print is registered but never starts (e.g. printer
+# disconnect, app restart, print started from the printer panel).
+_EXPECTED_PRINT_TTL_SECONDS: int = 2 * 60 * 60  # 2 hours
+
+# Registration timestamps used for TTL eviction: {(printer_id, filename): monotonic_time}
+_expected_print_registered_at: dict[tuple[int, str], float] = {}
+
+# Cleanup loop interval
+_EXPECTED_PRINT_CLEANUP_INTERVAL: int = 15 * 60  # 15 minutes
+_expected_prints_cleanup_task: asyncio.Task | None = None
+
 
 async def _get_plug_energy(plug, db) -> dict | None:
     """Get energy from plug regardless of type (Tasmota, Home Assistant, or MQTT).
@@ -345,6 +357,13 @@ def register_expected_print(
             base = filename[:-4]
             _expected_print_creators[(printer_id, base)] = created_by_id
             _expected_print_creators[(printer_id, f"{base}.gcode")] = created_by_id
+    # Record registration time for TTL-based eviction
+    _registered_at = time.monotonic()
+    _expected_print_registered_at[(printer_id, filename)] = _registered_at
+    if filename.endswith(".3mf"):
+        base = filename[:-4]
+        _expected_print_registered_at[(printer_id, base)] = _registered_at
+        _expected_print_registered_at[(printer_id, f"{base}.gcode")] = _registered_at
     logging.getLogger(__name__).info(
         f"Registered expected print: printer={printer_id}, file={filename}, archive={archive_id}, ams_mapping={ams_mapping}"
     )
@@ -1290,8 +1309,9 @@ async def on_print_start(printer_id: int, data: dict):
                     ]
                 _no_archive_creator: int | None = None
                 for _key in _no_archive_creator_keys:
-                    # Clean up both dicts for every key to avoid memory leaks
+                    # Clean up all dicts for every key to avoid memory leaks
                     _expected_prints.pop(_key, None)
+                    _expected_print_registered_at.pop(_key, None)
                     popped_creator = _expected_print_creators.pop(_key, None)
                     if _no_archive_creator is None:
                         _no_archive_creator = popped_creator
@@ -1338,10 +1358,12 @@ async def on_print_start(printer_id: int, data: dict):
         expected_archive_id = None
         for key in expected_keys:
             expected_archive_id = _expected_prints.pop(key, None)
+            _expected_print_registered_at.pop(key, None)
             if expected_archive_id:
                 # Clean up other possible keys for this print
                 for other_key in expected_keys:
                     _expected_prints.pop(other_key, None)
+                    _expected_print_registered_at.pop(other_key, None)
                 break
 
         if expected_archive_id:
@@ -3538,6 +3560,72 @@ def stop_camera_cleanup():
         logging.getLogger(__name__).info("Camera stream cleanup stopped")
 
 
+# ---------------------------------------------------------------------------
+# Expected-print TTL eviction
+# ---------------------------------------------------------------------------
+
+
+def _evict_stale_expected_prints() -> None:
+    """Remove entries from _expected_prints / _expected_print_creators that are
+    older than _EXPECTED_PRINT_TTL_SECONDS.
+
+    This prevents unbounded growth when a print is registered (via
+    register_expected_print) but on_print_start never fires — e.g. because the
+    printer disconnects, the app restarts, or the print is started directly from
+    the printer panel without going through the queue.
+    """
+    cutoff = time.monotonic() - _EXPECTED_PRINT_TTL_SECONDS
+    stale_keys = [k for k, t in _expected_print_registered_at.items() if t < cutoff]
+    if not stale_keys:
+        return
+
+    evicted_archive_ids: set[int] = set()
+    for key in stale_keys:
+        archive_id = _expected_prints.pop(key, None)
+        if archive_id is not None:
+            evicted_archive_ids.add(archive_id)
+        _expected_print_creators.pop(key, None)
+        _expected_print_registered_at.pop(key, None)
+
+    # Also clean up _print_ams_mappings for archive_ids that have no remaining
+    # live keys in _expected_prints (i.e. all variants were just evicted).
+    live_archive_ids = set(_expected_prints.values())
+    for archive_id in evicted_archive_ids:
+        if archive_id not in live_archive_ids:
+            _print_ams_mappings.pop(archive_id, None)
+
+    logging.getLogger(__name__).info(
+        "Evicted %d stale expected-print entries (TTL=%ds)", len(stale_keys), _EXPECTED_PRINT_TTL_SECONDS
+    )
+
+
+async def _expected_prints_cleanup_loop() -> None:
+    """Background task: periodically evict stale expected-print entries."""
+    while True:
+        try:
+            _evict_stale_expected_prints()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.getLogger(__name__).warning("Expected prints cleanup failed: %s", e)
+        await asyncio.sleep(_EXPECTED_PRINT_CLEANUP_INTERVAL)
+
+
+def start_expected_prints_cleanup() -> None:
+    global _expected_prints_cleanup_task
+    if _expected_prints_cleanup_task is None:
+        _expected_prints_cleanup_task = asyncio.create_task(_expected_prints_cleanup_loop())
+        logging.getLogger(__name__).info("Expected prints cleanup started")
+
+
+def stop_expected_prints_cleanup() -> None:
+    global _expected_prints_cleanup_task
+    if _expected_prints_cleanup_task:
+        _expected_prints_cleanup_task.cancel()
+        _expected_prints_cleanup_task = None
+        logging.getLogger(__name__).info("Expected prints cleanup stopped")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -3692,6 +3780,10 @@ async def lifespan(app: FastAPI):
     # Start camera stream orphan cleanup
     start_camera_cleanup()
 
+    # Start expected-print TTL eviction (prevents memory leak when prints are
+    # registered but on_print_start never fires)
+    start_expected_prints_cleanup()
+
     # Initialize virtual printer manager and sync from DB
     from backend.app.services.virtual_printer import virtual_printer_manager
 
@@ -3714,6 +3806,7 @@ async def lifespan(app: FastAPI):
     stop_runtime_tracking()
     stop_spoolbuddy_watchdog()
     stop_camera_cleanup()
+    stop_expected_prints_cleanup()
     printer_manager.disconnect_all()
     await close_spoolman_client()
 
