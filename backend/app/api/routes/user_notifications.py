@@ -20,7 +20,7 @@ router = APIRouter(prefix="/user-notifications", tags=["user-notifications"])
 
 @router.get("/preferences", response_model=UserEmailPreferenceResponse)
 async def get_user_email_preferences(
-    current_user: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_READ),
+    current_user: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_USER_EMAIL),
     db: AsyncSession = Depends(get_db),
 ):
     """Get the current user's email notification preferences.
@@ -56,7 +56,7 @@ async def get_user_email_preferences(
 @router.put("/preferences", response_model=UserEmailPreferenceResponse)
 async def update_user_email_preferences(
     data: UserEmailPreferenceUpdate,
-    current_user: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_UPDATE),
+    current_user: User | None = RequirePermissionIfAuthEnabled(Permission.NOTIFICATIONS_USER_EMAIL),
     db: AsyncSession = Depends(get_db),
 ):
     """Update the current user's email notification preferences."""
