@@ -112,3 +112,41 @@ class TestInventoryViewAssignmentsPermission:
         """Administrators should have all permissions including view_assignments."""
         admins = DEFAULT_GROUPS["Administrators"]
         assert "inventory:view_assignments" in admins["permissions"]
+
+
+class TestNotificationsUserEmailPermission:
+    """Test the NOTIFICATIONS_USER_EMAIL permission."""
+
+    def test_notifications_user_email_permission_exists(self):
+        """notifications:user_email permission should exist in the enum."""
+        assert hasattr(Permission, "NOTIFICATIONS_USER_EMAIL")
+        assert Permission.NOTIFICATIONS_USER_EMAIL == "notifications:user_email"
+
+    def test_notifications_user_email_in_all_permissions(self):
+        """notifications:user_email should be in ALL_PERMISSIONS list."""
+        assert "notifications:user_email" in ALL_PERMISSIONS
+
+    def test_notifications_user_email_in_notifications_category(self):
+        """notifications:user_email should be in the Notifications permission category."""
+        notifications_perms = PERMISSION_CATEGORIES["Notifications"]
+        assert Permission.NOTIFICATIONS_USER_EMAIL in notifications_perms
+
+    def test_notifications_user_email_separate_from_read(self):
+        """notifications:user_email and notifications:read should be distinct permissions."""
+        assert Permission.NOTIFICATIONS_USER_EMAIL != Permission.NOTIFICATIONS_READ
+        assert Permission.NOTIFICATIONS_USER_EMAIL.value != Permission.NOTIFICATIONS_READ.value
+
+    def test_operators_have_notifications_user_email(self):
+        """Operators group should include notifications:user_email."""
+        operators = DEFAULT_GROUPS["Operators"]
+        assert "notifications:user_email" in operators["permissions"]
+
+    def test_administrators_have_notifications_user_email(self):
+        """Administrators should have all permissions including notifications:user_email."""
+        admins = DEFAULT_GROUPS["Administrators"]
+        assert "notifications:user_email" in admins["permissions"]
+
+    def test_viewers_do_not_have_notifications_user_email(self):
+        """Viewers group (read-only) should not include notifications:user_email."""
+        viewers = DEFAULT_GROUPS["Viewers"]
+        assert "notifications:user_email" not in viewers["permissions"]
